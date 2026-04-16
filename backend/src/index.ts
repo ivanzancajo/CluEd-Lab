@@ -11,6 +11,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ==========================================
+// RUTA DE HEALTH CHECK (Control de salud)
+// ==========================================
+app.get('/health', (req, res) => {
+  res.json({ status: "Servidor Cluedo Operativo" });
+});
+
 // Rutas de autenticación
 app.use('/api/auth', authRoutes);
 

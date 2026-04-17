@@ -21,8 +21,9 @@ import {
   Radio,
   Database
 } from "lucide-react";
-import boardImg from "figma:asset/241994391a3b72800b68387bfebd6cd02264e354.png";
 import { DiceAnimation } from "../DiceAnimation";
+
+const boardImg = "/board-placeholder.svg";
 
 interface ElementoItem {
   name: string;

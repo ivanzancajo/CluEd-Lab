@@ -5,6 +5,8 @@ services:
       context: ./backend
       target: prod
     container_name: cluedo_backend_prod
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - ./backend/.env
     environment:

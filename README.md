@@ -5,6 +5,7 @@ Guia minima para levantar, validar y probar la autenticacion del administrador d
 ## Requisitos
 
 - Node.js 22
+- PostgreSQL 14 o superior para desarrollo local o una instancia accesible desde la MV
 - Docker y Docker Compose
 
 ## Variables de entorno
@@ -14,7 +15,25 @@ Guia minima para levantar, validar y probar la autenticacion del administrador d
    - `ADMIN_USER`: usuario del Game Master.
    - `ADMIN_PASS_HASH`: hash bcrypt de la contraseña.
    - `JWT_SECRET`: secreto para firmar tokens.
+  - `DATABASE_URL`: cadena de conexion PostgreSQL usada por Prisma.
    - `ALLOWED_ORIGINS`: orígenes permitidos para el frontend.
+
+Notas sobre `DATABASE_URL`:
+
+- Fuera de Docker usa normalmente `localhost`.
+- Dentro de Docker en Linux, si PostgreSQL vive en la maquina anfitriona, usa `host.docker.internal`.
+- En una base ya existente, conviene revisar primero el esquema real con `npm run prisma:pull` antes de aplicar cambios adicionales.
+
+Baseline recomendado para una base ya existente en la MV:
+
+```bash
+cd backend
+npm install
+npm run prisma:generate
+npm run prisma:migrate:resolve -- --applied 20260417_scrum_13_skin_schema
+```
+
+Con esto marcas la migracion inicial como ya aplicada en la base remota antes de introducir migraciones nuevas.
 
 ### Generar un hash bcrypt
 
@@ -34,6 +53,7 @@ Copia el resultado en `ADMIN_PASS_HASH`.
 ```bash
 cd backend
 npm install
+npm run prisma:generate
 npm run build
 npm run dev
 ```
@@ -65,6 +85,8 @@ Levanta backend y frontend con recarga:
 docker compose up -d --build
 ```
 
+El backend incluye la resolucion de `host.docker.internal` para poder alcanzar PostgreSQL si la base corre en la propia MV fuera de Docker.
+
 Servicios publicados:
 
 - Frontend: `http://localhost:5173`
@@ -83,6 +105,8 @@ Construye y levanta el frontend compilado con nginx y el backend en modo product
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build
 ```
+
+En despliegue, la `DATABASE_URL` del backend debe apuntar a PostgreSQL usando el host adecuado para el entorno. Si la base corre en la MV anfitriona fuera de Docker, usa `host.docker.internal` en lugar de `localhost`.
 
 Servicios publicados:
 

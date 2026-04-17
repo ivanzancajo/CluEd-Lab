@@ -5,6 +5,8 @@ services:
       context: ./backend
       target: dev
     container_name: cluedo_backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "4000:4000"
     env_file:

@@ -1,6 +1,18 @@
 -- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "public";
 
+-- CreateEnum
+CREATE TYPE "color_equipo" AS ENUM ('ROJO', 'AZUL', 'VERDE', 'AMARILLO', 'MORADO', 'BLANCO');
+
+-- CreateEnum
+CREATE TYPE "estado_deduccion" AS ENUM ('NEUTRO', 'DUDA', 'DESCARTADO');
+
+-- CreateEnum
+CREATE TYPE "tipo_evento" AS ENUM ('MOVIMIENTO', 'SUGERENCIA', 'REFUTACION', 'ACUSACION', 'SISTEMA');
+
+-- CreateEnum
+CREATE TYPE "tipo_elemento" AS ENUM ('SUJETO', 'OBJETO', 'ESPACIO');
+
 -- CreateTable
 CREATE TABLE "cluedo_skin" (
     "id_skin" UUID NOT NULL,
@@ -22,7 +34,7 @@ CREATE TABLE "cluedo_skin" (
 -- CreateTable
 CREATE TABLE "elemento" (
     "id_elem" UUID NOT NULL,
-    "tipo" VARCHAR(30) NOT NULL,
+    "tipo" "tipo_elemento" NOT NULL,
     "codigo" VARCHAR(50),
     "nombre_base" VARCHAR(120) NOT NULL,
     "creado_en" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -71,6 +83,60 @@ CREATE TABLE "partida" (
     CONSTRAINT "partida_pkey" PRIMARY KEY ("id_partida")
 );
 
+-- CreateTable
+CREATE TABLE "equipo" (
+    "id_equipo" UUID NOT NULL DEFAULT uuid_generate_v4(),
+    "id_partida" UUID,
+    "nombre" VARCHAR(20) NOT NULL,
+    "color" "color_equipo" NOT NULL,
+    "pos_x" INTEGER DEFAULT 0,
+    "pos_y" INTEGER DEFAULT 0,
+    "acusacion_falsa" BOOLEAN DEFAULT false,
+
+    CONSTRAINT "equipo_pkey" PRIMARY KEY ("id_equipo")
+);
+
+-- CreateTable
+CREATE TABLE "tabla_razonamiento" (
+    "id_tabla" UUID NOT NULL DEFAULT uuid_generate_v4(),
+    "id_equipo" UUID,
+    "progreso" DECIMAL(5,2) DEFAULT 0.00,
+
+    CONSTRAINT "tabla_razonamiento_pkey" PRIMARY KEY ("id_tabla")
+);
+
+-- CreateTable
+CREATE TABLE "anotacion" (
+    "id_anotacion" UUID NOT NULL DEFAULT uuid_generate_v4(),
+    "id_tabla" UUID,
+    "contenido" TEXT,
+
+    CONSTRAINT "anotacion_pkey" PRIMARY KEY ("id_anotacion")
+);
+
+-- CreateTable
+CREATE TABLE "celda_razonamiento" (
+    "id_celda" UUID NOT NULL DEFAULT uuid_generate_v4(),
+    "id_tabla" UUID,
+    "id_elem" UUID,
+    "estado_deduc" "estado_deduccion" DEFAULT 'NEUTRO',
+
+    CONSTRAINT "celda_razonamiento_pkey" PRIMARY KEY ("id_celda")
+);
+
+-- CreateTable
+CREATE TABLE "evento" (
+    "id_evento" UUID NOT NULL DEFAULT uuid_generate_v4(),
+    "id_partida" UUID,
+    "id_emisor" UUID,
+    "id_receptor" UUID,
+    "tipo_evento" "tipo_evento" NOT NULL,
+    "detalle" JSONB,
+    "timestamp" TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "evento_pkey" PRIMARY KEY ("id_evento")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "descripcion_elemento_skin_elemento_key" ON "descripcion_elemento"("id_skin", "id_elem");
 
@@ -103,4 +169,28 @@ ALTER TABLE "partida" ADD CONSTRAINT "partida_id_skin_fkey" FOREIGN KEY ("id_ski
 
 -- AddForeignKey
 ALTER TABLE "partida" ADD CONSTRAINT "partida_id_solucion_fkey" FOREIGN KEY ("id_solucion") REFERENCES "solucion"("id_solucion") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "equipo" ADD CONSTRAINT "equipo_id_partida_fkey" FOREIGN KEY ("id_partida") REFERENCES "partida"("id_partida") ON DELETE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tabla_razonamiento" ADD CONSTRAINT "tabla_razonamiento_id_equipo_fkey" FOREIGN KEY ("id_equipo") REFERENCES "equipo"("id_equipo") ON DELETE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "anotacion" ADD CONSTRAINT "anotacion_id_tabla_fkey" FOREIGN KEY ("id_tabla") REFERENCES "tabla_razonamiento"("id_tabla") ON DELETE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "celda_razonamiento" ADD CONSTRAINT "celda_razonamiento_id_tabla_fkey" FOREIGN KEY ("id_tabla") REFERENCES "tabla_razonamiento"("id_tabla") ON DELETE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "celda_razonamiento" ADD CONSTRAINT "celda_razonamiento_id_elem_fkey" FOREIGN KEY ("id_elem") REFERENCES "elemento"("id_elem");
+
+-- AddForeignKey
+ALTER TABLE "evento" ADD CONSTRAINT "evento_id_partida_fkey" FOREIGN KEY ("id_partida") REFERENCES "partida"("id_partida") ON DELETE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "evento" ADD CONSTRAINT "evento_id_emisor_fkey" FOREIGN KEY ("id_emisor") REFERENCES "equipo"("id_equipo");
+
+-- AddForeignKey
+ALTER TABLE "evento" ADD CONSTRAINT "evento_id_receptor_fkey" FOREIGN KEY ("id_receptor") REFERENCES "equipo"("id_equipo");
 

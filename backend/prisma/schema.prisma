@@ -7,6 +7,43 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ColorEquipo {
+  ROJO
+  AZUL
+  VERDE
+  AMARILLO
+  MORADO
+  BLANCO
+
+  @@map("color_equipo")
+}
+
+enum EstadoDeduccion {
+  NEUTRO
+  DUDA
+  DESCARTADO
+
+  @@map("estado_deduccion")
+}
+
+enum TipoEvento {
+  MOVIMIENTO
+  SUGERENCIA
+  REFUTACION
+  ACUSACION
+  SISTEMA
+
+  @@map("tipo_evento")
+}
+
+enum TipoElemento {
+  SUJETO
+  OBJETO
+  ESPACIO
+
+  @@map("tipo_elemento")
+}
+
 model CluedoSkin {
   id                  String                @id @default(uuid()) @db.Uuid @map("id_skin")
   name                String                @map("nombre") @db.VarChar(120)
@@ -29,13 +66,14 @@ model CluedoSkin {
 
 model Elemento {
   id               String                @id @default(uuid()) @db.Uuid @map("id_elem")
-  kind             String                @map("tipo") @db.VarChar(30)
+  kind             TipoElemento          @map("tipo")
   code             String?               @map("codigo") @db.VarChar(50)
   baseName         String                @map("nombre_base") @db.VarChar(120)
   createdAt        DateTime              @default(now()) @map("creado_en") @db.Timestamptz(6)
   updatedAt        DateTime              @updatedAt @map("actualizado_en") @db.Timestamptz(6)
 
   skinDescriptions DescripcionElemento[]
+  reasoningCells   CeldaRazonamiento[]
   subjectSolutions Solucion[]            @relation("SolutionSubject")
   objectSolutions  Solucion[]            @relation("SolutionObject")
   spaceSolutions   Solucion[]            @relation("SolutionSpace")
@@ -88,9 +126,78 @@ model Partida {
 
   skin       CluedoSkin @relation(fields: [skinId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   solution   Solucion   @relation(fields: [solutionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  teams      Equipo[]
+  events     Evento[]
 
   @@unique([accessCode], map: "partida_codigo_acceso_key")
   @@index([skinId], map: "partida_id_skin_idx")
   @@index([solutionId], map: "partida_id_solucion_idx")
   @@map("partida")
+}
+
+model Equipo {
+  id               String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid @map("id_equipo")
+  partidaId        String?             @db.Uuid @map("id_partida")
+  name             String              @map("nombre") @db.VarChar(20)
+  color            ColorEquipo         @map("color")
+  positionX        Int?                @default(0) @map("pos_x")
+  positionY        Int?                @default(0) @map("pos_y")
+  falseAccusation  Boolean?            @default(false) @map("acusacion_falsa")
+
+  partida          Partida?            @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  emittedEvents    Evento[]            @relation("EventEmitter")
+  receivedEvents   Evento[]            @relation("EventReceiver")
+  reasoningTables  TablaRazonamiento[]
+
+  @@map("equipo")
+}
+
+model TablaRazonamiento {
+  id               String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid @map("id_tabla")
+  equipoId         String?             @db.Uuid @map("id_equipo")
+  progress         Decimal?            @default(0.00) @map("progreso") @db.Decimal(5, 2)
+
+  equipo           Equipo?             @relation(fields: [equipoId], references: [id], onDelete: Cascade)
+  annotations      Anotacion[]
+  cells            CeldaRazonamiento[]
+
+  @@map("tabla_razonamiento")
+}
+
+model Anotacion {
+  id               String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid @map("id_anotacion")
+  tablaId          String?             @db.Uuid @map("id_tabla")
+  content          String?             @map("contenido") @db.Text
+
+  tabla            TablaRazonamiento?  @relation(fields: [tablaId], references: [id], onDelete: Cascade)
+
+  @@map("anotacion")
+}
+
+model CeldaRazonamiento {
+  id               String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid @map("id_celda")
+  tablaId          String?             @db.Uuid @map("id_tabla")
+  elementId        String?             @db.Uuid @map("id_elem")
+  deductionState   EstadoDeduccion?    @default(NEUTRO) @map("estado_deduc")
+
+  tabla            TablaRazonamiento?  @relation(fields: [tablaId], references: [id], onDelete: Cascade)
+  element          Elemento?           @relation(fields: [elementId], references: [id])
+
+  @@map("celda_razonamiento")
+}
+
+model Evento {
+  id               String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid @map("id_evento")
+  partidaId        String?             @db.Uuid @map("id_partida")
+  emitterId        String?             @db.Uuid @map("id_emisor")
+  receiverId       String?             @db.Uuid @map("id_receptor")
+  eventType        TipoEvento          @map("tipo_evento")
+  detail           Json?               @map("detalle")
+  occurredAt       DateTime?           @default(now()) @map("timestamp") @db.Timestamp(6)
+
+  partida          Partida?            @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  emitter          Equipo?             @relation("EventEmitter", fields: [emitterId], references: [id])
+  receiver         Equipo?             @relation("EventReceiver", fields: [receiverId], references: [id])
+
+  @@map("evento")
 }

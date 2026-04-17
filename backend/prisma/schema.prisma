@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model CluedoSkin {
+  id                  String                @id @default(uuid()) @db.Uuid @map("id_skin")
+  name                String                @map("nombre") @db.VarChar(120)
+  publicTitle         String                @map("titulo_partida") @db.VarChar(120)
+  objective           String                @map("objetivo") @db.Text
+  durationMinutes     Int                   @default(60) @map("duracion_minutos")
+  centerImageUrl      String?               @map("imagen_central_url") @db.Text
+  subjectCategoryName String                @default("Sujetos") @map("categoria_sujeto") @db.VarChar(80)
+  objectCategoryName  String                @default("Objetos") @map("categoria_objeto") @db.VarChar(80)
+  spaceCategoryName   String                @default("Espacios") @map("categoria_espacio") @db.VarChar(80)
+  hasMotifs           Boolean               @default(false) @map("tiene_motivos")
+  createdAt           DateTime              @default(now()) @map("creado_en") @db.Timestamptz(6)
+  updatedAt           DateTime              @updatedAt @map("actualizado_en") @db.Timestamptz(6)
+
+  partidas            Partida[]
+  elementDescriptions DescripcionElemento[]
+
+  @@map("cluedo_skin")
+}
+
+model Elemento {
+  id               String                @id @default(uuid()) @db.Uuid @map("id_elem")
+  kind             String                @map("tipo") @db.VarChar(30)
+  code             String?               @map("codigo") @db.VarChar(50)
+  baseName         String                @map("nombre_base") @db.VarChar(120)
+  createdAt        DateTime              @default(now()) @map("creado_en") @db.Timestamptz(6)
+  updatedAt        DateTime              @updatedAt @map("actualizado_en") @db.Timestamptz(6)
+
+  skinDescriptions DescripcionElemento[]
+  subjectSolutions Solucion[]            @relation("SolutionSubject")
+  objectSolutions  Solucion[]            @relation("SolutionObject")
+  spaceSolutions   Solucion[]            @relation("SolutionSpace")
+
+  @@map("elemento")
+}
+
+model DescripcionElemento {
+  id          String     @id @default(uuid()) @db.Uuid @map("id_descripcion")
+  skinId      String     @db.Uuid @map("id_skin")
+  elementId   String     @db.Uuid @map("id_elem")
+  displayName String     @map("nombre_visible") @db.VarChar(120)
+  description String     @map("descripcion") @db.Text
+  imageUrl    String?    @map("imagen_url") @db.Text
+  motif       String?    @map("motivo") @db.Text
+  createdAt   DateTime   @default(now()) @map("creado_en") @db.Timestamptz(6)
+  updatedAt   DateTime   @updatedAt @map("actualizado_en") @db.Timestamptz(6)
+
+  skin        CluedoSkin @relation(fields: [skinId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  element     Elemento   @relation(fields: [elementId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([skinId, elementId], map: "descripcion_elemento_skin_elemento_key")
+  @@map("descripcion_elemento")
+}
+
+model Solucion {
+  id               String    @id @default(uuid()) @db.Uuid @map("id_solucion")
+  subjectElementId String    @db.Uuid @map("id_sujeto")
+  objectElementId  String    @db.Uuid @map("id_objeto")
+  spaceElementId   String    @db.Uuid @map("id_espacio")
+  createdAt        DateTime  @default(now()) @map("creado_en") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("actualizado_en") @db.Timestamptz(6)
+
+  subject          Elemento  @relation("SolutionSubject", fields: [subjectElementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  object           Elemento  @relation("SolutionObject", fields: [objectElementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  space            Elemento  @relation("SolutionSpace", fields: [spaceElementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  partidas         Partida[]
+
+  @@map("solucion")
+}
+
+model Partida {
+  id         String     @id @default(uuid()) @db.Uuid @map("id_partida")
+  accessCode String     @map("codigo_acceso") @db.VarChar(6)
+  status     String     @default("LOBBY") @map("estado") @db.VarChar(30)
+  skinId     String     @db.Uuid @map("id_skin")
+  solutionId String     @db.Uuid @map("id_solucion")
+  createdAt  DateTime   @default(now()) @map("creado_en") @db.Timestamptz(6)
+  updatedAt  DateTime   @updatedAt @map("actualizado_en") @db.Timestamptz(6)
+
+  skin       CluedoSkin @relation(fields: [skinId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  solution   Solucion   @relation(fields: [solutionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([accessCode], map: "partida_codigo_acceso_key")
+  @@index([skinId], map: "partida_id_skin_idx")
+  @@index([solutionId], map: "partida_id_solucion_idx")
+  @@map("partida")
+}

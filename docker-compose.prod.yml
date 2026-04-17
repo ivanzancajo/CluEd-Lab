@@ -1,0 +1,26 @@
+services:
+  backend:
+    image: tfg-backend:prod
+    build:
+      context: ./backend
+      target: prod
+    container_name: cluedo_backend_prod
+    env_file:
+      - ./backend/.env
+    environment:
+      - ALLOWED_ORIGINS=http://localhost:8080
+    ports:
+      - "4000:4000"
+
+  frontend:
+    image: tfg-frontend:prod
+    build:
+      context: ./frontend
+      target: prod
+      args:
+        VITE_API_URL: /api
+    container_name: cluedo_frontend_prod
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"

@@ -1,6 +1,9 @@
 services:
   backend:
-    build: ./backend
+    image: tfg-backend:dev
+    build:
+      context: ./backend
+      target: dev
     container_name: cluedo_backend
     ports:
       - "4000:4000"
@@ -11,7 +14,10 @@ services:
       - /app/node_modules
 
   frontend:
-    build: ./frontend
+    image: tfg-frontend:dev
+    build:
+      context: ./frontend
+      target: dev
     container_name: cluedo_frontend
     ports:
       - "5173:5173"
@@ -21,4 +27,4 @@ services:
     depends_on:
       - backend
     environment:
-      - VITE_API_URL=http://localhost:4000
+      - VITE_API_URL=http://localhost:4000/api

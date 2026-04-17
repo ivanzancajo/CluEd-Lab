@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react"; // Añadimos us
 import { Link, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { ArrowLeft, KeyRound, MonitorPlay, Zap, Copy, CheckCircle2, FileText } from "lucide-react";
+import { clearAdminSession } from "../../src/lib/auth";
 
 // 1. Definimos la Interface para eliminar la advertencia 'any' de la línea 11
 interface GameConfig {
@@ -78,11 +79,19 @@ export function SessionCreateView() {
     navigate("/board");
   };
 
+  const handleLogout = () => {
+    clearAdminSession();
+    navigate('/');
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#020617] to-black text-cyan-400 font-mono">
       <Link to="/" className="absolute top-8 left-8 text-slate-500 hover:text-cyan-400 transition-colors p-2 rounded-md hover:bg-slate-800 flex items-center gap-2 text-sm font-bold tracking-widest uppercase">
         <ArrowLeft className="w-5 h-5" /> Volver
       </Link>
+      <button onClick={handleLogout} className="absolute top-8 right-8 text-red-300 hover:text-red-200 border border-red-900/60 hover:border-red-500 transition-colors px-4 py-2 rounded-md bg-slate-950/60 text-xs font-bold tracking-widest uppercase">
+        Cerrar sesión
+      </button>
 
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}

@@ -1,6 +1,12 @@
 {
   "name": "frontend",
   "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "lint": "eslint ."
+  },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-alert-dialog": "^1.1.6",
@@ -50,14 +56,18 @@
     "vaul": "^1.1.2"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@tailwindcss/vite": "^4.1.4",
+    "@vitejs/plugin-react": "^5.0.4",
+    "@eslint/js": "^9.39.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "eslint": "^10.2.0",
+    "eslint": "^9.39.1",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "prelude-ls": "^1.2.1",
+    "tailwindcss": "^4.1.4",
     "typescript": "^6.0.2",
-    "typescript-eslint": "^8.58.1"
+    "typescript-eslint": "^8.58.1",
+    "vite": "^7.1.10"
   }
 }

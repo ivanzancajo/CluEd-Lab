@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
 import { Clock, Activity, AlertTriangle, ArrowLeft, History, Users, RefreshCw, MonitorPlay, GitCommit, KeyRound } from "lucide-react";
-import boardImg from "figma:asset/241994391a3b72800b68387bfebd6cd02264e354.png";
+
+const boardImg = "/board-placeholder.svg";
 
 const MOCK_EVENTS = [
   { id: 1, time: "14:52:10", type: "system", msg: "INICIALIZACIÓN DE RED O.P.T.I.C.A COMPLETADA." },

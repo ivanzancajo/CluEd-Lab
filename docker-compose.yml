@@ -1,11 +1,30 @@
 services:
   backend:
+    image: tfg-backend:dev
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    container_name: cluedo-api
+      target: dev
+    container_name: cluedo_backend
     ports:
       - "4000:4000"
     env_file:
       - ./backend/.env
-    restart: unless-stopped
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  frontend:
+    image: tfg-frontend:dev
+    build:
+      context: ./frontend
+      target: dev
+    container_name: cluedo_frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:4000/api

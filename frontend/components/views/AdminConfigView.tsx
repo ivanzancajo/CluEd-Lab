@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowLeft, Plus, Settings, User, Box, MapPin, KeyRound, Clock, Target, Save, FileText, Upload, List, Trash2 } from "lucide-react";
+import { clearAdminSession } from "../../src/lib/auth";
 
 interface Item {
   id: string;
@@ -278,6 +279,11 @@ export function AdminConfigView() {
     setActiveTab("list");
   };
 
+  const handleLogout = () => {
+    clearAdminSession();
+    window.location.assign('/');
+  };
+
   return (
     <div className="flex w-full min-h-screen bg-[#020617] text-cyan-400 font-mono overflow-hidden">
       
@@ -291,6 +297,9 @@ export function AdminConfigView() {
             <h1 className="text-sm font-bold tracking-widest text-emerald-400">ADMINISTRACIÓN</h1>
             <p className="text-[10px] text-slate-500">CONFIGURAR CLUEDOSKIN</p>
           </div>
+          <button onClick={handleLogout} className="ml-auto border border-red-900/60 bg-slate-950/70 px-3 py-2 rounded-md text-[10px] font-bold tracking-widest uppercase text-red-300 hover:text-red-200 hover:border-red-500 transition-colors">
+            Salir
+          </button>
         </div>
 
         <nav className="p-4 flex flex-col gap-2 flex-1 overflow-y-auto">

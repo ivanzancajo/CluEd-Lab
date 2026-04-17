@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import { createBrowserRouter } from "react-router";
 import { Landing } from "./components/views/Landing";
 import { TerminalView } from "./components/views/TerminalView";
@@ -5,6 +6,15 @@ import { BoardView } from "./components/views/BoardView";
 import { JoinTerminalView } from "./components/views/JoinTerminalView";
 import { AdminConfigView } from "./components/views/AdminConfigView";
 import { SessionCreateView } from "./components/views/SessionCreateView";
+import { ProtectedRoute } from "./components/auth/ProtectedRoute";
+
+function ProtectedAdminConfig() {
+  return createElement(ProtectedRoute, null, createElement(AdminConfigView));
+}
+
+function ProtectedSessionCreate() {
+  return createElement(ProtectedRoute, null, createElement(SessionCreateView));
+}
 
 export const router = createBrowserRouter([
   {
@@ -21,7 +31,7 @@ export const router = createBrowserRouter([
   },
   {
     path: "/config",
-    Component: AdminConfigView,
+    Component: ProtectedAdminConfig,
   },
   {
     path: "/board",
@@ -29,6 +39,6 @@ export const router = createBrowserRouter([
   },
   {
     path: "/host",
-    Component: SessionCreateView,
+    Component: ProtectedSessionCreate,
   },
 ]);

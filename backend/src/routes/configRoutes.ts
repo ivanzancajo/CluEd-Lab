@@ -33,6 +33,35 @@ type PrismaWriter = Pick<typeof prisma, 'cluedoSkin' | 'elemento' | 'descripcion
 type SkinDescriptionRecord = Prisma.DescripcionElementoGetPayload<{ include: { element: true } }>;
 type DescriptionsPayload = Partial<Record<ConfigCollectionKey, ConfigItemInput[]>>;
 
+type SkinElementOverride = {
+  name?: string;
+  imageUrl?: string;
+  motif?: string;
+};
+
+type SkinContextMetadata = {
+  version: 1;
+  gameTitle: string;
+  duration: string;
+  cat1Name: string;
+  cat2Name: string;
+  cat3Name: string;
+  hasMotifs: boolean;
+  createdAt: number;
+  updatedAt: number;
+  legacyContext?: string;
+  elementOverrides: Record<string, SkinElementOverride>;
+};
+
+const DEFAULT_METADATA = {
+  gameTitle: 'Cluedo Online',
+  duration: '60',
+  cat1Name: 'Sujetos',
+  cat2Name: 'Objetos',
+  cat3Name: 'Espacios',
+  hasMotifs: false,
+} as const;
+
 class HttpError extends Error {
   constructor(
     public status: number,
@@ -48,7 +77,7 @@ router.use(verifyToken);
 router.get('/skins', async (_req, res) => {
   try {
     const [skins, counts] = await Promise.all([
-      prisma.cluedoSkin.findMany({ orderBy: { createdAt: 'desc' } }),
+      prisma.cluedoSkin.findMany(),
       prisma.elemento.groupBy({ by: ['kind'], _count: { _all: true } }),
     ]);
 
@@ -56,24 +85,42 @@ router.get('/skins', async (_req, res) => {
       counts.map((entry) => [entry.kind, entry._count._all])
     );
 
-    res.json({
-      items: skins.map((skin) => ({
-        id: skin.id,
-        name: skin.name,
-        gameTitle: skin.publicTitle,
-        duration: String(skin.durationMinutes),
-        centerImage: skin.centerImageUrl ?? '',
-        cat1Name: skin.subjectCategoryName,
-        cat2Name: skin.objectCategoryName,
-        cat3Name: skin.spaceCategoryName,
-        hasMotifs: skin.hasMotifs,
-        createdAt: skin.createdAt.getTime(),
-        updatedAt: skin.updatedAt.getTime(),
-        subjectCount: countByKind.get(TipoElemento.SUJETO) ?? 0,
-        objectCount: countByKind.get(TipoElemento.OBJETO) ?? 0,
-        spaceCount: countByKind.get(TipoElemento.ESPACIO) ?? 0,
-      })),
-    });
+    const items = skins
+      .map((skin) => {
+        const metadata = parseSkinContext(skin.context, skin.name);
+
+        return {
+          id: skin.id,
+          name: skin.name,
+          gameTitle: metadata.gameTitle,
+          duration: metadata.duration,
+          centerImage: skin.imageUrl ?? '',
+          cat1Name: metadata.cat1Name,
+          cat2Name: metadata.cat2Name,
+          cat3Name: metadata.cat3Name,
+          hasMotifs: metadata.hasMotifs,
+          createdAt: metadata.createdAt,
+          updatedAt: metadata.updatedAt,
+          subjectCount: countByKind.get(TipoElemento.SUJETO) ?? 0,
+          objectCount: countByKind.get(TipoElemento.OBJETO) ?? 0,
+          spaceCount: countByKind.get(TipoElemento.ESPACIO) ?? 0,
+        };
+      })
+      .sort((left, right) => {
+        const byUpdated = right.updatedAt - left.updatedAt;
+        if (byUpdated !== 0) {
+          return byUpdated;
+        }
+
+        const byCreated = right.createdAt - left.createdAt;
+        if (byCreated !== 0) {
+          return byCreated;
+        }
+
+        return left.name.localeCompare(right.name, 'es');
+      });
+
+    res.json({ items });
   } catch (error) {
     respondUnexpectedError(res, error);
   }
@@ -120,11 +167,25 @@ router.post('/skins', async (req, res) => {
 
   try {
     const skinConfig = await prisma.$transaction(async (tx) => {
+      const initialMetadata = createSkinMetadata(payload, Date.now());
       const skin = await tx.cluedoSkin.create({
-        data: mapCreateSkinFields(payload),
+        data: mapCreateSkinFields(payload, initialMetadata),
       });
 
-      await replaceSkinDescriptions(tx, skin.id, extractDescriptionsPayload(payload), skin.hasMotifs);
+      const nextMetadata = await replaceSkinDescriptions(
+        tx,
+        skin.id,
+        extractDescriptionsPayload(payload),
+        initialMetadata
+      );
+
+      if (serializeSkinContext(nextMetadata) !== skin.context) {
+        await tx.cluedoSkin.update({
+          where: { id: skin.id },
+          data: { context: serializeSkinContext(nextMetadata) },
+        });
+      }
+
       return loadSkinConfiguration(tx, skin.id);
     });
 
@@ -153,12 +214,19 @@ router.put('/skins/:id', async (req, res) => {
         throw new HttpError(404, 'La configuración solicitada no existe.');
       }
 
-      const updatedSkin = await tx.cluedoSkin.update({
+      const metadata = mergeSkinMetadata(parseSkinContext(existingSkin.context, existingSkin.name), payload);
+      const nextMetadata = await replaceSkinDescriptions(
+        tx,
+        skinId,
+        extractDescriptionsPayload(payload),
+        metadata
+      );
+
+      await tx.cluedoSkin.update({
         where: { id: skinId },
-        data: mapUpdateSkinFields(payload),
+        data: mapUpdateSkinFields(payload, nextMetadata),
       });
 
-      await replaceSkinDescriptions(tx, skinId, extractDescriptionsPayload(payload), updatedSkin.hasMotifs);
       return loadSkinConfiguration(tx, skinId);
     });
 
@@ -187,7 +255,19 @@ router.put('/skins/:id/descriptions', async (req, res) => {
         throw new HttpError(404, 'La configuración solicitada no existe.');
       }
 
-      await replaceSkinDescriptions(tx, skinId, extractDescriptionsPayload(payload), existingSkin.hasMotifs);
+      const metadata = touchSkinMetadata(parseSkinContext(existingSkin.context, existingSkin.name));
+      const nextMetadata = await replaceSkinDescriptions(
+        tx,
+        skinId,
+        extractDescriptionsPayload(payload),
+        metadata
+      );
+
+      await tx.cluedoSkin.update({
+        where: { id: skinId },
+        data: { context: serializeSkinContext(nextMetadata) },
+      });
+
       return loadSkinConfiguration(tx, skinId);
     });
 
@@ -259,58 +339,37 @@ function parseBody<T>(
   return parsed.data;
 }
 
-function mapCreateSkinFields(payload: CreateSkinConfigInput): Prisma.CluedoSkinCreateInput {
+function mapCreateSkinFields(
+  payload: CreateSkinConfigInput,
+  metadata: SkinContextMetadata
+): Prisma.CluedoSkinCreateInput {
   return {
     name: payload.name,
-    publicTitle: payload.gameTitle,
     objective: payload.objective,
-    durationMinutes: payload.duration,
-    centerImageUrl: payload.centerImage ?? null,
-    subjectCategoryName: payload.cat1Name,
-    objectCategoryName: payload.cat2Name,
-    spaceCategoryName: payload.cat3Name,
-    hasMotifs: payload.hasMotifs ?? false,
+    imageUrl: payload.centerImage ?? null,
+    context: serializeSkinContext(metadata),
   };
 }
 
-function mapUpdateSkinFields(payload: UpdateSkinConfigInput): Prisma.CluedoSkinUpdateInput {
+function mapUpdateSkinFields(
+  payload: UpdateSkinConfigInput,
+  metadata: SkinContextMetadata
+): Prisma.CluedoSkinUpdateInput {
   const data: Prisma.CluedoSkinUpdateInput = {};
 
   if (payload.name !== undefined) {
     data.name = payload.name;
   }
 
-  if (payload.gameTitle !== undefined) {
-    data.publicTitle = payload.gameTitle;
-  }
-
   if (payload.objective !== undefined) {
     data.objective = payload.objective;
   }
 
-  if (payload.duration !== undefined) {
-    data.durationMinutes = payload.duration;
-  }
-
   if (payload.centerImage !== undefined) {
-    data.centerImageUrl = payload.centerImage ?? null;
+    data.imageUrl = payload.centerImage ?? null;
   }
 
-  if (payload.cat1Name !== undefined) {
-    data.subjectCategoryName = payload.cat1Name;
-  }
-
-  if (payload.cat2Name !== undefined) {
-    data.objectCategoryName = payload.cat2Name;
-  }
-
-  if (payload.cat3Name !== undefined) {
-    data.spaceCategoryName = payload.cat3Name;
-  }
-
-  if (payload.hasMotifs !== undefined) {
-    data.hasMotifs = payload.hasMotifs;
-  }
+  data.context = serializeSkinContext(metadata);
 
   return data;
 }
@@ -335,11 +394,209 @@ function extractDescriptionsPayload(
   return descriptions;
 }
 
+function createSkinMetadata(payload: CreateSkinConfigInput, timestamp: number): SkinContextMetadata {
+  return {
+    version: 1,
+    gameTitle: payload.gameTitle,
+    duration: String(payload.duration),
+    cat1Name: payload.cat1Name,
+    cat2Name: payload.cat2Name,
+    cat3Name: payload.cat3Name,
+    hasMotifs: payload.hasMotifs ?? DEFAULT_METADATA.hasMotifs,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    elementOverrides: {},
+  };
+}
+
+function parseSkinContext(rawContext: string | null, fallbackName: string): SkinContextMetadata {
+  const fallback = createFallbackMetadata(fallbackName);
+
+  if (!rawContext || !rawContext.trim()) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(rawContext) as Record<string, unknown>;
+
+    if (parsed && typeof parsed === 'object') {
+      const metadata: SkinContextMetadata = {
+        version: 1,
+        gameTitle: getStringValue(parsed.gameTitle, fallbackName || DEFAULT_METADATA.gameTitle),
+        duration: getDurationValue(parsed.duration, DEFAULT_METADATA.duration),
+        cat1Name: getStringValue(parsed.cat1Name, DEFAULT_METADATA.cat1Name),
+        cat2Name: getStringValue(parsed.cat2Name, DEFAULT_METADATA.cat2Name),
+        cat3Name: getStringValue(parsed.cat3Name, DEFAULT_METADATA.cat3Name),
+        hasMotifs: typeof parsed.hasMotifs === 'boolean' ? parsed.hasMotifs : DEFAULT_METADATA.hasMotifs,
+        createdAt: getTimestampValue(parsed.createdAt),
+        updatedAt: getTimestampValue(parsed.updatedAt, getTimestampValue(parsed.createdAt)),
+        elementOverrides: parseElementOverrides(parsed.elementOverrides),
+      };
+
+      const legacyContext = getOptionalStringValue(parsed.legacyContext);
+      return legacyContext ? { ...metadata, legacyContext } : metadata;
+    }
+  } catch {
+    return {
+      ...fallback,
+      gameTitle: rawContext.trim() || fallback.gameTitle,
+      legacyContext: rawContext,
+    };
+  }
+
+  return fallback;
+}
+
+function mergeSkinMetadata(
+  current: SkinContextMetadata,
+  payload: UpdateSkinConfigInput
+): SkinContextMetadata {
+  const timestamp = Date.now();
+  const nextMetadataBase: SkinContextMetadata = {
+    version: 1,
+    gameTitle: payload.gameTitle ?? current.gameTitle,
+    duration: payload.duration !== undefined ? String(payload.duration) : current.duration,
+    cat1Name: payload.cat1Name ?? current.cat1Name,
+    cat2Name: payload.cat2Name ?? current.cat2Name,
+    cat3Name: payload.cat3Name ?? current.cat3Name,
+    hasMotifs: payload.hasMotifs ?? current.hasMotifs,
+    createdAt: current.createdAt > 0 ? current.createdAt : timestamp,
+    updatedAt: timestamp,
+    elementOverrides: { ...current.elementOverrides },
+  };
+
+  const nextMetadata = current.legacyContext
+    ? { ...nextMetadataBase, legacyContext: current.legacyContext }
+    : nextMetadataBase;
+
+  if (!nextMetadata.hasMotifs) {
+    removeMotifsFromOverrides(nextMetadata.elementOverrides);
+  }
+
+  return nextMetadata;
+}
+
+function touchSkinMetadata(current: SkinContextMetadata): SkinContextMetadata {
+  const timestamp = Date.now();
+
+  return {
+    ...current,
+    createdAt: current.createdAt > 0 ? current.createdAt : timestamp,
+    updatedAt: timestamp,
+    elementOverrides: { ...current.elementOverrides },
+  };
+}
+
+function createFallbackMetadata(fallbackName: string): SkinContextMetadata {
+  return {
+    version: 1,
+    gameTitle: fallbackName || DEFAULT_METADATA.gameTitle,
+    duration: DEFAULT_METADATA.duration,
+    cat1Name: DEFAULT_METADATA.cat1Name,
+    cat2Name: DEFAULT_METADATA.cat2Name,
+    cat3Name: DEFAULT_METADATA.cat3Name,
+    hasMotifs: DEFAULT_METADATA.hasMotifs,
+    createdAt: 0,
+    updatedAt: 0,
+    elementOverrides: {},
+  };
+}
+
+function serializeSkinContext(metadata: SkinContextMetadata) {
+  const sanitizedOverrides: Record<string, SkinElementOverride> = {};
+
+  for (const [elementId, override] of Object.entries(metadata.elementOverrides)) {
+    const normalizedOverride: SkinElementOverride = {
+      ...(override.name ? { name: override.name } : {}),
+      ...(override.imageUrl ? { imageUrl: override.imageUrl } : {}),
+      ...(metadata.hasMotifs && override.motif ? { motif: override.motif } : {}),
+    };
+
+    if (Object.keys(normalizedOverride).length > 0) {
+      sanitizedOverrides[elementId] = normalizedOverride;
+    }
+  }
+
+  return JSON.stringify({
+    version: 1,
+    gameTitle: metadata.gameTitle,
+    duration: metadata.duration,
+    cat1Name: metadata.cat1Name,
+    cat2Name: metadata.cat2Name,
+    cat3Name: metadata.cat3Name,
+    hasMotifs: metadata.hasMotifs,
+    createdAt: metadata.createdAt,
+    updatedAt: metadata.updatedAt,
+    ...(metadata.legacyContext ? { legacyContext: metadata.legacyContext } : {}),
+    elementOverrides: sanitizedOverrides,
+  });
+}
+
+function parseElementOverrides(value: unknown): Record<string, SkinElementOverride> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  const parsedOverrides: Record<string, SkinElementOverride> = {};
+
+  for (const [elementId, override] of Object.entries(value)) {
+    if (!override || typeof override !== 'object' || Array.isArray(override)) {
+      continue;
+    }
+
+    const overrideRecord = override as Record<string, unknown>;
+    const name = getOptionalStringValue(overrideRecord.name);
+    const imageUrl = getOptionalStringValue(overrideRecord.imageUrl);
+    const motif = getOptionalStringValue(overrideRecord.motif);
+    const parsedOverride: SkinElementOverride = {
+      ...(name ? { name } : {}),
+      ...(imageUrl ? { imageUrl } : {}),
+      ...(motif ? { motif } : {}),
+    };
+
+    if (Object.keys(parsedOverride).length > 0) {
+      parsedOverrides[elementId] = parsedOverride;
+    }
+  }
+
+  return parsedOverrides;
+}
+
+function getStringValue(value: unknown, fallback: string) {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function getOptionalStringValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function getDurationValue(value: unknown, fallback: string) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(Math.trunc(value));
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
+  }
+
+  return fallback;
+}
+
+function getTimestampValue(value: unknown, fallback = 0) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function removeMotifsFromOverrides(overrides: Record<string, SkinElementOverride>) {
+  for (const override of Object.values(overrides)) {
+    delete override.motif;
+  }
+}
+
 async function loadSkinConfiguration(client: PrismaReader, skinId: string) {
   const [skin, elements, descriptions] = await Promise.all([
     client.cluedoSkin.findUnique({ where: { id: skinId } }),
     client.elemento.findMany({
-      orderBy: [{ kind: 'asc' }, { baseName: 'asc' }],
+      orderBy: [{ kind: 'asc' }, { name: 'asc' }],
     }),
     client.descripcionElemento.findMany({
       where: { skinId },
@@ -355,41 +612,45 @@ async function loadSkinConfiguration(client: PrismaReader, skinId: string) {
     descriptions.map((description) => [description.elementId, description])
   );
 
+  const metadata = parseSkinContext(skin.context, skin.name);
+
   return {
     id: skin.id,
     name: skin.name,
-    gameTitle: skin.publicTitle,
-    objective: skin.objective,
-    duration: String(skin.durationMinutes),
-    centerImage: skin.centerImageUrl ?? '',
-    cat1Name: skin.subjectCategoryName,
-    cat2Name: skin.objectCategoryName,
-    cat3Name: skin.spaceCategoryName,
-    hasMotifs: skin.hasMotifs,
-    subjects: buildConfigItems(elements, descriptionsByElementId, TipoElemento.SUJETO),
-    objects: buildConfigItems(elements, descriptionsByElementId, TipoElemento.OBJETO),
-    spaces: buildConfigItems(elements, descriptionsByElementId, TipoElemento.ESPACIO),
-    createdAt: skin.createdAt.getTime(),
-    updatedAt: skin.updatedAt.getTime(),
+    gameTitle: metadata.gameTitle,
+    objective: skin.objective ?? '',
+    duration: metadata.duration,
+    centerImage: skin.imageUrl ?? '',
+    cat1Name: metadata.cat1Name,
+    cat2Name: metadata.cat2Name,
+    cat3Name: metadata.cat3Name,
+    hasMotifs: metadata.hasMotifs,
+    subjects: buildConfigItems(elements, descriptionsByElementId, metadata, TipoElemento.SUJETO),
+    objects: buildConfigItems(elements, descriptionsByElementId, metadata, TipoElemento.OBJETO),
+    spaces: buildConfigItems(elements, descriptionsByElementId, metadata, TipoElemento.ESPACIO),
+    createdAt: metadata.createdAt,
+    updatedAt: metadata.updatedAt,
   };
 }
 
 function buildConfigItems(
   elements: Elemento[],
   descriptionsByElementId: Map<string, SkinDescriptionRecord>,
+  metadata: SkinContextMetadata,
   kind: TipoElemento
 ) {
   return elements
     .filter((element) => element.kind === kind)
     .map((element) => {
       const description = descriptionsByElementId.get(element.id);
+      const override = metadata.elementOverrides[element.id];
 
       return {
         id: element.id,
-        name: description?.displayName ?? element.baseName,
+        name: override?.name ?? element.name,
         desc: description?.description ?? '',
-        imageUrl: description?.imageUrl ?? undefined,
-        motif: description?.motif ?? undefined,
+        imageUrl: override?.imageUrl ?? element.imageUrl ?? undefined,
+        motif: metadata.hasMotifs ? override?.motif ?? undefined : undefined,
       };
     });
 }
@@ -398,21 +659,23 @@ async function replaceSkinDescriptions(
   client: PrismaWriter,
   skinId: string,
   payload: DescriptionsPayload,
-  effectiveHasMotifs: boolean
+  metadata: SkinContextMetadata
 ) {
   const collectionsToReplace = CONFIG_COLLECTIONS.filter(({ key }) => payload[key] !== undefined);
+  const nextMetadata: SkinContextMetadata = {
+    ...metadata,
+    elementOverrides: { ...metadata.elementOverrides },
+  };
 
   if (collectionsToReplace.length === 0) {
-    if (!effectiveHasMotifs) {
-      await client.descripcionElemento.updateMany({
-        where: { skinId },
-        data: { motif: null },
-      });
+    if (!nextMetadata.hasMotifs) {
+      removeMotifsFromOverrides(nextMetadata.elementOverrides);
     }
-    return;
+
+    return nextMetadata;
   }
 
-  const { elementsByKind, errors } = await validateElementsForDescriptions(
+  const { elementsById, elementsByKind, errors } = await validateElementsForDescriptions(
     client,
     payload,
     collectionsToReplace
@@ -422,7 +685,7 @@ async function replaceSkinDescriptions(
     throw new HttpError(400, 'La configuración contiene elementos inválidos.', errors);
   }
 
-  if (!effectiveHasMotifs) {
+  if (!nextMetadata.hasMotifs) {
     const itemsWithMotif = collectionsToReplace.flatMap(({ key }) => (payload[key] ?? []).filter((item) => Boolean(item.motif)));
     if (itemsWithMotif.length > 0) {
       throw new HttpError(400, 'No se pueden guardar motivos cuando la configuración no los tiene habilitados.');
@@ -442,9 +705,19 @@ async function replaceSkinDescriptions(
           elementId: { in: descriptionIdsToDelete },
         },
       });
+
+      for (const elementId of descriptionIdsToDelete) {
+        delete nextMetadata.elementOverrides[elementId];
+      }
     }
 
     for (const item of items) {
+      const element = elementsById.get(item.id);
+
+      if (!element) {
+        continue;
+      }
+
       await client.descripcionElemento.upsert({
         where: {
           skinId_elementId: {
@@ -455,27 +728,54 @@ async function replaceSkinDescriptions(
         create: {
           skinId,
           elementId: item.id,
-          displayName: item.name,
           description: item.desc,
-          imageUrl: item.imageUrl ?? null,
-          motif: effectiveHasMotifs ? item.motif ?? null : null,
         },
         update: {
-          displayName: item.name,
           description: item.desc,
-          imageUrl: item.imageUrl ?? null,
-          motif: effectiveHasMotifs ? item.motif ?? null : null,
         },
       });
+
+      const override = buildElementOverride(item, element, nextMetadata.hasMotifs);
+      if (override) {
+        nextMetadata.elementOverrides[item.id] = override;
+      } else {
+        delete nextMetadata.elementOverrides[item.id];
+      }
     }
   }
 
-  if (!effectiveHasMotifs) {
-    await client.descripcionElemento.updateMany({
-      where: { skinId },
-      data: { motif: null },
-    });
+  if (!nextMetadata.hasMotifs) {
+    removeMotifsFromOverrides(nextMetadata.elementOverrides);
   }
+
+  nextMetadata.updatedAt = Date.now();
+  if (nextMetadata.createdAt <= 0) {
+    nextMetadata.createdAt = nextMetadata.updatedAt;
+  }
+
+  return nextMetadata;
+}
+
+function buildElementOverride(
+  item: ConfigItemInput,
+  element: Elemento,
+  hasMotifs: boolean
+) {
+  const override: SkinElementOverride = {};
+
+  if (item.name !== element.name) {
+    override.name = item.name;
+  }
+
+  if (item.imageUrl !== undefined && item.imageUrl !== (element.imageUrl ?? undefined)) {
+    override.imageUrl = item.imageUrl;
+  }
+
+  if (hasMotifs && item.motif) {
+    override.motif = item.motif;
+  }
+
+  return Object.keys(override).length > 0 ? override : null;
 }
 
 async function validateElementsForDescriptions(

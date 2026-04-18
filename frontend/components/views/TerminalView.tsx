@@ -47,6 +47,7 @@ interface GameConfig {
   cat1Name?: string;
   cat2Name?: string;
   cat3Name?: string;
+  hasMotifs?: boolean;
   subjects?: RawItem[];
   objects?: RawItem[];
   spaces?: RawItem[];
@@ -143,13 +144,15 @@ export function TerminalView() {
           c2: parsed.cat2Name || "Objetos",
           c3: parsed.cat3Name || "Espacios"
         });
+
+        const showMotifs = parsed.hasMotifs === true;
         
         // Map configs to the categories format expected by TerminalView
         const mapItems = (items: RawItem[], defaultIcon: React.ReactNode, defaultColor: string): ElementoItem[] => {
           return items.map((item) => ({
             name: item.name,
             desc: item.desc,
-            motif: item.motif,
+            motif: showMotifs ? item.motif : undefined,
             avatar: defaultIcon,
             color: defaultColor
           }));

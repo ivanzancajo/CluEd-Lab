@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react"; // Añadimos useCallback por seguridad
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { ArrowLeft, KeyRound, MonitorPlay, Zap, Copy, CheckCircle2, FileText } from "lucide-react";
 import { clearAdminSession } from "../../src/lib/auth";
 import { type GameConfig, validateSkinComposition } from "../../src/lib/skinApi";
+import { createGameSession, getSessionErrorMessage } from "../../src/lib/sessionApi";
 
 export function SessionCreateView() {
   const navigate = useNavigate();
@@ -11,19 +12,11 @@ export function SessionCreateView() {
   const [copied, setCopied] = useState(false);
   const [configs, setConfigs] = useState<GameConfig[]>([]);
   const [selectedConfigId, setSelectedConfigId] = useState<string>("");
-
-  const generateCode = useCallback(() => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < 6; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setSessionCode(result);
-    localStorage.setItem("sessionCode", result);
-  }, []);
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
 
   useEffect(() => {
-    generateCode();
+    localStorage.removeItem("sessionCode");
     const savedConfigs = localStorage.getItem("gameConfigs");
     if (savedConfigs) {
       const parsed: GameConfig[] = JSON.parse(savedConfigs);
@@ -32,7 +25,12 @@ export function SessionCreateView() {
         setSelectedConfigId(parsed[0].id);
       }
     }
-  }, [generateCode]);
+  }, []);
+
+  useEffect(() => {
+    setSessionCode("");
+    setSessionError(null);
+  }, [selectedConfigId]);
 
   const selectedConfig = configs.find((config) => config.id === selectedConfigId) ?? null;
   const selectedConfigValidation = validateSkinComposition({
@@ -43,6 +41,10 @@ export function SessionCreateView() {
   });
 
   const handleCopy = async () => {
+    if (!sessionCode) {
+      return;
+    }
+
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(sessionCode);
@@ -63,18 +65,28 @@ export function SessionCreateView() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleStartBoard = () => {
+  const handleStartBoard = async () => {
     if (!selectedConfig || !selectedConfigValidation.isValid) {
       return;
     }
 
-    if (selectedConfigId) {
-      localStorage.setItem("duration", selectedConfig.duration);
-      localStorage.setItem("gameTitle", selectedConfig.gameTitle);
-      localStorage.setItem("centerImage", selectedConfig.centerImage);
-      localStorage.setItem("activeConfig", JSON.stringify(selectedConfig));
+    try {
+      setIsCreatingSession(true);
+      setSessionError(null);
+
+      const session = await createGameSession(selectedConfigId);
+      setSessionCode(session.accessCode);
+      localStorage.setItem("sessionCode", session.accessCode);
+      localStorage.setItem("duration", session.skin.duration);
+      localStorage.setItem("gameTitle", session.skin.gameTitle);
+      localStorage.setItem("centerImage", session.skin.centerImage);
+      localStorage.setItem("activeConfig", JSON.stringify(session.skin));
+      navigate("/board");
+    } catch (error) {
+      setSessionError(getSessionErrorMessage(error, "No se pudo iniciar la sesión."));
+    } finally {
+      setIsCreatingSession(false);
     }
-    navigate("/board");
   };
 
   const handleLogout = () => {
@@ -105,7 +117,7 @@ export function SessionCreateView() {
             Sesión de Juego Lista
           </h1>
           <p className="text-slate-400 text-sm mt-2">
-            Selecciona la configuración a utilizar y comparte el código de acceso con los equipos.
+            Selecciona la configuración a utilizar. El código de acceso se generará al iniciar la sesión.
           </p>
         </div>
 
@@ -145,30 +157,39 @@ export function SessionCreateView() {
           <div className="flex items-center gap-4">
             <div className="flex-1 bg-black border border-cyan-900/50 rounded-lg p-6 flex items-center justify-center relative group">
               <span className="text-5xl font-black tracking-[0.2em] text-white drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
-                {sessionCode}
+                {sessionCode || "------"}
               </span>
             </div>
             <button 
               onClick={handleCopy}
-              className="h-full px-6 flex flex-col items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors"
+              disabled={!sessionCode}
+              className="h-full px-6 flex flex-col items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-600 text-slate-300 rounded-lg border border-slate-700 transition-colors"
               title="Copiar código"
             >
               {copied ? <CheckCircle2 className="w-6 h-6 text-emerald-400" /> : <Copy className="w-6 h-6" />}
               <span className="text-[10px] uppercase tracking-wider">{copied ? 'Copiado' : 'Copiar'}</span>
             </button>
           </div>
-          
-          <button onClick={generateCode} className="text-xs text-slate-500 hover:text-cyan-400 underline decoration-dashed underline-offset-4 transition-colors">
-            Regenerar código
-          </button>
+
+          <p className="text-center text-xs text-slate-500">
+            {sessionCode
+              ? "Código generado y listo para compartir."
+              : "El código aparecerá cuando pulses iniciar pantalla central."}
+          </p>
         </div>
+
+        {sessionError ? (
+          <div className="w-full rounded-xl border border-red-900/70 bg-red-950/30 px-4 py-3 text-sm text-red-100">
+            {sessionError}
+          </div>
+        ) : null}
 
         <button 
           onClick={handleStartBoard} 
-          disabled={!selectedConfig || !selectedConfigValidation.isValid}
+          disabled={!selectedConfig || !selectedConfigValidation.isValid || isCreatingSession}
           className="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black uppercase tracking-widest py-5 rounded-xl flex items-center justify-center gap-3 transition-all active:scale-95 shadow-[0_0_30px_rgba(16,185,129,0.3)] text-lg"
         >
-          <MonitorPlay className="w-6 h-6" /> Iniciar Pantalla Central
+          <MonitorPlay className="w-6 h-6" /> {isCreatingSession ? "Iniciando sesión..." : "Iniciar Pantalla Central"}
         </button>
 
       </motion.div>

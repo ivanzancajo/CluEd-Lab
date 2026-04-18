@@ -76,7 +76,7 @@ const configCollections = z.object({
 });
 
 const skinBaseSchema = z.object({
-  name: requiredText('El nombre de la configuración', 120),
+  name: requiredText('El nombre de la configuración', 100),
   gameTitle: requiredText('El título público de la partida', 120),
   objective: requiredText('El objetivo de la partida', MAX_TEXT_LENGTH),
   duration: durationSchema,

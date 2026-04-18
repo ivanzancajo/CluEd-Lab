@@ -86,6 +86,7 @@ model DescripcionElemento {
   skinId      String     @db.Uuid @map("id_skin")
   elementId   String     @db.Uuid @map("id_elem")
   description String?    @map("descripcion")
+  motif       String?    @map("motivo")
 
   skin        CluedoSkin @relation(fields: [skinId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   element     Elemento   @relation(fields: [elementId], references: [id], onDelete: Cascade, onUpdate: Cascade)

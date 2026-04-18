@@ -2,6 +2,11 @@ import { z } from 'zod';
 
 const MAX_IMAGE_LENGTH = 5_000_000;
 const MAX_TEXT_LENGTH = 4_000;
+const REQUIRED_COLLECTION_COUNTS = {
+  subjects: 6,
+  objects: 6,
+  spaces: 9,
+} as const;
 
 const uuidSchema = z.string().uuid('El identificador debe ser un UUID válido.');
 
@@ -61,18 +66,38 @@ const durationSchema = z.union([z.number(), z.string()]).transform((value, conte
   return parsedValue;
 });
 
+type MotifValidationInput = {
+  hasMotifs?: boolean | undefined;
+  subjects?: ConfigItemInput[] | undefined;
+  objects?: ConfigItemInput[] | undefined;
+  spaces?: ConfigItemInput[] | undefined;
+};
+
 export const configItemSchema = z.object({
-  id: uuidSchema,
+  id: uuidSchema.optional(),
   name: requiredText('El nombre del elemento', 120),
   desc: requiredText('La descripción del elemento', MAX_TEXT_LENGTH),
   imageUrl: optionalText(MAX_IMAGE_LENGTH, 'La imagen del elemento'),
   motif: optionalText(2_000, 'El motivo del elemento'),
 });
 
-const configCollections = z.object({
-  subjects: z.array(configItemSchema).optional(),
-  objects: z.array(configItemSchema).optional(),
-  spaces: z.array(configItemSchema).optional(),
+function collectionSchema(key: ConfigCollectionKey) {
+  return z.array(configItemSchema).length(
+    REQUIRED_COLLECTION_COUNTS[key],
+    `La configuración debe tener exactamente ${REQUIRED_COLLECTION_COUNTS[key]} ${getCollectionLabel(key)}.`
+  );
+}
+
+const fullConfigCollections = z.object({
+  subjects: collectionSchema('subjects'),
+  objects: collectionSchema('objects'),
+  spaces: collectionSchema('spaces'),
+});
+
+const partialConfigCollections = z.object({
+  subjects: collectionSchema('subjects').optional(),
+  objects: collectionSchema('objects').optional(),
+  spaces: collectionSchema('spaces').optional(),
 });
 
 const skinBaseSchema = z.object({
@@ -87,25 +112,184 @@ const skinBaseSchema = z.object({
   hasMotifs: z.boolean().optional(),
 });
 
-export const createSkinConfigSchema = skinBaseSchema.merge(configCollections);
+export const createSkinConfigSchema = skinBaseSchema
+  .merge(fullConfigCollections)
+  .superRefine((value, context) => {
+    validateCollectionUniqueness(value.subjects, 'subjects', context);
+    validateCollectionUniqueness(value.objects, 'objects', context);
+    validateCollectionUniqueness(value.spaces, 'spaces', context);
+    validateMotifRules(value, context);
+  });
 
 export const updateSkinConfigSchema = skinBaseSchema
   .partial()
-  .merge(configCollections)
-  .refine((value) => Object.keys(value).length > 0, {
-    message: 'Debes indicar al menos un campo a actualizar.',
+  .merge(partialConfigCollections)
+  .superRefine((value, context) => {
+    if (Object.keys(value).length === 0) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Debes indicar al menos un campo a actualizar.',
+      });
+      return;
+    }
+
+    const includesCollections =
+      value.subjects !== undefined || value.objects !== undefined || value.spaces !== undefined;
+
+    if (includesCollections) {
+      if (value.subjects === undefined || value.objects === undefined || value.spaces === undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Debes enviar sujetos, objetos y espacios cuando actualices las ternas.',
+        });
+        return;
+      }
+
+      validateCollectionUniqueness(value.subjects, 'subjects', context);
+      validateCollectionUniqueness(value.objects, 'objects', context);
+      validateCollectionUniqueness(value.spaces, 'spaces', context);
+      validateMotifRules(
+        {
+          hasMotifs: value.hasMotifs,
+          subjects: value.subjects,
+          objects: value.objects,
+          spaces: value.spaces,
+        },
+        context
+      );
+    }
   });
 
-export const updateSkinDescriptionsSchema = configCollections.refine(
-  (value) => value.subjects !== undefined || value.objects !== undefined || value.spaces !== undefined,
-  { message: 'Debes indicar al menos una colección de descripciones a actualizar.' }
-);
+export const updateSkinDescriptionsSchema = partialConfigCollections.superRefine((value, context) => {
+  if (value.subjects === undefined && value.objects === undefined && value.spaces === undefined) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Debes indicar al menos una colección de descripciones a actualizar.',
+    });
+    return;
+  }
+
+  if (value.subjects) {
+    validateCollectionUniqueness(value.subjects, 'subjects', context);
+  }
+
+  if (value.objects) {
+    validateCollectionUniqueness(value.objects, 'objects', context);
+  }
+
+  if (value.spaces) {
+    validateCollectionUniqueness(value.spaces, 'spaces', context);
+  }
+
+  validateMotifRules(value, context);
+});
 
 export const skinParamsSchema = z.object({
   id: uuidSchema,
 });
 
 export type ConfigCollectionKey = 'subjects' | 'objects' | 'spaces';
+
+function getCollectionLabel(key: ConfigCollectionKey) {
+  switch (key) {
+    case 'subjects':
+      return 'sujetos';
+    case 'objects':
+      return 'objetos';
+    case 'spaces':
+      return 'espacios';
+  }
+}
+
+function normalizeName(value: string) {
+  return value.trim().toLocaleLowerCase('es');
+}
+
+function addIssueForCollection(
+  context: z.RefinementCtx,
+  collection: ConfigCollectionKey,
+  index: number,
+  field: keyof ConfigItemInput,
+  message: string
+) {
+  context.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: [collection, index, field],
+    message,
+  });
+}
+
+function validateCollectionUniqueness(
+  items: ConfigItemInput[],
+  collection: ConfigCollectionKey,
+  context: z.RefinementCtx
+) {
+  const ids = new Map<string, number>();
+  const names = new Map<string, number>();
+
+  items.forEach((item, index) => {
+    if (item.id) {
+      const previousIndex = ids.get(item.id);
+      if (previousIndex !== undefined) {
+        addIssueForCollection(
+          context,
+          collection,
+          index,
+          'id',
+          `No se puede repetir el identificador del elemento en ${getCollectionLabel(collection)}.`
+        );
+      } else {
+        ids.set(item.id, index);
+      }
+    }
+
+    const normalized = normalizeName(item.name);
+    const previousNameIndex = names.get(normalized);
+    if (previousNameIndex !== undefined) {
+      addIssueForCollection(
+        context,
+        collection,
+        index,
+        'name',
+        `No se puede repetir el nombre del elemento en ${getCollectionLabel(collection)}.`
+      );
+    } else {
+      names.set(normalized, index);
+    }
+  });
+}
+
+function validateMotifRules(
+  value: MotifValidationInput,
+  context: z.RefinementCtx
+) {
+  value.subjects?.forEach((item, index) => {
+    if (item.motif) {
+      addIssueForCollection(context, 'subjects', index, 'motif', 'Los sujetos no pueden tener motivos asociados.');
+    }
+  });
+
+  value.objects?.forEach((item, index) => {
+    if (item.motif) {
+      addIssueForCollection(context, 'objects', index, 'motif', 'Los objetos no pueden tener motivos asociados.');
+    }
+  });
+
+  if (value.hasMotifs) {
+    value.spaces?.forEach((item, index) => {
+      if (!item.motif) {
+        addIssueForCollection(
+          context,
+          'spaces',
+          index,
+          'motif',
+          'Debes indicar un motivo para cada espacio cuando la configuración tiene motivos habilitados.'
+        );
+      }
+    });
+  }
+}
+
 export type ConfigItemInput = z.infer<typeof configItemSchema>;
 export type CreateSkinConfigInput = z.infer<typeof createSkinConfigSchema>;
 export type UpdateSkinConfigInput = z.infer<typeof updateSkinConfigSchema>;

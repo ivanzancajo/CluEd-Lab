@@ -1,4 +1,4 @@
-import { Prisma, TipoElemento, type Elemento } from '@prisma/client';
+import { Prisma, TipoElemento, type DescripcionElemento, type Elemento } from '@prisma/client';
 import { Router } from 'express';
 import type { Response } from 'express';
 import type { ZodType } from 'zod';
@@ -28,15 +28,24 @@ const CONFIG_COLLECTIONS: Array<{
   { key: 'spaces', kind: TipoElemento.ESPACIO },
 ];
 
-type PrismaReader = Pick<typeof prisma, 'cluedoSkin' | 'elemento' | 'descripcionElemento'>;
+type PrismaReader = Pick<typeof prisma, 'cluedoSkin'>;
 type PrismaWriter = Pick<typeof prisma, 'cluedoSkin' | 'elemento' | 'descripcionElemento' | 'partida'>;
-type SkinDescriptionRecord = Prisma.DescripcionElementoGetPayload<{ include: { element: true } }>;
-type DescriptionsPayload = Partial<Record<ConfigCollectionKey, ConfigItemInput[]>>;
-
-type SkinElementOverride = {
-  name?: string;
-  imageUrl?: string;
-  motif?: string;
+type SkinDescriptionRecord = DescripcionElemento & {
+  motif?: string | null;
+  element: Elemento;
+};
+type SkinWithDescriptions = {
+  id: string;
+  name: string;
+  objective: string | null;
+  context: string | null;
+  imageUrl: string | null;
+  elementDescriptions: SkinDescriptionRecord[];
+};
+type DescriptionsPayload = {
+  subjects?: ConfigItemInput[] | undefined;
+  objects?: ConfigItemInput[] | undefined;
+  spaces?: ConfigItemInput[] | undefined;
 };
 
 type SkinContextMetadata = {
@@ -50,7 +59,6 @@ type SkinContextMetadata = {
   createdAt: number;
   updatedAt: number;
   legacyContext?: string;
-  elementOverrides: Record<string, SkinElementOverride>;
 };
 
 const DEFAULT_METADATA = {
@@ -76,18 +84,24 @@ router.use(verifyToken);
 
 router.get('/skins', async (_req, res) => {
   try {
-    const [skins, counts] = await Promise.all([
-      prisma.cluedoSkin.findMany(),
-      prisma.elemento.groupBy({ by: ['kind'], _count: { _all: true } }),
-    ]);
-
-    const countByKind = new Map<TipoElemento, number>(
-      counts.map((entry) => [entry.kind, entry._count._all])
-    );
+    const skins = await prisma.cluedoSkin.findMany({
+      include: {
+        elementDescriptions: {
+          include: {
+            element: {
+              select: {
+                kind: true,
+              },
+            },
+          },
+        },
+      },
+    });
 
     const items = skins
       .map((skin) => {
         const metadata = parseSkinContext(skin.context, skin.name);
+        const counts = countCollectionsByKind(skin.elementDescriptions);
 
         return {
           id: skin.id,
@@ -101,9 +115,9 @@ router.get('/skins', async (_req, res) => {
           hasMotifs: metadata.hasMotifs,
           createdAt: metadata.createdAt,
           updatedAt: metadata.updatedAt,
-          subjectCount: countByKind.get(TipoElemento.SUJETO) ?? 0,
-          objectCount: countByKind.get(TipoElemento.OBJETO) ?? 0,
-          spaceCount: countByKind.get(TipoElemento.ESPACIO) ?? 0,
+          subjectCount: counts.subjects,
+          objectCount: counts.objects,
+          spaceCount: counts.spaces,
         };
       })
       .sort((left, right) => {
@@ -167,24 +181,12 @@ router.post('/skins', async (req, res) => {
 
   try {
     const skinConfig = await prisma.$transaction(async (tx) => {
-      const initialMetadata = createSkinMetadata(payload, Date.now());
+      const metadata = createSkinMetadata(payload, Date.now());
       const skin = await tx.cluedoSkin.create({
-        data: mapCreateSkinFields(payload, initialMetadata),
+        data: mapCreateSkinFields(payload, metadata),
       });
 
-      const nextMetadata = await replaceSkinDescriptions(
-        tx,
-        skin.id,
-        extractDescriptionsPayload(payload),
-        initialMetadata
-      );
-
-      if (serializeSkinContext(nextMetadata) !== skin.context) {
-        await tx.cluedoSkin.update({
-          where: { id: skin.id },
-          data: { context: serializeSkinContext(nextMetadata) },
-        });
-      }
+      await syncSkinCollections(tx, skin.id, extractDescriptionsPayload(payload), metadata.hasMotifs);
 
       return loadSkinConfiguration(tx, skin.id);
     });
@@ -214,13 +216,17 @@ router.put('/skins/:id', async (req, res) => {
         throw new HttpError(404, 'La configuración solicitada no existe.');
       }
 
-      const metadata = mergeSkinMetadata(parseSkinContext(existingSkin.context, existingSkin.name), payload);
-      const nextMetadata = await replaceSkinDescriptions(
-        tx,
-        skinId,
-        extractDescriptionsPayload(payload),
-        metadata
-      );
+      const currentMetadata = parseSkinContext(existingSkin.context, existingSkin.name);
+      const nextMetadata = mergeSkinMetadata(currentMetadata, payload);
+      const descriptionsPayload = extractDescriptionsPayload(payload);
+      const hasCollectionChanges = hasDescriptionsPayload(descriptionsPayload);
+
+      if (hasCollectionChanges) {
+        await ensureSkinNotLinkedToMatches(tx, skinId);
+        await syncSkinCollections(tx, skinId, descriptionsPayload, nextMetadata.hasMotifs);
+      } else if (!currentMetadata.hasMotifs && nextMetadata.hasMotifs) {
+        await ensureSkinSpacesHaveMotifs(tx, skinId);
+      }
 
       await tx.cluedoSkin.update({
         where: { id: skinId },
@@ -255,17 +261,14 @@ router.put('/skins/:id/descriptions', async (req, res) => {
         throw new HttpError(404, 'La configuración solicitada no existe.');
       }
 
+      await ensureSkinNotLinkedToMatches(tx, skinId);
+
       const metadata = touchSkinMetadata(parseSkinContext(existingSkin.context, existingSkin.name));
-      const nextMetadata = await replaceSkinDescriptions(
-        tx,
-        skinId,
-        extractDescriptionsPayload(payload),
-        metadata
-      );
+      await syncSkinCollections(tx, skinId, extractDescriptionsPayload(payload), metadata.hasMotifs);
 
       await tx.cluedoSkin.update({
         where: { id: skinId },
-        data: { context: serializeSkinContext(nextMetadata) },
+        data: { context: serializeSkinContext(metadata) },
       });
 
       return loadSkinConfiguration(tx, skinId);
@@ -284,23 +287,32 @@ router.delete('/skins/:id', async (req, res) => {
   }
 
   try {
-    const existingSkin = await prisma.cluedoSkin.findUnique({ where: { id: skinId } });
-
-    if (!existingSkin) {
-      res.status(404).json({ error: 'La configuración solicitada no existe.' });
-      return;
-    }
-
-    const linkedMatches = await prisma.partida.count({ where: { skinId } });
-
-    if (linkedMatches > 0) {
-      res.status(409).json({
-        error: 'No se puede eliminar la configuración porque está asociada a una partida.',
+    await prisma.$transaction(async (tx) => {
+      const existingSkin = await tx.cluedoSkin.findUnique({
+        where: { id: skinId },
+        include: {
+          elementDescriptions: {
+            select: {
+              elementId: true,
+            },
+          },
+        },
       });
-      return;
-    }
 
-    await prisma.cluedoSkin.delete({ where: { id: skinId } });
+      if (!existingSkin) {
+        throw new HttpError(404, 'La configuración solicitada no existe.');
+      }
+
+      await ensureSkinNotLinkedToMatches(tx, skinId, 'No se puede eliminar la configuración porque está asociada a una partida.');
+
+      const elementIds = existingSkin.elementDescriptions.map((description) => description.elementId);
+      await tx.cluedoSkin.delete({ where: { id: skinId } });
+
+      for (const elementId of elementIds) {
+        await deleteElementIfOrphaned(tx, elementId);
+      }
+    });
+
     res.status(204).send();
   } catch (error) {
     respondUnexpectedError(res, error);
@@ -321,11 +333,7 @@ function parseSkinId(req: AuthRequest, res: Response): string | null {
   return parsed.data.id;
 }
 
-function parseBody<T>(
-  schema: ZodType<T>,
-  value: unknown,
-  res: Response
-): T | null {
+function parseBody<T>(schema: ZodType<T>, value: unknown, res: Response): T | null {
   const parsed = schema.safeParse(value);
 
   if (!parsed.success) {
@@ -355,7 +363,9 @@ function mapUpdateSkinFields(
   payload: UpdateSkinConfigInput,
   metadata: SkinContextMetadata
 ): Prisma.CluedoSkinUpdateInput {
-  const data: Prisma.CluedoSkinUpdateInput = {};
+  const data: Prisma.CluedoSkinUpdateInput = {
+    context: serializeSkinContext(metadata),
+  };
 
   if (payload.name !== undefined) {
     data.name = payload.name;
@@ -369,13 +379,15 @@ function mapUpdateSkinFields(
     data.imageUrl = payload.centerImage ?? null;
   }
 
-  data.context = serializeSkinContext(metadata);
-
   return data;
 }
 
 function extractDescriptionsPayload(
-  payload: Pick<Partial<CreateSkinConfigInput & UpdateSkinConfigInput & UpdateSkinDescriptionsInput>, ConfigCollectionKey>
+  payload: {
+    subjects?: ConfigItemInput[] | undefined;
+    objects?: ConfigItemInput[] | undefined;
+    spaces?: ConfigItemInput[] | undefined;
+  }
 ): DescriptionsPayload {
   const descriptions: DescriptionsPayload = {};
 
@@ -394,6 +406,10 @@ function extractDescriptionsPayload(
   return descriptions;
 }
 
+function hasDescriptionsPayload(payload: DescriptionsPayload) {
+  return payload.subjects !== undefined || payload.objects !== undefined || payload.spaces !== undefined;
+}
+
 function createSkinMetadata(payload: CreateSkinConfigInput, timestamp: number): SkinContextMetadata {
   return {
     version: 1,
@@ -405,7 +421,6 @@ function createSkinMetadata(payload: CreateSkinConfigInput, timestamp: number): 
     hasMotifs: payload.hasMotifs ?? DEFAULT_METADATA.hasMotifs,
     createdAt: timestamp,
     updatedAt: timestamp,
-    elementOverrides: {},
   };
 }
 
@@ -430,7 +445,6 @@ function parseSkinContext(rawContext: string | null, fallbackName: string): Skin
         hasMotifs: typeof parsed.hasMotifs === 'boolean' ? parsed.hasMotifs : DEFAULT_METADATA.hasMotifs,
         createdAt: getTimestampValue(parsed.createdAt),
         updatedAt: getTimestampValue(parsed.updatedAt, getTimestampValue(parsed.createdAt)),
-        elementOverrides: parseElementOverrides(parsed.elementOverrides),
       };
 
       const legacyContext = getOptionalStringValue(parsed.legacyContext);
@@ -452,7 +466,7 @@ function mergeSkinMetadata(
   payload: UpdateSkinConfigInput
 ): SkinContextMetadata {
   const timestamp = Date.now();
-  const nextMetadataBase: SkinContextMetadata = {
+  const baseMetadata: SkinContextMetadata = {
     version: 1,
     gameTitle: payload.gameTitle ?? current.gameTitle,
     duration: payload.duration !== undefined ? String(payload.duration) : current.duration,
@@ -462,18 +476,11 @@ function mergeSkinMetadata(
     hasMotifs: payload.hasMotifs ?? current.hasMotifs,
     createdAt: current.createdAt > 0 ? current.createdAt : timestamp,
     updatedAt: timestamp,
-    elementOverrides: { ...current.elementOverrides },
   };
 
-  const nextMetadata = current.legacyContext
-    ? { ...nextMetadataBase, legacyContext: current.legacyContext }
-    : nextMetadataBase;
-
-  if (!nextMetadata.hasMotifs) {
-    removeMotifsFromOverrides(nextMetadata.elementOverrides);
-  }
-
-  return nextMetadata;
+  return current.legacyContext
+    ? { ...baseMetadata, legacyContext: current.legacyContext }
+    : baseMetadata;
 }
 
 function touchSkinMetadata(current: SkinContextMetadata): SkinContextMetadata {
@@ -483,7 +490,6 @@ function touchSkinMetadata(current: SkinContextMetadata): SkinContextMetadata {
     ...current,
     createdAt: current.createdAt > 0 ? current.createdAt : timestamp,
     updatedAt: timestamp,
-    elementOverrides: { ...current.elementOverrides },
   };
 }
 
@@ -498,25 +504,10 @@ function createFallbackMetadata(fallbackName: string): SkinContextMetadata {
     hasMotifs: DEFAULT_METADATA.hasMotifs,
     createdAt: 0,
     updatedAt: 0,
-    elementOverrides: {},
   };
 }
 
 function serializeSkinContext(metadata: SkinContextMetadata) {
-  const sanitizedOverrides: Record<string, SkinElementOverride> = {};
-
-  for (const [elementId, override] of Object.entries(metadata.elementOverrides)) {
-    const normalizedOverride: SkinElementOverride = {
-      ...(override.name ? { name: override.name } : {}),
-      ...(override.imageUrl ? { imageUrl: override.imageUrl } : {}),
-      ...(metadata.hasMotifs && override.motif ? { motif: override.motif } : {}),
-    };
-
-    if (Object.keys(normalizedOverride).length > 0) {
-      sanitizedOverrides[elementId] = normalizedOverride;
-    }
-  }
-
   return JSON.stringify({
     version: 1,
     gameTitle: metadata.gameTitle,
@@ -528,38 +519,7 @@ function serializeSkinContext(metadata: SkinContextMetadata) {
     createdAt: metadata.createdAt,
     updatedAt: metadata.updatedAt,
     ...(metadata.legacyContext ? { legacyContext: metadata.legacyContext } : {}),
-    elementOverrides: sanitizedOverrides,
   });
-}
-
-function parseElementOverrides(value: unknown): Record<string, SkinElementOverride> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {};
-  }
-
-  const parsedOverrides: Record<string, SkinElementOverride> = {};
-
-  for (const [elementId, override] of Object.entries(value)) {
-    if (!override || typeof override !== 'object' || Array.isArray(override)) {
-      continue;
-    }
-
-    const overrideRecord = override as Record<string, unknown>;
-    const name = getOptionalStringValue(overrideRecord.name);
-    const imageUrl = getOptionalStringValue(overrideRecord.imageUrl);
-    const motif = getOptionalStringValue(overrideRecord.motif);
-    const parsedOverride: SkinElementOverride = {
-      ...(name ? { name } : {}),
-      ...(imageUrl ? { imageUrl } : {}),
-      ...(motif ? { motif } : {}),
-    };
-
-    if (Object.keys(parsedOverride).length > 0) {
-      parsedOverrides[elementId] = parsedOverride;
-    }
-  }
-
-  return parsedOverrides;
 }
 
 function getStringValue(value: unknown, fallback: string) {
@@ -586,31 +546,42 @@ function getTimestampValue(value: unknown, fallback = 0) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-function removeMotifsFromOverrides(overrides: Record<string, SkinElementOverride>) {
-  for (const override of Object.values(overrides)) {
-    delete override.motif;
-  }
+function countCollectionsByKind(descriptions: Array<{ element: { kind: TipoElemento } }>) {
+  return descriptions.reduce(
+    (accumulator, description) => {
+      if (description.element.kind === TipoElemento.SUJETO) {
+        accumulator.subjects += 1;
+      }
+
+      if (description.element.kind === TipoElemento.OBJETO) {
+        accumulator.objects += 1;
+      }
+
+      if (description.element.kind === TipoElemento.ESPACIO) {
+        accumulator.spaces += 1;
+      }
+
+      return accumulator;
+    },
+    { subjects: 0, objects: 0, spaces: 0 }
+  );
 }
 
 async function loadSkinConfiguration(client: PrismaReader, skinId: string) {
-  const [skin, elements, descriptions] = await Promise.all([
-    client.cluedoSkin.findUnique({ where: { id: skinId } }),
-    client.elemento.findMany({
-      orderBy: [{ kind: 'asc' }, { name: 'asc' }],
-    }),
-    client.descripcionElemento.findMany({
-      where: { skinId },
-      include: { element: true },
-    }),
-  ]);
+  const skin = (await client.cluedoSkin.findUnique({
+    where: { id: skinId },
+    include: {
+      elementDescriptions: {
+        include: {
+          element: true,
+        },
+      },
+    },
+  })) as SkinWithDescriptions | null;
 
   if (!skin) {
     throw new HttpError(404, 'La configuración solicitada no existe.');
   }
-
-  const descriptionsByElementId = new Map<string, SkinDescriptionRecord>(
-    descriptions.map((description) => [description.elementId, description])
-  );
 
   const metadata = parseSkinContext(skin.context, skin.name);
 
@@ -625,218 +596,251 @@ async function loadSkinConfiguration(client: PrismaReader, skinId: string) {
     cat2Name: metadata.cat2Name,
     cat3Name: metadata.cat3Name,
     hasMotifs: metadata.hasMotifs,
-    subjects: buildConfigItems(elements, descriptionsByElementId, metadata, TipoElemento.SUJETO),
-    objects: buildConfigItems(elements, descriptionsByElementId, metadata, TipoElemento.OBJETO),
-    spaces: buildConfigItems(elements, descriptionsByElementId, metadata, TipoElemento.ESPACIO),
+    subjects: buildConfigItems(skin.elementDescriptions, TipoElemento.SUJETO),
+    objects: buildConfigItems(skin.elementDescriptions, TipoElemento.OBJETO),
+    spaces: buildConfigItems(skin.elementDescriptions, TipoElemento.ESPACIO),
     createdAt: metadata.createdAt,
     updatedAt: metadata.updatedAt,
   };
 }
 
-function buildConfigItems(
-  elements: Elemento[],
-  descriptionsByElementId: Map<string, SkinDescriptionRecord>,
-  metadata: SkinContextMetadata,
-  kind: TipoElemento
-) {
-  return elements
-    .filter((element) => element.kind === kind)
-    .map((element) => {
-      const description = descriptionsByElementId.get(element.id);
-      const override = metadata.elementOverrides[element.id];
-
-      return {
-        id: element.id,
-        name: override?.name ?? element.name,
-        desc: description?.description ?? '',
-        imageUrl: override?.imageUrl ?? element.imageUrl ?? undefined,
-        motif: metadata.hasMotifs ? override?.motif ?? undefined : undefined,
-      };
-    });
+function buildConfigItems(descriptions: SkinDescriptionRecord[], kind: TipoElemento) {
+  return descriptions
+    .filter((description) => description.element.kind === kind)
+    .sort((left, right) => left.element.name.localeCompare(right.element.name, 'es'))
+    .map((description) => ({
+      id: description.elementId,
+      name: description.element.name,
+      desc: description.description ?? '',
+      imageUrl: description.element.imageUrl ?? undefined,
+      motif: kind === TipoElemento.ESPACIO ? description.motif ?? undefined : undefined,
+    }));
 }
 
-async function replaceSkinDescriptions(
+async function syncSkinCollections(
   client: PrismaWriter,
   skinId: string,
   payload: DescriptionsPayload,
-  metadata: SkinContextMetadata
+  hasMotifs: boolean
 ) {
   const collectionsToReplace = CONFIG_COLLECTIONS.filter(({ key }) => payload[key] !== undefined);
-  const nextMetadata: SkinContextMetadata = {
-    ...metadata,
-    elementOverrides: { ...metadata.elementOverrides },
-  };
 
   if (collectionsToReplace.length === 0) {
-    if (!nextMetadata.hasMotifs) {
-      removeMotifsFromOverrides(nextMetadata.elementOverrides);
-    }
-
-    return nextMetadata;
+    return;
   }
 
-  const { elementsById, elementsByKind, errors } = await validateElementsForDescriptions(
-    client,
-    payload,
-    collectionsToReplace
+  const existingDescriptions = await client.descripcionElemento.findMany({
+    where: { skinId },
+    include: { element: true },
+  });
+
+  const existingByKind = new Map<TipoElemento, Map<string, SkinDescriptionRecord>>(
+    CONFIG_COLLECTIONS.map(({ kind }) => [kind, new Map<string, SkinDescriptionRecord>()])
   );
 
-  if (errors.length > 0) {
-    throw new HttpError(400, 'La configuración contiene elementos inválidos.', errors);
-  }
-
-  if (!nextMetadata.hasMotifs) {
-    const itemsWithMotif = collectionsToReplace.flatMap(({ key }) => (payload[key] ?? []).filter((item) => Boolean(item.motif)));
-    if (itemsWithMotif.length > 0) {
-      throw new HttpError(400, 'No se pueden guardar motivos cuando la configuración no los tiene habilitados.');
-    }
+  for (const description of existingDescriptions) {
+    existingByKind.get(description.element.kind)?.set(description.elementId, description);
   }
 
   for (const { key, kind } of collectionsToReplace) {
     const items = payload[key] ?? [];
-    const elementIdsForKind = (elementsByKind.get(kind) ?? []).map((element) => element.id);
-    const providedIds = new Set(items.map((item) => item.id));
-    const descriptionIdsToDelete = elementIdsForKind.filter((elementId) => !providedIds.has(elementId));
+    validateSkinOwnedItems(items, key, kind, existingByKind.get(kind) ?? new Map());
+    validateSpaceMotifs(items, key, hasMotifs);
 
-    if (descriptionIdsToDelete.length > 0) {
-      await client.descripcionElemento.deleteMany({
-        where: {
-          skinId,
-          elementId: { in: descriptionIdsToDelete },
-        },
-      });
-
-      for (const elementId of descriptionIdsToDelete) {
-        delete nextMetadata.elementOverrides[elementId];
-      }
-    }
+    const existingDescriptionsForKind = existingByKind.get(kind) ?? new Map<string, SkinDescriptionRecord>();
+    const retainedIds = new Set<string>();
 
     for (const item of items) {
-      const element = elementsById.get(item.id);
+      if (item.id) {
+        const existingDescription = existingDescriptionsForKind.get(item.id);
 
-      if (!element) {
+        if (!existingDescription) {
+          throw new HttpError(400, `El elemento ${item.id} no pertenece a la skin seleccionada.`);
+        }
+
+        await updateSkinItem(client, skinId, existingDescription, item, key);
+        retainedIds.add(existingDescription.elementId);
         continue;
       }
 
-      await client.descripcionElemento.upsert({
+      const createdDescription = await createSkinItem(client, skinId, kind, item, key);
+      retainedIds.add(createdDescription.elementId);
+    }
+
+    for (const description of existingDescriptionsForKind.values()) {
+      if (retainedIds.has(description.elementId)) {
+        continue;
+      }
+
+      await client.descripcionElemento.delete({
         where: {
           skinId_elementId: {
             skinId,
-            elementId: item.id,
+            elementId: description.elementId,
           },
-        },
-        create: {
-          skinId,
-          elementId: item.id,
-          description: item.desc,
-        },
-        update: {
-          description: item.desc,
         },
       });
 
-      const override = buildElementOverride(item, element, nextMetadata.hasMotifs);
-      if (override) {
-        nextMetadata.elementOverrides[item.id] = override;
-      } else {
-        delete nextMetadata.elementOverrides[item.id];
-      }
+      await deleteElementIfOrphaned(client, description.elementId);
     }
   }
-
-  if (!nextMetadata.hasMotifs) {
-    removeMotifsFromOverrides(nextMetadata.elementOverrides);
-  }
-
-  nextMetadata.updatedAt = Date.now();
-  if (nextMetadata.createdAt <= 0) {
-    nextMetadata.createdAt = nextMetadata.updatedAt;
-  }
-
-  return nextMetadata;
 }
 
-function buildElementOverride(
-  item: ConfigItemInput,
-  element: Elemento,
-  hasMotifs: boolean
+function validateSkinOwnedItems(
+  items: ConfigItemInput[],
+  key: ConfigCollectionKey,
+  kind: TipoElemento,
+  existingDescriptions: Map<string, SkinDescriptionRecord>
 ) {
-  const override: SkinElementOverride = {};
-
-  if (item.name !== element.name) {
-    override.name = item.name;
-  }
-
-  if (item.imageUrl !== undefined && item.imageUrl !== (element.imageUrl ?? undefined)) {
-    override.imageUrl = item.imageUrl;
-  }
-
-  if (hasMotifs && item.motif) {
-    override.motif = item.motif;
-  }
-
-  return Object.keys(override).length > 0 ? override : null;
-}
-
-async function validateElementsForDescriptions(
-  client: PrismaWriter,
-  payload: DescriptionsPayload,
-  collections: Array<{ key: ConfigCollectionKey; kind: TipoElemento }>
-) {
-  const referencedItems = collections.flatMap(({ key, kind }) =>
-    (payload[key] ?? []).map((item) => ({
-      item,
-      kind,
-      collection: key,
-    }))
-  );
-
-  const uniqueIds = Array.from(new Set(referencedItems.map(({ item }) => item.id)));
-  const kinds = Array.from(new Set(collections.map(({ kind }) => kind)));
-  const elements = await client.elemento.findMany({
-    where: {
-      OR: [
-        { kind: { in: kinds } },
-        ...(uniqueIds.length > 0 ? [{ id: { in: uniqueIds } }] : []),
-      ],
-    },
-  });
-
-  const elementsById = new Map(elements.map((element) => [element.id, element]));
-  const elementsByKind = new Map<TipoElemento, Elemento[]>();
-  const errors: string[] = [];
-
-  for (const kind of kinds) {
-    elementsByKind.set(
-      kind,
-      elements.filter((element) => element.kind === kind)
-    );
-  }
-
-  for (const { key } of collections) {
-    const seenIds = new Set<string>();
-    for (const item of payload[key] ?? []) {
-      if (seenIds.has(item.id)) {
-        errors.push(`No se puede repetir el elemento ${item.id} en la colección ${key}.`);
-      }
-      seenIds.add(item.id);
-    }
-  }
-
-  for (const { item, kind } of referencedItems) {
-    const element = elementsById.get(item.id);
-
-    if (!element) {
-      errors.push(`El elemento ${item.id} no existe en la base de datos.`);
+  for (const item of items) {
+    if (!item.id) {
       continue;
     }
 
-    if (element.kind !== kind) {
-      errors.push(`El elemento ${item.id} no pertenece a la categoría esperada.`);
+    const existingDescription = existingDescriptions.get(item.id);
+    if (!existingDescription) {
+      throw new HttpError(400, `El elemento ${item.id} no pertenece a la colección ${key} de esta skin.`);
+    }
+
+    if (existingDescription.element.kind !== kind) {
+      throw new HttpError(400, `El elemento ${item.id} no pertenece a la categoría esperada.`);
     }
   }
+}
 
-  return { elementsById, elementsByKind, errors };
+function validateSpaceMotifs(items: ConfigItemInput[], key: ConfigCollectionKey, hasMotifs: boolean) {
+  if (key !== 'spaces' || !hasMotifs) {
+    return;
+  }
+
+  const itemsWithoutMotif = items.filter((item) => !item.motif);
+  if (itemsWithoutMotif.length > 0) {
+    throw new HttpError(
+      400,
+      'Debes indicar un motivo para cada espacio cuando la configuración tiene motivos habilitados.'
+    );
+  }
+}
+
+async function createSkinItem(
+  client: PrismaWriter,
+  skinId: string,
+  kind: TipoElemento,
+  item: ConfigItemInput,
+  key: ConfigCollectionKey
+) {
+  const element = await client.elemento.create({
+    data: {
+      kind,
+      name: item.name,
+      imageUrl: item.imageUrl ?? null,
+    },
+  });
+
+  return client.descripcionElemento.create({
+    data: {
+      skinId,
+      elementId: element.id,
+      description: item.desc,
+      motif: key === 'spaces' ? item.motif ?? null : null,
+    },
+    include: {
+      element: true,
+    },
+  });
+}
+
+async function updateSkinItem(
+  client: PrismaWriter,
+  skinId: string,
+  description: SkinDescriptionRecord,
+  item: ConfigItemInput,
+  key: ConfigCollectionKey
+) {
+  await client.elemento.update({
+    where: { id: description.elementId },
+    data: {
+      name: item.name,
+      imageUrl: item.imageUrl ?? null,
+    },
+  });
+
+  await client.descripcionElemento.update({
+    where: {
+      skinId_elementId: {
+        skinId,
+        elementId: description.elementId,
+      },
+    },
+    data: {
+      description: item.desc,
+      motif: key === 'spaces' ? item.motif ?? null : null,
+    },
+  });
+}
+
+async function ensureSkinNotLinkedToMatches(
+  client: PrismaWriter,
+  skinId: string,
+  message = 'No se puede modificar la configuración porque está asociada a una partida.'
+) {
+  const linkedMatches = await client.partida.count({ where: { skinId } });
+
+  if (linkedMatches > 0) {
+    throw new HttpError(409, message);
+  }
+}
+
+async function ensureSkinSpacesHaveMotifs(client: PrismaWriter, skinId: string) {
+  const spaceDescriptions = (await client.descripcionElemento.findMany({
+    where: {
+      skinId,
+      element: {
+        kind: TipoElemento.ESPACIO,
+      },
+    },
+  })) as Array<{ motif?: string | null }>;
+
+  const hasSpacesWithoutMotif = spaceDescriptions.some((description) => !description.motif?.trim());
+  if (hasSpacesWithoutMotif) {
+    throw new HttpError(
+      400,
+      'No se pueden habilitar los motivos mientras existan espacios sin motivo asociado.'
+    );
+  }
+}
+
+async function deleteElementIfOrphaned(client: PrismaWriter, elementId: string) {
+  const element = await client.elemento.findUnique({
+    where: { id: elementId },
+    include: {
+      _count: {
+        select: {
+          skinDescriptions: true,
+          reasoningCells: true,
+          subjectSolutions: true,
+          objectSolutions: true,
+          spaceSolutions: true,
+        },
+      },
+    },
+  });
+
+  if (!element) {
+    return;
+  }
+
+  if (
+    element._count.skinDescriptions > 0 ||
+    element._count.reasoningCells > 0 ||
+    element._count.subjectSolutions > 0 ||
+    element._count.objectSolutions > 0 ||
+    element._count.spaceSolutions > 0
+  ) {
+    return;
+  }
+
+  await client.elemento.delete({ where: { id: elementId } });
 }
 
 function respondUnexpectedError(res: Response, error: unknown) {

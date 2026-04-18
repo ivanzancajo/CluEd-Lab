@@ -1,8 +1,6 @@
 import { Prisma, TipoElemento, type DescripcionElemento, type Elemento } from '@prisma/client';
 import { Router } from 'express';
 import type { Response } from 'express';
-import type { ZodType } from 'zod';
-import { prisma } from '../lib/prisma.js';
 import {
   createSkinConfigSchema,
   skinParamsSchema,
@@ -14,6 +12,15 @@ import {
   updateSkinConfigSchema,
   updateSkinDescriptionsSchema,
 } from '../lib/configSchemas.js';
+import { HttpError, parseBody } from '../lib/http.js';
+import { prisma } from '../lib/prisma.js';
+import {
+  DEFAULT_SKIN_METADATA,
+  countCollectionsByKind,
+  loadSkinConfiguration,
+  parseSkinContext,
+  type SkinContextMetadata,
+} from '../lib/skinConfigs.js';
 import type { AuthRequest } from '../middleware/auth.js';
 import { verifyToken } from '../middleware/auth.js';
 
@@ -28,57 +35,16 @@ const CONFIG_COLLECTIONS: Array<{
   { key: 'spaces', kind: TipoElemento.ESPACIO },
 ];
 
-type PrismaReader = Pick<typeof prisma, 'cluedoSkin'>;
 type PrismaWriter = Pick<typeof prisma, 'cluedoSkin' | 'elemento' | 'descripcionElemento' | 'partida'>;
 type SkinDescriptionRecord = DescripcionElemento & {
   motif?: string | null;
   element: Elemento;
-};
-type SkinWithDescriptions = {
-  id: string;
-  name: string;
-  objective: string | null;
-  context: string | null;
-  imageUrl: string | null;
-  elementDescriptions: SkinDescriptionRecord[];
 };
 type DescriptionsPayload = {
   subjects?: ConfigItemInput[] | undefined;
   objects?: ConfigItemInput[] | undefined;
   spaces?: ConfigItemInput[] | undefined;
 };
-
-type SkinContextMetadata = {
-  version: 1;
-  gameTitle: string;
-  duration: string;
-  cat1Name: string;
-  cat2Name: string;
-  cat3Name: string;
-  hasMotifs: boolean;
-  createdAt: number;
-  updatedAt: number;
-  legacyContext?: string;
-};
-
-const DEFAULT_METADATA = {
-  gameTitle: 'Cluedo Online',
-  duration: '60',
-  cat1Name: 'Sujetos',
-  cat2Name: 'Objetos',
-  cat3Name: 'Espacios',
-  hasMotifs: false,
-} as const;
-
-class HttpError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-    public details?: string[]
-  ) {
-    super(message);
-  }
-}
 
 router.use(verifyToken);
 
@@ -333,20 +299,6 @@ function parseSkinId(req: AuthRequest, res: Response): string | null {
   return parsed.data.id;
 }
 
-function parseBody<T>(schema: ZodType<T>, value: unknown, res: Response): T | null {
-  const parsed = schema.safeParse(value);
-
-  if (!parsed.success) {
-    res.status(400).json({
-      error: 'El cuerpo de la petición no es válido.',
-      details: parsed.error.issues.map((issue) => issue.message),
-    });
-    return null;
-  }
-
-  return parsed.data;
-}
-
 function mapCreateSkinFields(
   payload: CreateSkinConfigInput,
   metadata: SkinContextMetadata
@@ -418,47 +370,10 @@ function createSkinMetadata(payload: CreateSkinConfigInput, timestamp: number): 
     cat1Name: payload.cat1Name,
     cat2Name: payload.cat2Name,
     cat3Name: payload.cat3Name,
-    hasMotifs: payload.hasMotifs ?? DEFAULT_METADATA.hasMotifs,
+    hasMotifs: payload.hasMotifs ?? DEFAULT_SKIN_METADATA.hasMotifs,
     createdAt: timestamp,
     updatedAt: timestamp,
   };
-}
-
-function parseSkinContext(rawContext: string | null, fallbackName: string): SkinContextMetadata {
-  const fallback = createFallbackMetadata(fallbackName);
-
-  if (!rawContext || !rawContext.trim()) {
-    return fallback;
-  }
-
-  try {
-    const parsed = JSON.parse(rawContext) as Record<string, unknown>;
-
-    if (parsed && typeof parsed === 'object') {
-      const metadata: SkinContextMetadata = {
-        version: 1,
-        gameTitle: getStringValue(parsed.gameTitle, fallbackName || DEFAULT_METADATA.gameTitle),
-        duration: getDurationValue(parsed.duration, DEFAULT_METADATA.duration),
-        cat1Name: getStringValue(parsed.cat1Name, DEFAULT_METADATA.cat1Name),
-        cat2Name: getStringValue(parsed.cat2Name, DEFAULT_METADATA.cat2Name),
-        cat3Name: getStringValue(parsed.cat3Name, DEFAULT_METADATA.cat3Name),
-        hasMotifs: typeof parsed.hasMotifs === 'boolean' ? parsed.hasMotifs : DEFAULT_METADATA.hasMotifs,
-        createdAt: getTimestampValue(parsed.createdAt),
-        updatedAt: getTimestampValue(parsed.updatedAt, getTimestampValue(parsed.createdAt)),
-      };
-
-      const legacyContext = getOptionalStringValue(parsed.legacyContext);
-      return legacyContext ? { ...metadata, legacyContext } : metadata;
-    }
-  } catch {
-    return {
-      ...fallback,
-      gameTitle: rawContext.trim() || fallback.gameTitle,
-      legacyContext: rawContext,
-    };
-  }
-
-  return fallback;
 }
 
 function mergeSkinMetadata(
@@ -493,20 +408,6 @@ function touchSkinMetadata(current: SkinContextMetadata): SkinContextMetadata {
   };
 }
 
-function createFallbackMetadata(fallbackName: string): SkinContextMetadata {
-  return {
-    version: 1,
-    gameTitle: fallbackName || DEFAULT_METADATA.gameTitle,
-    duration: DEFAULT_METADATA.duration,
-    cat1Name: DEFAULT_METADATA.cat1Name,
-    cat2Name: DEFAULT_METADATA.cat2Name,
-    cat3Name: DEFAULT_METADATA.cat3Name,
-    hasMotifs: DEFAULT_METADATA.hasMotifs,
-    createdAt: 0,
-    updatedAt: 0,
-  };
-}
-
 function serializeSkinContext(metadata: SkinContextMetadata) {
   return JSON.stringify({
     version: 1,
@@ -520,101 +421,6 @@ function serializeSkinContext(metadata: SkinContextMetadata) {
     updatedAt: metadata.updatedAt,
     ...(metadata.legacyContext ? { legacyContext: metadata.legacyContext } : {}),
   });
-}
-
-function getStringValue(value: unknown, fallback: string) {
-  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
-}
-
-function getOptionalStringValue(value: unknown) {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-}
-
-function getDurationValue(value: unknown, fallback: string) {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return String(Math.trunc(value));
-  }
-
-  if (typeof value === 'string' && value.trim()) {
-    return value.trim();
-  }
-
-  return fallback;
-}
-
-function getTimestampValue(value: unknown, fallback = 0) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-function countCollectionsByKind(descriptions: Array<{ element: { kind: TipoElemento } }>) {
-  return descriptions.reduce(
-    (accumulator, description) => {
-      if (description.element.kind === TipoElemento.SUJETO) {
-        accumulator.subjects += 1;
-      }
-
-      if (description.element.kind === TipoElemento.OBJETO) {
-        accumulator.objects += 1;
-      }
-
-      if (description.element.kind === TipoElemento.ESPACIO) {
-        accumulator.spaces += 1;
-      }
-
-      return accumulator;
-    },
-    { subjects: 0, objects: 0, spaces: 0 }
-  );
-}
-
-async function loadSkinConfiguration(client: PrismaReader, skinId: string) {
-  const skin = (await client.cluedoSkin.findUnique({
-    where: { id: skinId },
-    include: {
-      elementDescriptions: {
-        include: {
-          element: true,
-        },
-      },
-    },
-  })) as SkinWithDescriptions | null;
-
-  if (!skin) {
-    throw new HttpError(404, 'La configuración solicitada no existe.');
-  }
-
-  const metadata = parseSkinContext(skin.context, skin.name);
-
-  return {
-    id: skin.id,
-    name: skin.name,
-    gameTitle: metadata.gameTitle,
-    objective: skin.objective ?? '',
-    duration: metadata.duration,
-    centerImage: skin.imageUrl ?? '',
-    cat1Name: metadata.cat1Name,
-    cat2Name: metadata.cat2Name,
-    cat3Name: metadata.cat3Name,
-    hasMotifs: metadata.hasMotifs,
-    subjects: buildConfigItems(skin.elementDescriptions, TipoElemento.SUJETO),
-    objects: buildConfigItems(skin.elementDescriptions, TipoElemento.OBJETO),
-    spaces: buildConfigItems(skin.elementDescriptions, TipoElemento.ESPACIO),
-    createdAt: metadata.createdAt,
-    updatedAt: metadata.updatedAt,
-  };
-}
-
-function buildConfigItems(descriptions: SkinDescriptionRecord[], kind: TipoElemento) {
-  return descriptions
-    .filter((description) => description.element.kind === kind)
-    .sort((left, right) => left.element.name.localeCompare(right.element.name, 'es'))
-    .map((description) => ({
-      id: description.elementId,
-      name: description.element.name,
-      desc: description.description ?? '',
-      imageUrl: description.element.imageUrl ?? undefined,
-      motif: kind === TipoElemento.ESPACIO ? description.motif ?? undefined : undefined,
-    }));
 }
 
 async function syncSkinCollections(

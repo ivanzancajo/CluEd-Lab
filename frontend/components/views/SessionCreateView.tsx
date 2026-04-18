@@ -3,26 +3,15 @@ import { Link, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { ArrowLeft, KeyRound, MonitorPlay, Zap, Copy, CheckCircle2, FileText } from "lucide-react";
 import { clearAdminSession } from "../../src/lib/auth";
-
-// 1. Definimos la Interface para eliminar la advertencia 'any' de la línea 11
-interface GameConfig {
-  id: string;
-  name: string;
-  gameTitle: string;
-  duration: string;
-  centerImage: string;
-}
+import { type GameConfig, validateSkinComposition } from "../../src/lib/skinApi";
 
 export function SessionCreateView() {
   const navigate = useNavigate();
   const [sessionCode, setSessionCode] = useState("");
   const [copied, setCopied] = useState(false);
-  
-  // CORRECCIÓN: Tipamos el estado de las configuraciones
   const [configs, setConfigs] = useState<GameConfig[]>([]);
   const [selectedConfigId, setSelectedConfigId] = useState<string>("");
 
-  // 2. Usamos useCallback para que ESLint reconozca la función como estable
   const generateCode = useCallback(() => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
@@ -44,6 +33,14 @@ export function SessionCreateView() {
       }
     }
   }, [generateCode]);
+
+  const selectedConfig = configs.find((config) => config.id === selectedConfigId) ?? null;
+  const selectedConfigValidation = validateSkinComposition({
+    hasMotifs: selectedConfig?.hasMotifs,
+    subjects: selectedConfig?.subjects,
+    objects: selectedConfig?.objects,
+    spaces: selectedConfig?.spaces,
+  });
 
   const handleCopy = async () => {
     try {
@@ -67,14 +64,15 @@ export function SessionCreateView() {
   };
 
   const handleStartBoard = () => {
+    if (!selectedConfig || !selectedConfigValidation.isValid) {
+      return;
+    }
+
     if (selectedConfigId) {
-      const activeConfig = configs.find(c => c.id === selectedConfigId);
-      if (activeConfig) {
-        localStorage.setItem("duration", activeConfig.duration);
-        localStorage.setItem("gameTitle", activeConfig.gameTitle);
-        localStorage.setItem("centerImage", activeConfig.centerImage);
-        localStorage.setItem("activeConfig", JSON.stringify(activeConfig));
-      }
+      localStorage.setItem("duration", selectedConfig.duration);
+      localStorage.setItem("gameTitle", selectedConfig.gameTitle);
+      localStorage.setItem("centerImage", selectedConfig.centerImage);
+      localStorage.setItem("activeConfig", JSON.stringify(selectedConfig));
     }
     navigate("/board");
   };
@@ -131,6 +129,12 @@ export function SessionCreateView() {
               <Link to="/config" className="text-indigo-400 hover:underline ml-2">Ir a Administración</Link>
             </div>
           )}
+
+          {selectedConfig && !selectedConfigValidation.isValid ? (
+            <div className="p-3 bg-amber-950/30 border border-amber-900/70 rounded text-amber-100 text-sm">
+              {selectedConfigValidation.errors[0] ?? "La skin seleccionada no se puede iniciar todavía."}
+            </div>
+          ) : null}
         </div>
 
         <div className="w-full p-6 bg-slate-950 border border-slate-700 rounded-xl flex flex-col gap-4">
@@ -161,6 +165,7 @@ export function SessionCreateView() {
 
         <button 
           onClick={handleStartBoard} 
+          disabled={!selectedConfig || !selectedConfigValidation.isValid}
           className="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black uppercase tracking-widest py-5 rounded-xl flex items-center justify-center gap-3 transition-all active:scale-95 shadow-[0_0_30px_rgba(16,185,129,0.3)] text-lg"
         >
           <MonitorPlay className="w-6 h-6" /> Iniciar Pantalla Central

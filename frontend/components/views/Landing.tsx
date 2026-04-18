@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { isAxiosError } from "axios";
 import { Link, useNavigate } from "react-router";
 import { Monitor, Terminal as TerminalIcon, Cpu, Fingerprint, Settings, Zap, Lock, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -38,8 +39,18 @@ export function Landing() {
       // Si el login es correcto, cerramos el modal y vamos a la pantalla solicitada
       setShowLogin(false);
       navigate(pendingAdminPath);
-    } catch {
-      setError("Credenciales inválidas. Acceso denegado.");
+    } catch (error) {
+      if (isAxiosError<{ error?: string }>(error)) {
+        if (error.response?.status === 401) {
+          setError(error.response.data?.error || "Credenciales inválidas. Acceso denegado.");
+        } else if (!error.response) {
+          setError("No se puede contactar con el backend. Verifica que el servidor esté levantado en localhost:4000.");
+        } else {
+          setError(error.response.data?.error || "No se pudo completar el inicio de sesión.");
+        }
+      } else {
+        setError("No se pudo completar el inicio de sesión.");
+      }
     } finally {
       setIsLoading(false);
     }

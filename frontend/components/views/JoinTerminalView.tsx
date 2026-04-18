@@ -19,7 +19,7 @@ export function JoinTerminalView() {
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (code.length >= 4 && selectedTeam) {
+    if (code.length === 6 && selectedTeam) {
       // Logic for joining session would go here, proceeding to terminal view for now
       navigate("/terminal");
     }
@@ -56,10 +56,10 @@ export function JoinTerminalView() {
               <input 
                 type="text" 
                 value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="EJ: XR-892A" 
+                onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
+                placeholder="EJ: XR892A" 
                 className="w-full bg-slate-950 border border-slate-700 focus:border-cyan-400 rounded-lg p-4 text-center text-xl font-bold tracking-widest text-white outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all placeholder:text-slate-700"
-                maxLength={8}
+                maxLength={6}
                 required
               />
             </div>
@@ -93,7 +93,7 @@ export function JoinTerminalView() {
             <div className="mt-4 pt-6 border-t border-slate-800">
               <button 
                 type="submit"
-                disabled={code.length < 4 || !selectedTeam}
+                disabled={code.length !== 6 || !selectedTeam}
                 className="w-full bg-cyan-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none hover:bg-cyan-500 text-slate-950 font-bold uppercase tracking-widest py-4 rounded-lg flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.4)]"
               >
                  <Cpu className="w-5 h-5" /> Jugar

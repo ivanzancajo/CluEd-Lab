@@ -239,7 +239,30 @@ export function AdminConfigView() {
     (value) => value.trim().length > 0
   );
 
-  const canSave = activeTab !== "list" && !fieldsDisabled && metadataReady && validation.isValid;
+  const canSave = activeTab !== "list" && !fieldsDisabled;
+  const saveBlockerMessage = useMemo(() => {
+    if (activeTab === "list") {
+      return "Crea o carga una configuración para poder guardarla.";
+    }
+
+    if (detailLoading) {
+      return "Espera a que termine de cargarse la configuración antes de guardar.";
+    }
+
+    if (saving) {
+      return "Guardando configuración...";
+    }
+
+    if (!metadataReady) {
+      return "Completa nombre, título, objetivo y nombres de categorías antes de guardar.";
+    }
+
+    if (!validation.isValid) {
+      return validation.errors[0] ?? "La skin no cumple las reglas de composición requeridas.";
+    }
+
+    return null;
+  }, [activeTab, detailLoading, metadataReady, saving, validation.errors, validation.isValid]);
 
   const applyConfigToForm = (config: GameConfig) => {
     setPersistedConfig(config);
@@ -704,6 +727,16 @@ export function AdminConfigView() {
           >
             <Save className="h-5 w-5" /> {saving ? "Guardando..." : "Guardar Configuración"}
           </button>
+
+          {saveBlockerMessage ? (
+            <p className="mt-3 text-center text-[11px] leading-5 text-slate-500">
+              {saveBlockerMessage}
+            </p>
+          ) : (
+            <p className="mt-3 text-center text-[11px] leading-5 text-emerald-300">
+              La skin cumple las reglas y está lista para guardarse.
+            </p>
+          )}
         </div>
       </div>
 

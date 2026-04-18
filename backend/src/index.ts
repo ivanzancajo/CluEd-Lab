@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import authRoutes from './routes/authRoutes.js';
 import configRoutes from './routes/configRoutes.js';
+import sessionRoutes from './routes/sessionRoutes.js';
 import { env } from './config/env.js';
 
 const app = express();
@@ -20,6 +21,7 @@ app.get('/health', (req, res) => {
 // Rutas de autenticación
 app.use('/api/auth', authRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/game', sessionRoutes);
 
 app.listen(env.port, '0.0.0.0', () => {
   console.log(`[Backend] Servidor Cluedo corriendo en el puerto ${env.port}`);

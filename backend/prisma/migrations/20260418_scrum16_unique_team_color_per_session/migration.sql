@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS "equipo_partida_color_key" ON "equipo"("id_partida", "color");

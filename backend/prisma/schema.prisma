@@ -139,6 +139,7 @@ model Equipo {
   receivedEvents   Evento[]            @relation("EventReceiver")
   reasoningTables  TablaRazonamiento[]
 
+  @@unique([partidaId, color], map: "equipo_partida_color_key")
   @@map("equipo")
 }
 

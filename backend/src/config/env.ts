@@ -15,6 +15,11 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const socketIoCorsOrigins = (process.env.SOCKET_IO_CORS_ORIGIN || process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 export const env = {
   adminUser: process.env.ADMIN_USER as string,
   adminPassHash: process.env.ADMIN_PASS_HASH as string,
@@ -22,4 +27,5 @@ export const env = {
   databaseUrl: process.env.DATABASE_URL as string,
   port: Number(process.env.PORT || 4000),
   allowedOrigins,
+  socketIoCorsOrigins,
 };

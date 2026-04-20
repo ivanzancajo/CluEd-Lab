@@ -4,13 +4,15 @@ import { motion } from "motion/react";
 import {
   Activity,
   ArrowLeft,
-  Clock,
   History,
   KeyRound,
   LoaderCircle,
-  MonitorPlay,
+  Play,
+  RadioTower,
   RefreshCw,
+  ShieldCheck,
   Users,
+  Zap,
 } from "lucide-react";
 import {
   createLobbySocketClient,
@@ -18,56 +20,24 @@ import {
   type LobbyEventMessage,
   type LobbyPresenceState,
 } from "../../src/lib/lobbySocket";
-import {
-  getStoredSessionCode,
-  getStoredSessionDurationSeconds,
-  getStoredSessionId,
-  getStoredSessionStartedAt,
-  storeHostLobbySession,
-} from "../../src/lib/lobbyStorage";
+import { getStoredSessionCode, getStoredSessionId, storeHostLobbySession } from "../../src/lib/lobbyStorage";
 import { TEAM_METADATA } from "../../src/lib/teamMeta";
-import { getGameSession, getSessionErrorMessage } from "../../src/lib/sessionApi";
+import { getGameSession, getSessionErrorMessage, startGameSession } from "../../src/lib/sessionApi";
 
-const boardImg = "/board-placeholder.svg";
+type LobbyConnectionStatus = "idle" | "connecting" | "connected" | "error";
 
-type BoardConnectionStatus = "idle" | "connecting" | "connected" | "error";
-
-export function BoardView() {
+export function LobbyView() {
   const navigate = useNavigate();
-  const [timeRemaining, setTimeRemaining] = useState(0);
   const [sessionCode, setSessionCode] = useState("");
-  const [centerImage, setCenterImage] = useState("");
   const [presenceState, setPresenceState] = useState<LobbyPresenceState | null>(null);
   const [events, setEvents] = useState<LobbyEventMessage[]>([]);
-  const [connectionStatus, setConnectionStatus] = useState<BoardConnectionStatus>("idle");
-  const [boardError, setBoardError] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<LobbyConnectionStatus>("idle");
+  const [lobbyError, setLobbyError] = useState<string | null>(null);
+  const [isStartingGame, setIsStartingGame] = useState(false);
 
   useEffect(() => {
     setSessionCode(getStoredSessionCode() || "N/A");
-    setCenterImage(localStorage.getItem("centerImage") || "");
-    setTimeRemaining(
-      calculateRemainingSeconds(getStoredSessionStartedAt(), getStoredSessionDurationSeconds() ?? 0)
-    );
   }, []);
-
-  useEffect(() => {
-    if (!presenceState) {
-      return;
-    }
-
-    if (presenceState.status === "LOBBY") {
-      navigate("/lobby", { replace: true });
-      return;
-    }
-
-    const updateTimeRemaining = () => {
-      setTimeRemaining(calculateRemainingSeconds(presenceState.startedAt, presenceState.durationSeconds));
-    };
-
-    updateTimeRemaining();
-    const timer = window.setInterval(updateTimeRemaining, 1000);
-    return () => window.clearInterval(timer);
-  }, [navigate, presenceState]);
 
   useEffect(() => {
     let active = true;
@@ -78,20 +48,20 @@ export function BoardView() {
         return;
       }
 
-      if (state.status === "LOBBY") {
-        navigate("/lobby", { replace: true });
+      if (state.status !== "LOBBY") {
+        navigate("/board", { replace: true });
         return;
       }
 
       setPresenceState(state);
       setSessionCode(state.accessCode);
-      setBoardError(null);
+      setLobbyError(null);
       setConnectionStatus("connected");
     };
 
-    const connectBoardToSession = async () => {
+    const connectHostToLobby = async () => {
       setConnectionStatus("connecting");
-      setBoardError(null);
+      setLobbyError(null);
 
       try {
         const resolvedSessionId = await resolveSessionId();
@@ -101,7 +71,7 @@ export function BoardView() {
         }
 
         if (!resolvedSessionId) {
-          throw new Error("No hay una partida activa para la pantalla central.");
+          throw new Error("No hay una partida habilitada para la sala de espera.");
         }
 
         socket.on("lobby:presence-updated", applyPresenceState);
@@ -125,7 +95,7 @@ export function BoardView() {
           }
 
           setConnectionStatus("error");
-          setBoardError("No se ha podido conectar la pantalla central con el servicio realtime de la partida.");
+          setLobbyError("No se ha podido conectar la sala de espera con el servicio realtime.");
         });
         socket.on("connect", async () => {
           const response = await subscribeHostToLobby(socket, resolvedSessionId);
@@ -136,7 +106,7 @@ export function BoardView() {
 
           if (!response.ok) {
             setConnectionStatus("error");
-            setBoardError(response.error);
+            setLobbyError(response.error);
             return;
           }
 
@@ -150,21 +120,41 @@ export function BoardView() {
         }
 
         setConnectionStatus("error");
-        setBoardError(
+        setLobbyError(
           error instanceof Error
             ? error.message
-            : getSessionErrorMessage(error, "No se ha podido cargar la partida activa para la pantalla central.")
+            : getSessionErrorMessage(error, "No se ha podido cargar la sesión activa de la sala de espera.")
         );
       }
     };
 
-    connectBoardToSession();
+    connectHostToLobby();
 
     return () => {
       active = false;
       socket.disconnect();
     };
   }, [navigate]);
+
+  const handleStartGame = async () => {
+    if (!sessionCode || sessionCode === "N/A") {
+      setLobbyError("No hay un código de partida activo para iniciar la sesión.");
+      return;
+    }
+
+    try {
+      setIsStartingGame(true);
+      setLobbyError(null);
+
+      const session = await startGameSession(sessionCode);
+      storeHostLobbySession(session);
+      navigate("/board");
+    } catch (error) {
+      setLobbyError(getSessionErrorMessage(error, "No se ha podido iniciar la partida."));
+    } finally {
+      setIsStartingGame(false);
+    }
+  };
 
   const teamSlots = TEAM_METADATA.map((teamMeta) => {
     const joinedTeam = presenceState?.teams.find((team) => team.color === teamMeta.color) ?? null;
@@ -177,17 +167,20 @@ export function BoardView() {
     };
   });
 
+  const joinedCount = presenceState?.teams.length ?? 0;
+  const connectedCount = presenceState?.teams.filter((team) => team.connected).length ?? 0;
+  const availableCount = TEAM_METADATA.length - joinedCount;
   const visibleEvents =
     events.length > 0
       ? events
       : [
           {
-            id: "active-room",
+            id: "waiting-room",
             type: "system" as const,
             message:
               connectionStatus === "connected"
-                ? "Partida en curso. Monitorizando la presencia de los equipos."
-                : "Conectando la pantalla central con la partida...",
+                ? "Sala de espera operativa. Compartiendo el codigo con los equipos."
+                : "Conectando la sala de espera con el servicio realtime...",
             occurredAt: Date.now(),
           },
         ];
@@ -199,37 +192,34 @@ export function BoardView() {
           <Link to="/" className="text-slate-500 hover:text-cyan-400 transition-colors p-2 rounded-md hover:bg-slate-800">
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <MonitorPlay className="w-6 h-6 text-emerald-400" />
+          <RadioTower className="w-6 h-6 text-amber-400" />
           <div className="flex-1">
-            <h1 className="text-sm font-bold tracking-widest text-emerald-400">PANTALLA CENTRAL</h1>
-            <p className="text-[10px] text-slate-500">PARTIDA EN CURSO</p>
+            <h1 className="text-sm font-bold tracking-widest text-amber-300">SALA DE ESPERA</h1>
+            <p className="text-[10px] text-slate-500">HOST CONTROL ROOM</p>
           </div>
           {connectionStatus === "connecting" ? <LoaderCircle className="w-4 h-4 animate-spin text-cyan-300" /> : null}
         </div>
 
-        <div className="p-6 border-b border-cyan-800/30 grid grid-cols-2 gap-4 bg-gradient-to-b from-cyan-950/10 to-transparent">
+        <div className="p-6 border-b border-cyan-800/30 grid grid-cols-2 gap-4 bg-gradient-to-b from-amber-950/10 to-transparent">
           <div className="flex flex-col gap-1 p-3 bg-slate-900 border border-slate-800 rounded-lg shadow-inner shadow-slate-950/50">
             <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><KeyRound className="w-3 h-3" /> Codigo Sesion</span>
             <span className="text-xl font-mono font-bold tracking-widest text-emerald-400">{sessionCode}</span>
           </div>
-          <div className="flex flex-col gap-1 p-3 bg-slate-900 border border-slate-800 rounded-lg shadow-inner shadow-slate-950/50 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-[2px] bg-red-500"></div>
-            <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><Clock className="w-3 h-3" /> Tiempo Restante</span>
-            <span className={`text-xl font-bold font-mono tracking-widest ${timeRemaining < 300 ? "text-red-400 animate-pulse" : "text-cyan-400"}`}>
-              {formatTime(timeRemaining)}
-            </span>
+          <div className="flex flex-col gap-1 p-3 bg-slate-900 border border-slate-800 rounded-lg shadow-inner shadow-slate-950/50">
+            <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><Users className="w-3 h-3" /> Equipos Listos</span>
+            <span className="text-xl font-bold font-mono tracking-widest text-cyan-300">{connectedCount}/{joinedCount}</span>
           </div>
         </div>
 
-        {boardError ? (
+        {lobbyError ? (
           <div className="mx-6 mt-4 rounded-lg border border-red-900/70 bg-red-950/30 px-4 py-3 text-sm text-red-100">
-            {boardError}
+            {lobbyError}
           </div>
         ) : null}
 
         <div className="px-6 py-4 border-b border-cyan-800/30">
           <h3 className="text-xs uppercase text-cyan-600 mb-4 flex items-center gap-2 font-bold tracking-widest">
-            <Users className="w-4 h-4" /> Equipos Conectados
+            <Users className="w-4 h-4" /> Equipos del Lobby
           </h3>
           <div className="grid grid-cols-2 gap-2">
             {teamSlots.map((team) => {
@@ -242,10 +232,10 @@ export function BoardView() {
 
               const secondaryText =
                 team.status === "connected"
-                  ? "Terminal activo"
+                  ? "Terminal conectado"
                   : team.status === "joined"
-                  ? "Terminal desconectado"
-                  : "Color no asignado";
+                  ? "Equipo unido sin terminal"
+                  : "Color disponible";
 
               return (
                 <div key={team.color} className={`flex items-center gap-2 p-2 rounded border transition-all ${cardClass}`}>
@@ -264,7 +254,7 @@ export function BoardView() {
         <div className="flex-1 flex flex-col p-6 overflow-hidden bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-slate-900 to-[#020617]">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xs uppercase text-cyan-600 flex items-center gap-2 font-bold tracking-widest">
-              <History className="w-4 h-4" /> Registro de Partida
+              <History className="w-4 h-4" /> Registro del Lobby
             </h3>
             <RefreshCw className={`w-3 h-3 text-cyan-800 ${connectionStatus === "connecting" ? "animate-spin" : ""}`} />
           </div>
@@ -295,48 +285,62 @@ export function BoardView() {
         </div>
       </div>
 
-      <div className="flex-1 relative bg-[#020617] flex items-center justify-center p-8 overflow-hidden">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+CjxyZWN0IHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgZmlsbD0ibm9uZSIvPgo8cGF0aCBkPSJNMCA0MGg0MHYtMUgwem0zOSAwSDQwaC0xdjQwSDB6IiBmaWxsPSJyZ2JhKDMsIDEwNSwgMTYxLCAwLjA1KSIvPgo8L3N2Zz4=')] z-0"></div>
-
-        <div className="relative z-10 w-full max-w-5xl aspect-square bg-[#380b0b] rounded-xl shadow-[0_0_60px_-10px_rgba(0,0,0,1)] border-4 border-slate-800 p-2 flex items-center justify-center">
-          <div className="relative w-full h-full rounded-lg overflow-hidden border border-[#5c1a1a]">
-            <img src={boardImg} alt="Tablero de partida" className="w-full h-full object-contain" />
-
-            {centerImage ? (
-              <div className="absolute top-[48%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[30%] h-[30%] pointer-events-none z-10 flex items-center justify-center">
-                <img src={centerImage} alt="Center Logo" className="max-w-full max-h-full object-contain drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]" />
+      <div className="flex-1 relative overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(245,158,11,0.14),_transparent_28%),linear-gradient(180deg,#020617_0%,#020617_48%,#000000_100%)]">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+CjxyZWN0IHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgZmlsbD0ibm9uZSIvPgo8cGF0aCBkPSJNMCA0MGg0MHYtMUgwem0zOSAwSDQwaC0xdjQwSDB6IiBmaWxsPSJyZ2JhKDI0NSwgMTU4LCAxMSwgMC4wNikiLz4KPC9zdmc+')] opacity-40"></div>
+        <div className="relative z-10 flex h-full items-center justify-center p-8">
+          <div className="w-full max-w-4xl rounded-[32px] border border-amber-700/30 bg-slate-950/70 p-10 shadow-[0_0_60px_-20px_rgba(245,158,11,0.25)] backdrop-blur-md">
+            <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+              <div className="max-w-2xl">
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-800/60 bg-amber-950/20 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.32em] text-amber-200/90">
+                  <ShieldCheck className="w-4 h-4" /> Lobby habilitado
+                </div>
+                <h2 className="text-4xl font-black uppercase tracking-tight text-white">Esperando a los equipos</h2>
+                <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300">
+                  La partida ya tiene codigo de acceso, pero la pantalla central sigue oculta. Comparte el codigo con los jugadores y lanza la partida solo cuando esten listos.
+                </p>
+                <div className="mt-8 grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                    <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Unidos</p>
+                    <p className="mt-3 text-3xl font-black text-white">{joinedCount}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                    <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Conectados</p>
+                    <p className="mt-3 text-3xl font-black text-cyan-300">{connectedCount}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                    <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Disponibles</p>
+                    <p className="mt-3 text-3xl font-black text-emerald-300">{availableCount}</p>
+                  </div>
+                </div>
               </div>
-            ) : null}
 
-            {teamSlots.map((team) => {
-              const isJoined = team.status !== "free";
-              const pawnOpacity = team.status === "connected" ? 1 : team.status === "joined" ? 0.45 : 0.15;
+              <div className="w-full max-w-md rounded-[28px] border border-cyan-900/50 bg-slate-900/80 p-6 shadow-inner shadow-slate-950/60">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-2xl border border-cyan-900/50 bg-cyan-950/20 p-4">
+                    <Zap className="w-7 h-7 text-cyan-300" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.28em] text-cyan-500">Codigo activo</p>
+                    <p className="mt-1 text-3xl font-black tracking-[0.22em] text-emerald-400">{sessionCode}</p>
+                  </div>
+                </div>
 
-              return (
-                <motion.div
-                  key={team.color}
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1, opacity: pawnOpacity }}
-                  transition={{ type: "spring", stiffness: 200, damping: 10 }}
-                  className="absolute w-8 h-8 md:w-10 md:h-10 rounded-full border-[3px] border-slate-900 shadow-[0_0_15px_rgba(0,0,0,0.8)] z-20 flex items-center justify-center"
-                  style={{
-                    backgroundColor: isJoined ? team.hexColor : "transparent",
-                    borderColor: team.hexColor,
-                    top: team.position.top,
-                    left: team.position.left,
-                    transform: "translate(-50%, -50%)",
-                  }}
+                <div className="mt-6 rounded-2xl border border-amber-900/40 bg-amber-950/10 px-4 py-3 text-sm leading-6 text-amber-100">
+                  Al pulsar Iniciar Partida se cerrara el acceso de nuevos equipos, se mostrara la pantalla central y comenzara a correr el tiempo.
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleStartGame}
+                  disabled={isStartingGame || !sessionCode || sessionCode === "N/A"}
+                  className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-500 px-6 py-5 text-lg font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_30px_rgba(16,185,129,0.28)] transition-all hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none"
                 >
-                  <div className={`rounded-full ${isJoined ? "w-1/2 h-1/2 bg-white/30 backdrop-blur-sm" : "w-3 h-3 border border-current opacity-70"}`}></div>
-                </motion.div>
-              );
-            })}
+                  {isStartingGame ? <LoaderCircle className="w-6 h-6 animate-spin" /> : <Play className="w-6 h-6" />}
+                  {isStartingGame ? "Iniciando..." : "Iniciar Partida"}
+                </button>
+              </div>
+            </div>
           </div>
-
-          <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-cyan-800 -translate-x-4 -translate-y-4"></div>
-          <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-cyan-800 translate-x-4 -translate-y-4"></div>
-          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-cyan-800 -translate-x-4 translate-y-4"></div>
-          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-cyan-800 translate-x-4 translate-y-4"></div>
         </div>
       </div>
     </div>
@@ -357,25 +361,6 @@ async function resolveSessionId() {
   const session = await getGameSession(storedSessionCode);
   storeHostLobbySession(session);
   return session.id;
-}
-
-function calculateRemainingSeconds(startedAt: string | null, durationSeconds: number) {
-  if (!durationSeconds) {
-    return 0;
-  }
-
-  if (!startedAt) {
-    return durationSeconds;
-  }
-
-  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
-  return Math.max(0, durationSeconds - elapsedSeconds);
-}
-
-function formatTime(seconds: number) {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
 
 function formatEventTime(timestamp: number) {

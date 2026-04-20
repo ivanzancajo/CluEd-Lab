@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { createBrowserRouter } from "react-router";
 import { Landing } from "./components/views/Landing";
+import { LobbyView } from "./components/views/LobbyView";
 import { TerminalView } from "./components/views/TerminalView";
 import { BoardView } from "./components/views/BoardView";
 import { JoinTerminalView } from "./components/views/JoinTerminalView";
@@ -14,6 +15,14 @@ function ProtectedAdminConfig() {
 
 function ProtectedSessionCreate() {
   return createElement(ProtectedRoute, null, createElement(SessionCreateView));
+}
+
+function ProtectedBoardView() {
+  return createElement(ProtectedRoute, null, createElement(BoardView));
+}
+
+function ProtectedLobbyView() {
+  return createElement(ProtectedRoute, null, createElement(LobbyView));
 }
 
 export const router = createBrowserRouter([
@@ -34,8 +43,12 @@ export const router = createBrowserRouter([
     Component: ProtectedAdminConfig,
   },
   {
+    path: "/lobby",
+    Component: ProtectedLobbyView,
+  },
+  {
     path: "/board",
-    Component: BoardView,
+    Component: ProtectedBoardView,
   },
   {
     path: "/host",

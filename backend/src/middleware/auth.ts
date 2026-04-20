@@ -14,6 +14,16 @@ export interface AuthRequest extends Request {
   user?: AuthTokenPayload;
 }
 
+export function verifyAdminToken(token: string): AuthTokenPayload {
+  const verified = jwt.verify(token, env.jwtSecret);
+
+  if (typeof verified === 'string' || verified.role !== 'admin') {
+    throw new Error('Token inválido o expirado.');
+  }
+
+  return verified as AuthTokenPayload;
+}
+
 export const verifyToken = (req: AuthRequest, res: Response, next: NextFunction): void => {
   const token = req.header('Authorization')?.split(' ')[1];
 
@@ -23,14 +33,7 @@ export const verifyToken = (req: AuthRequest, res: Response, next: NextFunction)
   }
 
   try {
-    const verified = jwt.verify(token, env.jwtSecret);
-
-    if (typeof verified === 'string') {
-      res.status(403).json({ error: 'Token inválido o expirado.' });
-      return;
-    }
-
-    req.user = verified as AuthTokenPayload;
+    req.user = verifyAdminToken(token);
     next();
   } catch {
     res.status(403).json({ error: 'Token inválido o expirado.' });

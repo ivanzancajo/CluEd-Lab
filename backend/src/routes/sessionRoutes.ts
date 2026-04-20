@@ -1,55 +1,28 @@
-import { randomInt } from 'node:crypto';
-import { ColorEquipo, EstadoPartida, Prisma } from '@prisma/client';
+import { randomInt, randomUUID } from 'node:crypto';
+import { EstadoPartida, Prisma } from '@prisma/client';
 import { Router } from 'express';
 import type { Response } from 'express';
 import { HttpError, parseBody } from '../lib/http.js';
 import { prisma } from '../lib/prisma.js';
-import { loadSkinConfiguration, type LoadedSkinConfiguration } from '../lib/skinConfigs.js';
+import { loadSkinConfiguration } from '../lib/skinConfigs.js';
 import {
   createSessionSchema,
   joinSessionSchema,
   sessionAccessCodeParamsSchema,
 } from '../lib/sessionSchemas.js';
+import {
+  COLOR_LABELS,
+  loadSessionSnapshotByAccessCode,
+  type SessionSnapshot,
+} from '../lib/sessionSnapshots.js';
 import { verifyToken } from '../middleware/auth.js';
+import { emitSessionSnapshotUpdate } from '../socket/socketServer.js';
 
 const router = Router();
 
 const ACCESS_CODE_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const ACCESS_CODE_LENGTH = 6;
 const ACCESS_CODE_GENERATION_RETRIES = 10;
-const COLOR_SORT_ORDER: ColorEquipo[] = [
-  ColorEquipo.ROJO,
-  ColorEquipo.AMARILLO,
-  ColorEquipo.AZUL,
-  ColorEquipo.VERDE,
-  ColorEquipo.MORADO,
-  ColorEquipo.BLANCO,
-];
-const COLOR_LABELS: Record<ColorEquipo, string> = {
-  [ColorEquipo.ROJO]: 'Equipo Rojo',
-  [ColorEquipo.AMARILLO]: 'Equipo Amarillo',
-  [ColorEquipo.AZUL]: 'Equipo Azul',
-  [ColorEquipo.VERDE]: 'Equipo Verde',
-  [ColorEquipo.MORADO]: 'Equipo Morado',
-  [ColorEquipo.BLANCO]: 'Equipo Blanco',
-};
-
-type SessionReader = Pick<typeof prisma, 'partida' | 'cluedoSkin'>;
-type SessionTeamSnapshot = {
-  id: string;
-  name: string;
-  color: ColorEquipo;
-  positionX: number;
-  positionY: number;
-  falseAccusation: boolean;
-};
-type SessionSnapshot = {
-  id: string;
-  accessCode: string;
-  status: EstadoPartida;
-  skin: LoadedSkinConfiguration;
-  teams: SessionTeamSnapshot[];
-};
 
 router.post('/sessions', verifyToken, async (req, res) => {
   const payload = parseBody(createSessionSchema, req.body, res);
@@ -72,7 +45,7 @@ router.get('/sessions/:accessCode', async (req, res) => {
   }
 
   try {
-    const session = await loadSessionSnapshot(prisma, accessCode);
+    const session = await loadSessionSnapshotByAccessCode(prisma, accessCode);
     res.json({ item: session });
   } catch (error) {
     respondUnexpectedError(res, error);
@@ -128,17 +101,79 @@ router.post('/sessions/:accessCode/join', async (req, res) => {
           },
         });
 
-        const snapshot = await loadSessionSnapshot(tx, accessCode);
+        const snapshot = await loadSessionSnapshotByAccessCode(tx, accessCode);
 
         return {
           session: snapshot,
-          team: mapTeamSnapshot(team),
+          team: snapshot.teams.find((currentTeam) => currentTeam.id === team.id) ?? {
+            id: team.id,
+            name: team.name,
+            color: team.color,
+            positionX: team.positionX ?? 0,
+            positionY: team.positionY ?? 0,
+            falseAccusation: team.falseAccusation ?? false,
+          },
         };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
     );
 
     res.status(201).json({ item: result });
+  } catch (error) {
+    respondUnexpectedError(res, error);
+  }
+});
+
+router.post('/sessions/:accessCode/start', verifyToken, async (req, res) => {
+  const accessCode = parseAccessCode(req.params, res);
+  if (!accessCode) {
+    return;
+  }
+
+  try {
+    const session = await prisma.$transaction(
+      async (tx) => {
+        const currentSession = await tx.partida.findUnique({
+          where: { accessCode },
+          select: {
+            id: true,
+            status: true,
+          },
+        });
+
+        if (!currentSession) {
+          throw new HttpError(404, 'La sesión solicitada no existe.');
+        }
+
+        if ((currentSession.status ?? EstadoPartida.LOBBY) !== EstadoPartida.LOBBY) {
+          throw new HttpError(409, 'La partida ya ha sido iniciada o no admite esta transición.');
+        }
+
+        await tx.partida.update({
+          where: { id: currentSession.id },
+          data: {
+            status: EstadoPartida.EN_CURSO,
+            startedAt: new Date(),
+          },
+        });
+
+        return loadSessionSnapshotByAccessCode(tx, accessCode);
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+
+    try {
+      await emitSessionSnapshotUpdate(session.id, {
+        id: randomUUID(),
+        type: 'system',
+        message: 'El Game Master ha iniciado la partida.',
+        occurredAt: Date.now(),
+      });
+    } catch {
+      // El cambio de estado ya quedó persistido; un fallo de broadcast no debe revertirlo.
+    }
+
+    res.json({ item: session });
   } catch (error) {
     respondUnexpectedError(res, error);
   }
@@ -151,24 +186,18 @@ async function createSessionWithUniqueCode(skinId: string): Promise<SessionSnaps
     try {
       return await prisma.$transaction(
         async (tx) => {
-          const skin = await tx.cluedoSkin.findUnique({
-            where: { id: skinId },
-            select: { id: true },
-          });
-
-          if (!skin) {
-            throw new HttpError(404, 'La configuración seleccionada no existe.');
-          }
+          const skin = await loadSkinConfiguration(tx, skinId);
 
           await tx.partida.create({
             data: {
               accessCode,
               status: EstadoPartida.LOBBY,
               skinId,
+              durationMinutes: parseDurationMinutes(skin.duration),
             },
           });
 
-          return loadSessionSnapshot(tx, accessCode);
+          return loadSessionSnapshotByAccessCode(tx, accessCode);
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
       );
@@ -182,42 +211,6 @@ async function createSessionWithUniqueCode(skinId: string): Promise<SessionSnaps
   }
 
   throw new HttpError(503, 'No se ha podido generar un código de sesión único. Inténtalo de nuevo.');
-}
-
-async function loadSessionSnapshot(client: SessionReader, accessCode: string): Promise<SessionSnapshot> {
-  const session = await client.partida.findUnique({
-    where: { accessCode },
-    include: {
-      teams: {
-        select: {
-          id: true,
-          name: true,
-          color: true,
-          positionX: true,
-          positionY: true,
-          falseAccusation: true,
-        },
-      },
-    },
-  });
-
-  if (!session) {
-    throw new HttpError(404, 'La sesión solicitada no existe.');
-  }
-
-  if (!session.skinId) {
-    throw new HttpError(409, 'La sesión no tiene una configuración válida asociada.');
-  }
-
-  const skin = await loadSkinConfiguration(client, session.skinId);
-
-  return {
-    id: session.id,
-    accessCode: session.accessCode,
-    status: session.status ?? EstadoPartida.LOBBY,
-    skin,
-    teams: session.teams.map(mapTeamSnapshot).sort(sortTeamsByColor),
-  };
 }
 
 function parseAccessCode(value: unknown, res: Response): string | null {
@@ -235,26 +228,9 @@ function generateAccessCode() {
   return code;
 }
 
-function mapTeamSnapshot(team: {
-  id: string;
-  name: string;
-  color: ColorEquipo;
-  positionX: number | null;
-  positionY: number | null;
-  falseAccusation: boolean | null;
-}): SessionTeamSnapshot {
-  return {
-    id: team.id,
-    name: team.name,
-    color: team.color,
-    positionX: team.positionX ?? 0,
-    positionY: team.positionY ?? 0,
-    falseAccusation: team.falseAccusation ?? false,
-  };
-}
-
-function sortTeamsByColor(left: SessionTeamSnapshot, right: SessionTeamSnapshot) {
-  return COLOR_SORT_ORDER.indexOf(left.color) - COLOR_SORT_ORDER.indexOf(right.color);
+function parseDurationMinutes(value: string) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
 }
 
 function isKnownPrismaError(error: unknown, code: string) {

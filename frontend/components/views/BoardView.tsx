@@ -25,12 +25,14 @@ import {
   getStoredSessionStartedAt,
   storeHostLobbySession,
 } from "../../src/lib/lobbyStorage";
+import { getTeamMonitoringLabel, getTeamMonitoringStatus } from "../../src/lib/teamMonitoring";
 import { TEAM_METADATA } from "../../src/lib/teamMeta";
 import { getGameSession, getSessionErrorMessage } from "../../src/lib/sessionApi";
 
 const boardImg = "/board-placeholder.svg";
 
 type BoardConnectionStatus = "idle" | "connecting" | "connected" | "error";
+type TeamSlotStatus = "free" | "connected" | "inactive" | "disconnected";
 
 export function BoardView() {
   const navigate = useNavigate();
@@ -41,6 +43,7 @@ export function BoardView() {
   const [events, setEvents] = useState<LobbyEventMessage[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<BoardConnectionStatus>("idle");
   const [boardError, setBoardError] = useState<string | null>(null);
+  const [monitoringNow, setMonitoringNow] = useState(() => Date.now());
 
   useEffect(() => {
     setSessionCode(getStoredSessionCode() || "N/A");
@@ -48,6 +51,11 @@ export function BoardView() {
     setTimeRemaining(
       calculateRemainingSeconds(getStoredSessionStartedAt(), getStoredSessionDurationSeconds() ?? 0)
     );
+  }, []);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setMonitoringNow(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
@@ -166,14 +174,27 @@ export function BoardView() {
     };
   }, [navigate]);
 
+  const monitoredTeams = presenceState?.teams ?? [];
+  const connectedCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "connected").length;
+  const inactiveCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "inactive").length;
+  const disconnectedCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "disconnected").length;
   const teamSlots = TEAM_METADATA.map((teamMeta) => {
     const joinedTeam = presenceState?.teams.find((team) => team.color === teamMeta.color) ?? null;
-    const teamStatus = !joinedTeam ? "free" : joinedTeam.connected ? "connected" : "joined";
+    const teamStatus: TeamSlotStatus = !joinedTeam ? "free" : getTeamMonitoringStatus(joinedTeam, monitoringNow);
 
     return {
       ...teamMeta,
       team: joinedTeam,
       status: teamStatus,
+      statusLabel:
+        teamStatus === "connected"
+          ? "Conectado"
+          : teamStatus === "inactive"
+          ? "Inactivo"
+          : teamStatus === "disconnected"
+          ? "Desconectado"
+          : "Libre",
+      secondaryText: joinedTeam ? getTeamMonitoringLabel(joinedTeam, monitoringNow) : "Color no asignado",
     };
   });
 
@@ -231,30 +252,34 @@ export function BoardView() {
           <h3 className="text-xs uppercase text-cyan-600 mb-4 flex items-center gap-2 font-bold tracking-widest">
             <Users className="w-4 h-4" /> Equipos Conectados
           </h3>
+          <div className="mb-4 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest">
+            <span className="rounded-full border border-cyan-900/60 bg-cyan-950/20 px-3 py-1 text-cyan-200">Conectados {connectedCount}</span>
+            <span className="rounded-full border border-amber-900/60 bg-amber-950/20 px-3 py-1 text-amber-200">Inactivos {inactiveCount}</span>
+            <span className="rounded-full border border-red-900/60 bg-red-950/20 px-3 py-1 text-red-200">Sin senal {disconnectedCount}</span>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             {teamSlots.map((team) => {
               const cardClass =
                 team.status === "connected"
                   ? "border-cyan-500 bg-cyan-950/30 shadow-[0_0_10px_rgba(6,182,212,0.2)]"
-                  : team.status === "joined"
+                  : team.status === "inactive"
                   ? "border-amber-500/40 bg-amber-950/10"
+                  : team.status === "disconnected"
+                  ? "border-red-500/40 bg-red-950/10"
                   : "border-slate-800 bg-slate-900/50 opacity-70";
-
-              const secondaryText =
-                team.status === "connected"
-                  ? "Terminal activo"
-                  : team.status === "joined"
-                  ? "Terminal desconectado"
-                  : "Color no asignado";
 
               return (
                 <div key={team.color} className={`flex items-center gap-2 p-2 rounded border transition-all ${cardClass}`}>
                   <div className="w-3 h-3 rounded-full shadow-[0_0_5px_rgba(255,255,255,0.2)]" style={{ backgroundColor: team.hexColor }}></div>
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-xs font-bold text-slate-200 truncate">{team.team?.name ?? team.label}</span>
-                    <span className="text-[9px] text-slate-500 truncate" title={team.location}>{secondaryText}</span>
+                    <span className="text-[9px] text-slate-500 truncate" title={team.location}>{team.secondaryText}</span>
                   </div>
-                  {team.status === "connected" ? <Activity className="w-3 h-3 text-cyan-400 animate-pulse" /> : null}
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[8px] font-bold uppercase tracking-widest text-slate-400">{team.statusLabel}</span>
+                    {team.status === "connected" ? <Activity className="w-3 h-3 text-cyan-400 animate-pulse" /> : null}
+                    {team.status === "inactive" ? <Activity className="w-3 h-3 text-amber-300" /> : null}
+                  </div>
                 </div>
               );
             })}
@@ -310,7 +335,7 @@ export function BoardView() {
 
             {teamSlots.map((team) => {
               const isJoined = team.status !== "free";
-              const pawnOpacity = team.status === "connected" ? 1 : team.status === "joined" ? 0.45 : 0.15;
+              const pawnOpacity = team.status === "connected" ? 1 : team.status === "inactive" ? 0.7 : team.status === "disconnected" ? 0.35 : 0.15;
 
               return (
                 <motion.div

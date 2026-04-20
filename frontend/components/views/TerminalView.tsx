@@ -22,8 +22,9 @@ import {
   Database
 } from "lucide-react";
 import { DiceAnimation } from "../DiceAnimation";
-import { createLobbySocketClient, subscribeTeamToLobby, type LobbyPresenceState } from "../../src/lib/lobbySocket";
+import { createLobbySocketClient, emitTeamHeartbeat, subscribeTeamToLobby, type LobbyPresenceState } from "../../src/lib/lobbySocket";
 import { getStoredSessionId, getStoredTeamColor, getStoredTeamId, getStoredTeamName } from "../../src/lib/lobbyStorage";
+import { TEAM_HEARTBEAT_INTERVAL_MS } from "../../src/lib/teamMonitoring";
 import { getTeamMeta } from "../../src/lib/teamMeta";
 import type { SessionStatus, TeamColor } from "../../src/lib/sessionApi";
 
@@ -189,6 +190,17 @@ export function TerminalView() {
     }
 
     const socket = createLobbySocketClient();
+    let isSubscribed = false;
+
+    const sendHeartbeat = () => {
+      if (!socket.connected || !isSubscribed) {
+        return;
+      }
+
+      emitTeamHeartbeat(socket);
+    };
+
+    const heartbeatIntervalId = window.setInterval(sendHeartbeat, TEAM_HEARTBEAT_INTERVAL_MS);
 
     const applyPresenceState = (state: LobbyPresenceState) => {
       const currentTeam = state.teams.find((team) => team.id === teamId);
@@ -215,15 +227,19 @@ export function TerminalView() {
         return;
       }
 
+      isSubscribed = true;
       setLobbyError(null);
       applyPresenceState(response.state);
+      sendHeartbeat();
     });
 
     socket.on("lobby:presence-updated", applyPresenceState);
     socket.on("disconnect", () => {
+      isSubscribed = false;
       setLobbyConnectionStatus("disconnected");
     });
     socket.on("connect_error", () => {
+      isSubscribed = false;
       setLobbyConnectionStatus("error");
       setLobbyError("No se ha podido conectar el terminal con la sala de espera.");
     });
@@ -231,6 +247,7 @@ export function TerminalView() {
     socket.connect();
 
     return () => {
+      window.clearInterval(heartbeatIntervalId);
       socket.disconnect();
     };
   }, []);

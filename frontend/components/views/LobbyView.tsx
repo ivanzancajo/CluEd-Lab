@@ -21,10 +21,12 @@ import {
   type LobbyPresenceState,
 } from "../../src/lib/lobbySocket";
 import { getStoredSessionCode, getStoredSessionId, storeHostLobbySession } from "../../src/lib/lobbyStorage";
+import { getTeamMonitoringLabel, getTeamMonitoringStatus } from "../../src/lib/teamMonitoring";
 import { TEAM_METADATA } from "../../src/lib/teamMeta";
 import { getGameSession, getSessionErrorMessage, startGameSession } from "../../src/lib/sessionApi";
 
 type LobbyConnectionStatus = "idle" | "connecting" | "connected" | "error";
+type TeamSlotStatus = "free" | "connected" | "inactive" | "disconnected";
 
 export function LobbyView() {
   const navigate = useNavigate();
@@ -34,9 +36,15 @@ export function LobbyView() {
   const [connectionStatus, setConnectionStatus] = useState<LobbyConnectionStatus>("idle");
   const [lobbyError, setLobbyError] = useState<string | null>(null);
   const [isStartingGame, setIsStartingGame] = useState(false);
+  const [monitoringNow, setMonitoringNow] = useState(() => Date.now());
 
   useEffect(() => {
     setSessionCode(getStoredSessionCode() || "N/A");
+  }, []);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setMonitoringNow(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
@@ -156,19 +164,31 @@ export function LobbyView() {
     }
   };
 
+  const monitoredTeams = presenceState?.teams ?? [];
+  const connectedCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "connected").length;
+  const inactiveCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "inactive").length;
+  const disconnectedCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "disconnected").length;
   const teamSlots = TEAM_METADATA.map((teamMeta) => {
     const joinedTeam = presenceState?.teams.find((team) => team.color === teamMeta.color) ?? null;
-    const teamStatus = !joinedTeam ? "free" : joinedTeam.connected ? "connected" : "joined";
+    const teamStatus: TeamSlotStatus = !joinedTeam ? "free" : getTeamMonitoringStatus(joinedTeam, monitoringNow);
 
     return {
       ...teamMeta,
       team: joinedTeam,
       status: teamStatus,
+      statusLabel:
+        teamStatus === "connected"
+          ? "Conectado"
+          : teamStatus === "inactive"
+          ? "Inactivo"
+          : teamStatus === "disconnected"
+          ? "Desconectado"
+          : "Libre",
+      secondaryText: joinedTeam ? getTeamMonitoringLabel(joinedTeam, monitoringNow) : "Color disponible",
     };
   });
 
-  const joinedCount = presenceState?.teams.length ?? 0;
-  const connectedCount = presenceState?.teams.filter((team) => team.connected).length ?? 0;
+  const joinedCount = monitoredTeams.length;
   const availableCount = TEAM_METADATA.length - joinedCount;
   const visibleEvents =
     events.length > 0
@@ -206,7 +226,7 @@ export function LobbyView() {
             <span className="text-xl font-mono font-bold tracking-widest text-emerald-400">{sessionCode}</span>
           </div>
           <div className="flex flex-col gap-1 p-3 bg-slate-900 border border-slate-800 rounded-lg shadow-inner shadow-slate-950/50">
-            <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><Users className="w-3 h-3" /> Equipos Listos</span>
+            <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><Users className="w-3 h-3" /> Estado Activo</span>
             <span className="text-xl font-bold font-mono tracking-widest text-cyan-300">{connectedCount}/{joinedCount}</span>
           </div>
         </div>
@@ -221,30 +241,34 @@ export function LobbyView() {
           <h3 className="text-xs uppercase text-cyan-600 mb-4 flex items-center gap-2 font-bold tracking-widest">
             <Users className="w-4 h-4" /> Equipos del Lobby
           </h3>
+          <div className="mb-4 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest">
+            <span className="rounded-full border border-cyan-900/60 bg-cyan-950/20 px-3 py-1 text-cyan-200">Conectados {connectedCount}</span>
+            <span className="rounded-full border border-amber-900/60 bg-amber-950/20 px-3 py-1 text-amber-200">Inactivos {inactiveCount}</span>
+            <span className="rounded-full border border-red-900/60 bg-red-950/20 px-3 py-1 text-red-200">Sin senal {disconnectedCount}</span>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             {teamSlots.map((team) => {
               const cardClass =
                 team.status === "connected"
                   ? "border-cyan-500 bg-cyan-950/30 shadow-[0_0_10px_rgba(6,182,212,0.2)]"
-                  : team.status === "joined"
+                  : team.status === "inactive"
                   ? "border-amber-500/40 bg-amber-950/10"
+                  : team.status === "disconnected"
+                  ? "border-red-500/40 bg-red-950/10"
                   : "border-slate-800 bg-slate-900/50 opacity-70";
-
-              const secondaryText =
-                team.status === "connected"
-                  ? "Terminal conectado"
-                  : team.status === "joined"
-                  ? "Equipo unido sin terminal"
-                  : "Color disponible";
 
               return (
                 <div key={team.color} className={`flex items-center gap-2 p-2 rounded border transition-all ${cardClass}`}>
                   <div className="w-3 h-3 rounded-full shadow-[0_0_5px_rgba(255,255,255,0.2)]" style={{ backgroundColor: team.hexColor }}></div>
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-xs font-bold text-slate-200 truncate">{team.team?.name ?? team.label}</span>
-                    <span className="text-[9px] text-slate-500 truncate" title={team.location}>{secondaryText}</span>
+                    <span className="text-[9px] text-slate-500 truncate" title={team.location}>{team.secondaryText}</span>
                   </div>
-                  {team.status === "connected" ? <Activity className="w-3 h-3 text-cyan-400 animate-pulse" /> : null}
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[8px] font-bold uppercase tracking-widest text-slate-400">{team.statusLabel}</span>
+                    {team.status === "connected" ? <Activity className="w-3 h-3 text-cyan-400 animate-pulse" /> : null}
+                    {team.status === "inactive" ? <Activity className="w-3 h-3 text-amber-300" /> : null}
+                  </div>
                 </div>
               );
             })}
@@ -298,7 +322,7 @@ export function LobbyView() {
                 <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300">
                   La partida ya tiene codigo de acceso, pero la pantalla central sigue oculta. Comparte el codigo con los jugadores y lanza la partida solo cuando esten listos.
                 </p>
-                <div className="mt-8 grid gap-4 sm:grid-cols-3">
+                <div className="mt-8 grid gap-4 sm:grid-cols-4">
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                     <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Unidos</p>
                     <p className="mt-3 text-3xl font-black text-white">{joinedCount}</p>
@@ -308,10 +332,17 @@ export function LobbyView() {
                     <p className="mt-3 text-3xl font-black text-cyan-300">{connectedCount}</p>
                   </div>
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                    <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Disponibles</p>
+                    <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Inactivos</p>
+                    <p className="mt-3 text-3xl font-black text-amber-300">{inactiveCount}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                    <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Libres</p>
                     <p className="mt-3 text-3xl font-black text-emerald-300">{availableCount}</p>
                   </div>
                 </div>
+                <p className="mt-4 text-xs uppercase tracking-[0.22em] text-slate-500">
+                  Equipos sin senal reciente: {disconnectedCount}
+                </p>
               </div>
 
               <div className="w-full max-w-md rounded-[28px] border border-cyan-900/50 bg-slate-900/80 p-6 shadow-inner shadow-slate-950/60">

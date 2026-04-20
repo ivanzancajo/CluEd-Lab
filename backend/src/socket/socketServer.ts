@@ -21,6 +21,7 @@ import { lobbyPresenceStore } from './lobbyPresenceStore.js';
 
 type LobbyPresenceTeam = SessionTeamSnapshot & {
   connected: boolean;
+  lastSeenAt: number | null;
 };
 
 export type LobbyPresenceState = {
@@ -162,6 +163,21 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
     }
   });
 
+  socket.on('lobby:team-heartbeat', async () => {
+    if (socket.data.role !== 'team' || !socket.data.sessionId || !socket.data.teamId) {
+      return;
+    }
+
+    lobbyPresenceStore.touchTeam(socket.data.sessionId, socket.data.teamId);
+
+    try {
+      const state = await buildLobbyPresenceState(socket.data.sessionId);
+      broadcastLobbyUpdate(io, state);
+    } catch {
+      // Un heartbeat nunca debe romper la conexión del terminal.
+    }
+  });
+
   socket.on('disconnect', async () => {
     if (socket.data.role !== 'team' || !socket.data.sessionId || !socket.data.teamId) {
       return;
@@ -261,6 +277,7 @@ async function buildLobbyPresenceState(sessionId: string): Promise<LobbyPresence
     teams: snapshot.teams.map((team) => ({
       ...team,
       connected: lobbyPresenceStore.isTeamConnected(snapshot.id, team.id),
+      lastSeenAt: lobbyPresenceStore.getTeamLastSeen(snapshot.id, team.id),
     })),
     updatedAt: Date.now(),
   };

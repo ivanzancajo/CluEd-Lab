@@ -1,13 +1,20 @@
-type TeamPresenceBucket = Map<string, Set<string>>;
+type TeamPresenceEntry = {
+  socketIds: Set<string>;
+  lastSeenAt: number | null;
+};
+
+type TeamPresenceBucket = Map<string, TeamPresenceEntry>;
+
+const PRESENCE_RETENTION_MS = 12 * 60 * 60 * 1000;
 
 class LobbyPresenceStore {
   private readonly sessions = new Map<string, TeamPresenceBucket>();
 
   connectTeam(sessionId: string, teamId: string, socketId: string) {
-    const teamBucket = this.getOrCreateSession(sessionId);
-    const socketIds = teamBucket.get(teamId) ?? new Set<string>();
-    socketIds.add(socketId);
-    teamBucket.set(teamId, socketIds);
+    const teamEntry = this.getOrCreateTeam(sessionId, teamId);
+    teamEntry.socketIds.add(socketId);
+    teamEntry.lastSeenAt = Date.now();
+    this.pruneSession(sessionId);
   }
 
   disconnectTeam(sessionId: string, teamId: string, socketId: string) {
@@ -16,28 +23,40 @@ class LobbyPresenceStore {
       return;
     }
 
-    const socketIds = teamBucket.get(teamId);
-    if (!socketIds) {
+    const teamEntry = teamBucket.get(teamId);
+    if (!teamEntry) {
       return;
     }
 
-    socketIds.delete(socketId);
+    teamEntry.socketIds.delete(socketId);
+    teamBucket.set(teamId, teamEntry);
 
-    if (socketIds.size === 0) {
-      teamBucket.delete(teamId);
-    }
+    this.pruneSession(sessionId);
+  }
 
-    if (teamBucket.size === 0) {
-      this.sessions.delete(sessionId);
-    }
+  touchTeam(sessionId: string, teamId: string) {
+    const teamEntry = this.getOrCreateTeam(sessionId, teamId);
+    teamEntry.lastSeenAt = Date.now();
+    this.pruneSession(sessionId);
+  }
+
+  getTeamLastSeen(sessionId: string, teamId: string) {
+    return this.sessions.get(sessionId)?.get(teamId)?.lastSeenAt ?? null;
   }
 
   isTeamConnected(sessionId: string, teamId: string) {
-    return (this.sessions.get(sessionId)?.get(teamId)?.size ?? 0) > 0;
+    return (this.sessions.get(sessionId)?.get(teamId)?.socketIds.size ?? 0) > 0;
   }
 
   getConnectedTeamIds(sessionId: string) {
-    return Array.from(this.sessions.get(sessionId)?.keys() ?? []);
+    const teamBucket = this.sessions.get(sessionId);
+    if (!teamBucket) {
+      return [];
+    }
+
+    return Array.from(teamBucket.entries())
+      .filter(([, teamEntry]) => teamEntry.socketIds.size > 0)
+      .map(([teamId]) => teamId);
   }
 
   private getOrCreateSession(sessionId: string) {
@@ -46,9 +65,47 @@ class LobbyPresenceStore {
       return existing;
     }
 
-    const next = new Map<string, Set<string>>();
+    const next = new Map<string, TeamPresenceEntry>();
     this.sessions.set(sessionId, next);
     return next;
+  }
+
+  private getOrCreateTeam(sessionId: string, teamId: string) {
+    const teamBucket = this.getOrCreateSession(sessionId);
+    const existing = teamBucket.get(teamId);
+
+    if (existing) {
+      return existing;
+    }
+
+    const next: TeamPresenceEntry = {
+      socketIds: new Set<string>(),
+      lastSeenAt: null,
+    };
+
+    teamBucket.set(teamId, next);
+    return next;
+  }
+
+  private pruneSession(sessionId: string) {
+    const teamBucket = this.sessions.get(sessionId);
+    if (!teamBucket) {
+      return;
+    }
+
+    const cutoff = Date.now() - PRESENCE_RETENTION_MS;
+
+    for (const [teamId, teamEntry] of teamBucket.entries()) {
+      const keepEntry = teamEntry.socketIds.size > 0 || (teamEntry.lastSeenAt !== null && teamEntry.lastSeenAt >= cutoff);
+
+      if (!keepEntry) {
+        teamBucket.delete(teamId);
+      }
+    }
+
+    if (teamBucket.size === 0) {
+      this.sessions.delete(sessionId);
+    }
   }
 }
 

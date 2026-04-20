@@ -4,6 +4,7 @@ import type { LobbyTeam, SessionStatus, TeamColor } from './sessionApi';
 
 export type LobbyPresenceTeam = LobbyTeam & {
   connected: boolean;
+  lastSeenAt: number | null;
 };
 
 export type LobbyPresenceState = {
@@ -47,6 +48,7 @@ type ClientToServerEvents = {
     payload: { sessionId: string; teamId: string },
     acknowledge: (response: LobbySubscribeAck) => void
   ) => void;
+  'lobby:team-heartbeat': () => void;
 };
 
 export type LobbySocketClient = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -69,6 +71,10 @@ export function subscribeHostToLobby(socket: LobbySocketClient, sessionId: strin
 
 export function subscribeTeamToLobby(socket: LobbySocketClient, sessionId: string, teamId: string) {
   return emitWithAck(socket, 'lobby:team-subscribe', { sessionId, teamId });
+}
+
+export function emitTeamHeartbeat(socket: LobbySocketClient) {
+  socket.emit('lobby:team-heartbeat');
 }
 
 function emitWithAck<EventName extends keyof ClientToServerEvents>(

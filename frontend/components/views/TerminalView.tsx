@@ -22,6 +22,10 @@ import {
   Database
 } from "lucide-react";
 import { DiceAnimation } from "../DiceAnimation";
+import { createLobbySocketClient, subscribeTeamToLobby, type LobbyPresenceState } from "../../src/lib/lobbySocket";
+import { getStoredSessionId, getStoredTeamColor, getStoredTeamId, getStoredTeamName } from "../../src/lib/lobbyStorage";
+import { getTeamMeta } from "../../src/lib/teamMeta";
+import type { SessionStatus, TeamColor } from "../../src/lib/sessionApi";
 
 const boardImg = "/board-placeholder.svg";
 
@@ -89,6 +93,11 @@ const TEAMS = ["Rojo", "Amarillo", "Azul", "Verde", "Morado", "Blanco"];
 export function TerminalView() {
   const [activeTab, setActiveTab] = useState("map");
   const [centerImage, setCenterImage] = useState("");
+  const [teamName, setTeamName] = useState(getStoredTeamName() || "Equipo sin asignar");
+  const [teamColor, setTeamColor] = useState<TeamColor | null>(getStoredTeamColor());
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>("LOBBY");
+  const [lobbyConnectionStatus, setLobbyConnectionStatus] = useState<"connecting" | "connected" | "disconnected" | "error">("connecting");
+  const [lobbyError, setLobbyError] = useState<string | null>(null);
   
   const [categories, setCategories] = useState<{
     c1: ElementoItem[];
@@ -168,6 +177,74 @@ export function TerminalView() {
       }
     }
   }, []);
+
+  React.useEffect(() => {
+    const sessionId = getStoredSessionId();
+    const teamId = getStoredTeamId();
+
+    if (!sessionId || !teamId) {
+      setLobbyConnectionStatus("error");
+      setLobbyError("No se ha encontrado un equipo activo para este terminal.");
+      return;
+    }
+
+    const socket = createLobbySocketClient();
+
+    const applyPresenceState = (state: LobbyPresenceState) => {
+      const currentTeam = state.teams.find((team) => team.id === teamId);
+
+      if (!currentTeam) {
+        setLobbyConnectionStatus("error");
+        setLobbyError("El equipo seleccionado ya no pertenece al lobby actual.");
+        return;
+      }
+
+      setTeamName(currentTeam.name);
+      setTeamColor(currentTeam.color);
+      setSessionStatus(state.status);
+      setLobbyConnectionStatus(currentTeam.connected ? "connected" : "disconnected");
+    };
+
+    socket.on("connect", async () => {
+      setLobbyConnectionStatus("connecting");
+
+      const response = await subscribeTeamToLobby(socket, sessionId, teamId);
+      if (!response.ok) {
+        setLobbyConnectionStatus("error");
+        setLobbyError(response.error);
+        return;
+      }
+
+      setLobbyError(null);
+      applyPresenceState(response.state);
+    });
+
+    socket.on("lobby:presence-updated", applyPresenceState);
+    socket.on("disconnect", () => {
+      setLobbyConnectionStatus("disconnected");
+    });
+    socket.on("connect_error", () => {
+      setLobbyConnectionStatus("error");
+      setLobbyError("No se ha podido conectar el terminal con la sala de espera.");
+    });
+
+    socket.connect();
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  const currentTeamMeta = teamColor ? getTeamMeta(teamColor) : null;
+  const sessionStatusLabel = sessionStatus === "EN_CURSO" ? "PARTIDA EN CURSO" : "SALA DE ESPERA";
+  const connectionLabel =
+    lobbyConnectionStatus === "connected"
+      ? "CONECTADO"
+      : lobbyConnectionStatus === "connecting"
+      ? "CONECTANDO"
+      : lobbyConnectionStatus === "disconnected"
+      ? "DESCONECTADO"
+      : "ERROR DE ENLACE";
   
   // Matrix state: "row-col" -> 0 (neutral), 1 (doubt), 2 (discarded)
   const [matrix, setMatrix] = useState<Record<string, number>>({});
@@ -204,10 +281,24 @@ export function TerminalView() {
               {isMyTurn ? "MI TURNO" : "ESPERA"}
             </button>
           </h2>
-          <p className="text-[10px] text-slate-500 mt-1">EQUIPO ROJO - CONECTADO</p>
+          <p className={`text-[10px] mt-1 ${currentTeamMeta?.textClass ?? 'text-slate-500'}`}>
+            {teamName.toUpperCase()} - {sessionStatusLabel} - {connectionLabel}
+          </p>
         </div>
         <div className={`w-3 h-3 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse ${isMyTurn ? 'bg-emerald-500 shadow-emerald-500/80' : 'bg-red-500 shadow-red-500/80'}`}></div>
       </div>
+
+      {!lobbyError ? (
+        <div className="px-4 py-2 bg-cyan-950/30 border-b border-cyan-900/50 text-[11px] text-cyan-100 uppercase tracking-[0.22em]">
+          {sessionStatus === "EN_CURSO" ? "Partida iniciada por el Game Master." : "Esperando a que el Game Master inicie la partida."}
+        </div>
+      ) : null}
+
+      {lobbyError ? (
+        <div className="px-4 py-2 bg-red-950/40 border-b border-red-900/60 text-[11px] text-red-100">
+          {lobbyError}
+        </div>
+      ) : null}
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden relative bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900/50 to-[#020617]">

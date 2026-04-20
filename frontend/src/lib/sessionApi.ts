@@ -18,6 +18,9 @@ export interface LobbySession {
   id: string;
   accessCode: string;
   status: SessionStatus;
+  startedAt: string | null;
+  durationSeconds: number;
+  remainingSeconds: number;
   skin: GameConfig;
   teams: LobbyTeam[];
 }
@@ -52,6 +55,11 @@ export async function getGameSession(accessCode: string) {
 
 export async function joinGameSession(accessCode: string, color: TeamColor) {
   const response = await api.post<JoinSessionResponse>(`/game/sessions/${accessCode}/join`, { color });
+  return response.data.item;
+}
+
+export async function startGameSession(accessCode: string) {
+  const response = await api.post<SessionResponse>(`/game/sessions/${accessCode}/start`);
   return response.data.item;
 }
 

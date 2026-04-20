@@ -50,7 +50,7 @@ type EditableSkinItem = SkinItemPayload & {
 };
 
 const DEFAULT_CONFIG_NAME = "Nueva Configuración";
-const DEFAULT_GAME_TITLE = "Cluedo Online";
+const DEFAULT_GAME_TITLE = "ClueLab Creator";
 const DEFAULT_OBJECTIVE = "Evaluación de resolución de problemas lógicos en entornos técnicos.";
 const DEFAULT_DURATION = "60";
 const DEFAULT_CAT_1 = "Sujetos";
@@ -912,7 +912,7 @@ export function AdminConfigView() {
                     disabled={fieldsDisabled}
                     onChange={(event) => setGameTitle(event.target.value)}
                     className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 font-bold text-white outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
-                    placeholder="Ej. Cluedo Online"
+                    placeholder="Ej. ClueLab Creator"
                   />
                 </div>
 

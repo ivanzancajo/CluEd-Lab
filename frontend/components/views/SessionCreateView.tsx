@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { ArrowLeft, KeyRound, MonitorPlay, Zap, Copy, CheckCircle2, FileText } from "lucide-react";
+import { ArrowLeft, MonitorPlay, Zap, FileText } from "lucide-react";
 import { clearAdminSession } from "../../src/lib/auth";
+import { storeHostLobbySession } from "../../src/lib/lobbyStorage";
 import { type GameConfig, validateSkinComposition } from "../../src/lib/skinApi";
 import { createGameSession, getSessionErrorMessage } from "../../src/lib/sessionApi";
 
 export function SessionCreateView() {
   const navigate = useNavigate();
-  const [sessionCode, setSessionCode] = useState("");
-  const [copied, setCopied] = useState(false);
   const [configs, setConfigs] = useState<GameConfig[]>([]);
   const [selectedConfigId, setSelectedConfigId] = useState<string>("");
   const [isCreatingSession, setIsCreatingSession] = useState(false);
@@ -28,7 +27,6 @@ export function SessionCreateView() {
   }, []);
 
   useEffect(() => {
-    setSessionCode("");
     setSessionError(null);
   }, [selectedConfigId]);
 
@@ -40,32 +38,7 @@ export function SessionCreateView() {
     spaces: selectedConfig?.spaces,
   });
 
-  const handleCopy = async () => {
-    if (!sessionCode) {
-      return;
-    }
-
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(sessionCode);
-        setCopied(true);
-      } else {
-        throw new Error("Clipboard API not available");
-      }
-    } catch {
-      // Fallback para navegadores antiguos
-      const textArea = document.createElement("textarea");
-      textArea.value = sessionCode;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand("copy");
-      textArea.remove();
-      setCopied(true);
-    }
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleStartBoard = async () => {
+  const handleEnableGame = async () => {
     if (!selectedConfig || !selectedConfigValidation.isValid) {
       return;
     }
@@ -75,15 +48,10 @@ export function SessionCreateView() {
       setSessionError(null);
 
       const session = await createGameSession(selectedConfigId);
-      setSessionCode(session.accessCode);
-      localStorage.setItem("sessionCode", session.accessCode);
-      localStorage.setItem("duration", session.skin.duration);
-      localStorage.setItem("gameTitle", session.skin.gameTitle);
-      localStorage.setItem("centerImage", session.skin.centerImage);
-      localStorage.setItem("activeConfig", JSON.stringify(session.skin));
-      navigate("/board");
+      storeHostLobbySession(session);
+      navigate("/lobby");
     } catch (error) {
-      setSessionError(getSessionErrorMessage(error, "No se pudo iniciar la sesión."));
+      setSessionError(getSessionErrorMessage(error, "No se pudo habilitar la partida."));
     } finally {
       setIsCreatingSession(false);
     }
@@ -95,103 +63,119 @@ export function SessionCreateView() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#020617] to-black text-cyan-400 font-mono">
-      <Link to="/" className="absolute top-8 left-8 text-slate-500 hover:text-cyan-400 transition-colors p-2 rounded-md hover:bg-slate-800 flex items-center gap-2 text-sm font-bold tracking-widest uppercase">
+    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(8,145,178,0.18),_transparent_28%),linear-gradient(180deg,#020617_0%,#020617_38%,#000000_100%)] px-6 py-10 text-slate-100 sm:px-8">
+      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+CjxyZWN0IHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0ibm9uZSIvPgo8cGF0aCBkPSJNMCAyMGgyMHYtMUgwem0xOSAwSDIwaC0xdjIwSDB6IiBmaWxsPSJyZ2JhKDMsIDEwNSwgMTYxLCAwLjA1KSIvPgo8L3N2Zz4=')] opacity-50 z-0"></div>
+      <div className="absolute -left-16 top-20 h-56 w-56 rounded-full bg-cyan-500/10 blur-3xl"></div>
+      <div className="absolute bottom-10 right-0 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl"></div>
+
+      <Link to="/" className="absolute top-8 left-8 z-10 text-slate-500 hover:text-cyan-400 transition-colors p-2 rounded-md hover:bg-slate-800 flex items-center gap-2 text-sm font-bold tracking-widest uppercase">
         <ArrowLeft className="w-5 h-5" /> Volver
       </Link>
-      <button onClick={handleLogout} className="absolute top-8 right-8 text-red-300 hover:text-red-200 border border-red-900/60 hover:border-red-500 transition-colors px-4 py-2 rounded-md bg-slate-950/60 text-xs font-bold tracking-widest uppercase">
+      <button onClick={handleLogout} className="absolute top-8 right-8 z-10 text-red-300 hover:text-red-200 border border-red-900/60 hover:border-red-500 transition-colors px-4 py-2 rounded-md bg-slate-950/60 text-xs font-bold tracking-widest uppercase">
         Cerrar sesión
       </button>
 
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-xl p-8 bg-slate-900/50 border border-cyan-800/50 rounded-2xl shadow-[0_0_50px_rgba(6,182,212,0.1)] flex flex-col items-center text-center gap-8 backdrop-blur-sm"
+      <motion.div
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative z-10 w-full max-w-2xl"
       >
-        <div className="p-4 bg-emerald-950/30 border border-emerald-800 rounded-full shadow-[0_0_30px_rgba(16,185,129,0.15)]">
-          <Zap className="w-12 h-12 text-emerald-400" />
-        </div>
-        
-        <div>
-          <h1 className="text-3xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 uppercase">
-            Sesión de Juego Lista
-          </h1>
-          <p className="text-slate-400 text-sm mt-2">
-            Selecciona la configuración a utilizar. El código de acceso se generará al iniciar la sesión.
-          </p>
-        </div>
+        <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/60 p-8 text-left shadow-[0_0_45px_-12px_rgba(6,182,212,0.2)] backdrop-blur-sm sm:p-10">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/70 to-transparent"></div>
 
-        <div className="w-full text-left flex flex-col gap-2 p-6 bg-slate-950/50 border border-slate-800 rounded-xl">
-          <label className="text-[10px] uppercase text-indigo-400 flex items-center gap-2 font-bold tracking-widest">
-            <FileText className="w-4 h-4"/> Seleccionar cluedoskin para el juego
-          </label>
-          {configs.length > 0 ? (
-            <select 
-              value={selectedConfigId}
-              onChange={(e) => setSelectedConfigId(e.target.value)}
-              className="w-full bg-slate-900 border border-indigo-900/50 focus:border-indigo-400 rounded-lg p-3 text-sm text-indigo-100 appearance-none outline-none focus:ring-1 focus:ring-indigo-500 transition-colors cursor-pointer"
+          <div className="flex flex-col items-center gap-5 text-center">
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-800/60 bg-slate-950/70 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.35em] text-cyan-300 shadow-[0_0_30px_rgba(6,182,212,0.12)] backdrop-blur-sm">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.9)]"></span>
+              Control de partida
+            </div>
+
+            <div className="rounded-full border border-cyan-800 bg-cyan-950/30 p-4 shadow-[0_0_30px_rgba(6,182,212,0.15)]">
+              <Zap className="h-14 w-14 text-cyan-400" />
+            </div>
+
+            <div className="space-y-3">
+              <h1 className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400 uppercase sm:text-5xl">
+                Habilitar Partida
+              </h1>
+              <p className="mx-auto max-w-xl text-sm leading-7 text-slate-300 md:text-base">
+                Selecciona la configuración del juego y abre la sala de espera. El código de sesión se mostrará en el lobby, justo después de habilitar la partida.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8 flex flex-col gap-6 rounded-2xl border border-slate-800 bg-slate-950/75 p-6 shadow-inner shadow-black/30">
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-cyan-400">
+                <FileText className="h-4 w-4" /> Seleccionar CluedoSkin para la partida
+              </label>
+
+              {configs.length > 0 ? (
+                <select
+                  value={selectedConfigId}
+                  onChange={(event) => setSelectedConfigId(event.target.value)}
+                  className="w-full cursor-pointer rounded-lg border border-cyan-900/40 bg-slate-900 p-3 text-sm text-cyan-100 outline-none transition-colors focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500"
+                >
+                  {configs.map((config) => (
+                    <option key={config.id} value={config.id}>
+                      {config.name} ({config.duration} min)
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 text-sm text-slate-400">
+                  No hay configuraciones guardadas.
+                  <Link to="/config" className="ml-2 font-semibold text-cyan-400 hover:underline">
+                    Ir a Administración
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            {selectedConfig ? (
+              <div className="grid gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-5 text-sm text-slate-300 sm:grid-cols-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Configuración</p>
+                  <p className="mt-2 font-semibold text-slate-100">{selectedConfig.name}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Título público</p>
+                  <p className="mt-2 font-semibold text-slate-100">{selectedConfig.gameTitle}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Duración</p>
+                  <p className="mt-2 font-semibold text-slate-100">{selectedConfig.duration} min</p>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="rounded-2xl border border-emerald-900/40 bg-emerald-950/20 px-4 py-4 text-sm leading-6 text-emerald-100">
+              Al habilitar la partida entrarás directamente en la sala de espera para ver los equipos conectados y arrancar el tablero cuando quieras.
+            </div>
+
+            {selectedConfig && !selectedConfigValidation.isValid ? (
+              <div className="rounded-xl border border-amber-900/70 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
+                {selectedConfigValidation.errors[0] ?? "La skin seleccionada no se puede iniciar todavía."}
+              </div>
+            ) : null}
+
+            {sessionError ? (
+              <div className="rounded-xl border border-red-900/70 bg-red-950/30 px-4 py-3 text-sm text-red-100">
+                {sessionError}
+              </div>
+            ) : null}
+
+            <button
+              onClick={handleEnableGame}
+              disabled={!selectedConfig || !selectedConfigValidation.isValid || isCreatingSession}
+              className="w-full rounded-xl bg-emerald-600 py-5 text-lg font-black uppercase tracking-widest text-slate-950 shadow-[0_0_30px_rgba(16,185,129,0.3)] transition-all active:scale-95 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-emerald-800/60 disabled:text-slate-300"
             >
-              {configs.map(c => (
-                <option key={c.id} value={c.id}>{c.name} ({c.duration} min)</option>
-              ))}
-            </select>
-          ) : (
-            <div className="p-3 bg-slate-900/80 rounded border border-slate-800 text-slate-500 text-sm italic">
-              No hay configuraciones guardadas.
-              <Link to="/config" className="text-indigo-400 hover:underline ml-2">Ir a Administración</Link>
-            </div>
-          )}
-
-          {selectedConfig && !selectedConfigValidation.isValid ? (
-            <div className="p-3 bg-amber-950/30 border border-amber-900/70 rounded text-amber-100 text-sm">
-              {selectedConfigValidation.errors[0] ?? "La skin seleccionada no se puede iniciar todavía."}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="w-full p-6 bg-slate-950 border border-slate-700 rounded-xl flex flex-col gap-4">
-          <label className="text-[10px] uppercase text-cyan-500 flex items-center justify-center gap-2 font-bold tracking-widest">
-            <KeyRound className="w-4 h-4"/> Código de Acceso
-          </label>
-          
-          <div className="flex items-center gap-4">
-            <div className="flex-1 bg-black border border-cyan-900/50 rounded-lg p-6 flex items-center justify-center relative group">
-              <span className="text-5xl font-black tracking-[0.2em] text-white drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
-                {sessionCode || "------"}
+              <span className="flex items-center justify-center gap-3">
+                <MonitorPlay className="h-6 w-6" />
+                {isCreatingSession ? "Habilitando partida..." : "Habilitar Partida"}
               </span>
-            </div>
-            <button 
-              onClick={handleCopy}
-              disabled={!sessionCode}
-              className="h-full px-6 flex flex-col items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-600 text-slate-300 rounded-lg border border-slate-700 transition-colors"
-              title="Copiar código"
-            >
-              {copied ? <CheckCircle2 className="w-6 h-6 text-emerald-400" /> : <Copy className="w-6 h-6" />}
-              <span className="text-[10px] uppercase tracking-wider">{copied ? 'Copiado' : 'Copiar'}</span>
             </button>
           </div>
-
-          <p className="text-center text-xs text-slate-500">
-            {sessionCode
-              ? "Código generado y listo para compartir."
-              : "El código aparecerá cuando pulses iniciar pantalla central."}
-          </p>
         </div>
-
-        {sessionError ? (
-          <div className="w-full rounded-xl border border-red-900/70 bg-red-950/30 px-4 py-3 text-sm text-red-100">
-            {sessionError}
-          </div>
-        ) : null}
-
-        <button 
-          onClick={handleStartBoard} 
-          disabled={!selectedConfig || !selectedConfigValidation.isValid || isCreatingSession}
-          className="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black uppercase tracking-widest py-5 rounded-xl flex items-center justify-center gap-3 transition-all active:scale-95 shadow-[0_0_30px_rgba(16,185,129,0.3)] text-lg"
-        >
-          <MonitorPlay className="w-6 h-6" /> {isCreatingSession ? "Iniciando sesión..." : "Iniciar Pantalla Central"}
-        </button>
-
       </motion.div>
     </div>
   );

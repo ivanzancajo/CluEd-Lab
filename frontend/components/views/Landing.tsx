@@ -6,8 +6,11 @@ import { motion, AnimatePresence } from "motion/react";
 import api from "../../src/lib/api";// Importamos nuestra instancia de Axios configurada
 import { hasStoredAdminSession, storeAdminToken } from "../../src/lib/auth";
 
+const DEFAULT_GAME_TITLE = "ClueLab Creator";
+const LEGACY_GAME_TITLE = "Cluedo Online";
+
 export function Landing() {
-  const [gameTitle, setGameTitle] = useState("Cluedo Online");
+  const [gameTitle, setGameTitle] = useState(DEFAULT_GAME_TITLE);
   const [pendingAdminPath, setPendingAdminPath] = useState("/host");
   
   // Estados para el Login (CU00)
@@ -21,9 +24,17 @@ export function Landing() {
 
   useEffect(() => {
     const savedTitle = localStorage.getItem("gameTitle");
-    if (savedTitle) {
+
+    if (savedTitle && savedTitle !== LEGACY_GAME_TITLE) {
       setGameTitle(savedTitle);
+      return;
     }
+
+    if (savedTitle === LEGACY_GAME_TITLE) {
+      localStorage.setItem("gameTitle", DEFAULT_GAME_TITLE);
+    }
+
+    setGameTitle(DEFAULT_GAME_TITLE);
   }, []);
 
   // Función de Autenticación
@@ -115,22 +126,21 @@ export function Landing() {
           <div className="space-y-3">
             <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-yellow-200/80">Control de partida</p>
             <h2 className="text-2xl font-bold text-slate-200 group-hover:text-white">Crear Sesión</h2>
-            <p className="text-sm leading-6 text-slate-400 group-hover:text-slate-300">Genera el código de acceso, selecciona la configuración activa y lanza la pantalla central del juego.</p>
+            <p className="text-sm leading-6 text-slate-400 group-hover:text-slate-300">Genera el código, habilita la partida y controla la sala de espera antes de iniciar el tablero central.</p>
           </div>
         </button>
 
-        {/* Botones públicos: Se mantienen con Link */}
-        <Link to="/board" className="group relative flex min-h-[260px] flex-col items-start justify-between overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/55 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:border-cyan-500 hover:bg-slate-800/85 hover:shadow-[0_0_40px_-10px_rgba(6,182,212,0.3)]">
+        <button onClick={(e) => handleAdminAccess(e, '/lobby')} className="group relative flex min-h-[260px] flex-col items-start justify-between overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/55 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:border-cyan-500 hover:bg-slate-800/85 hover:shadow-[0_0_40px_-10px_rgba(6,182,212,0.3)]">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/70 to-transparent opacity-0 transition-opacity group-hover:opacity-100"></div>
           <div className="rounded-2xl border border-cyan-900/50 bg-cyan-950/20 p-4">
             <Monitor className="w-10 h-10 text-slate-500 group-hover:text-cyan-400 transition-colors" />
           </div>
           <div className="space-y-3">
             <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-cyan-300/80">Vista de sala</p>
-            <h2 className="text-2xl font-bold text-slate-200 group-hover:text-white">Pantalla Central</h2>
-            <p className="text-sm leading-6 text-slate-400 group-hover:text-slate-300">Supervisa equipos, estado del tablero, cronómetro y eventos principales durante la sesión.</p>
+            <h2 className="text-2xl font-bold text-slate-200 group-hover:text-white">Sala de Espera</h2>
+            <p className="text-sm leading-6 text-slate-400 group-hover:text-slate-300">Observa como se unen los equipos y activa la pantalla central solo cuando el Game Master lo decida.</p>
           </div>
-        </Link>
+        </button>
         
         <Link to="/join" className="group relative flex min-h-[260px] flex-col items-start justify-between overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/55 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:border-emerald-500 hover:bg-slate-800/85 hover:shadow-[0_0_40px_-10px_rgba(16,185,129,0.3)]">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/70 to-transparent opacity-0 transition-opacity group-hover:opacity-100"></div>

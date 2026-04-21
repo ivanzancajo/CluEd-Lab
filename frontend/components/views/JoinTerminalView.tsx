@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { ArrowLeft, KeyRound, LoaderCircle, MonitorSmartphone, ShieldAlert, Cpu } from "lucide-react";
-import { storeJoinedLobbySession } from "../../src/lib/lobbyStorage";
+import { clearStoredTeamContext, getStoredJoinedLobbyContext, storeJoinedLobbySession } from "../../src/lib/lobbyStorage";
 import { TEAM_METADATA } from "../../src/lib/teamMeta";
 import {
   getGameSession,
@@ -16,6 +16,7 @@ export function JoinTerminalView() {
   const [code, setCode] = useState("");
   const [selectedTeam, setSelectedTeam] = useState<TeamColor | "">("");
   const [sessionSnapshot, setSessionSnapshot] = useState<LobbySession | null>(null);
+  const [resumeTeamId, setResumeTeamId] = useState<string | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -25,6 +26,7 @@ export function JoinTerminalView() {
     if (code.length !== 6) {
       setSessionSnapshot(null);
       setSelectedTeam("");
+      setResumeTeamId(null);
       setJoinError(null);
       setIsLoadingSession(false);
       return;
@@ -42,7 +44,24 @@ export function JoinTerminalView() {
         }
 
         setSessionSnapshot(session);
+        const storedContext = getStoredJoinedLobbyContext();
+        const isStoredSessionMatch =
+          storedContext?.sessionId === session.id && storedContext.accessCode === session.accessCode;
+        const resumeTeam = isStoredSessionMatch
+          ? session.teams.find((team) => team.id === storedContext.teamId) ?? null
+          : null;
+
+        if (isStoredSessionMatch && !resumeTeam) {
+          clearStoredTeamContext();
+        }
+
+        setResumeTeamId(resumeTeam?.id ?? null);
+
         setSelectedTeam((currentTeam) => {
+          if (resumeTeam) {
+            return resumeTeam.color;
+          }
+
           if (!currentTeam) {
             return currentTeam;
           }
@@ -50,8 +69,10 @@ export function JoinTerminalView() {
           return session.teams.some((team) => team.color === currentTeam) ? "" : currentTeam;
         });
 
-        if (session.status !== "LOBBY") {
+        if (!resumeTeam && session.status !== "LOBBY") {
           setJoinError("La partida ya ha comenzado y el lobby esta cerrado para nuevos equipos.");
+        } else if (resumeTeam && session.status !== "LOBBY" && session.status !== "EN_CURSO") {
+          setJoinError("La sesion ya no permite reanudar este terminal.");
         }
       })
       .catch((error) => {
@@ -61,7 +82,8 @@ export function JoinTerminalView() {
 
         setSessionSnapshot(null);
         setSelectedTeam("");
-        setJoinError(getSessionErrorMessage(error, "No se ha encontrado una sesión válida con ese código."));
+        setResumeTeamId(null);
+        setJoinError(getSessionErrorMessage(error, "No se ha encontrado una sesion valida con ese codigo."));
       })
       .finally(() => {
         if (!cancelled) {
@@ -77,6 +99,10 @@ export function JoinTerminalView() {
   const occupiedColors = useMemo(
     () => new Set(sessionSnapshot?.teams.map((team) => team.color) ?? []),
     [sessionSnapshot]
+  );
+  const resumeTeam = useMemo(
+    () => (resumeTeamId ? sessionSnapshot?.teams.find((team) => team.id === resumeTeamId) ?? null : null),
+    [resumeTeamId, sessionSnapshot]
   );
   const selectedTeamMeta = useMemo(
     () => TEAM_METADATA.find((team) => team.color === selectedTeam) ?? null,
@@ -105,6 +131,20 @@ export function JoinTerminalView() {
       };
     }
 
+    if (resumeTeam && sessionSnapshot?.status === "LOBBY") {
+      return {
+        tone: "text-cyan-200",
+        message: `Sesion valida: puedes reanudar ${resumeTeam.name}.`,
+      };
+    }
+
+    if (resumeTeam && sessionSnapshot?.status === "EN_CURSO") {
+      return {
+        tone: "text-cyan-200",
+        message: `Partida en curso: puedes reanudar ${resumeTeam.name}.`,
+      };
+    }
+
     if (sessionSnapshot?.status === "LOBBY") {
       return {
         tone: "text-emerald-300",
@@ -123,11 +163,19 @@ export function JoinTerminalView() {
       tone: "text-slate-500",
       message: "Esperando validacion del codigo.",
     };
-  }, [code, isLoadingSession, sessionSnapshot]);
+  }, [code, isLoadingSession, resumeTeam, sessionSnapshot]);
+
+  const canResume =
+    !!resumeTeam &&
+    !!sessionSnapshot &&
+    (sessionSnapshot.status === "LOBBY" || sessionSnapshot.status === "EN_CURSO") &&
+    !isLoadingSession &&
+    !isJoining;
 
   const canJoin =
     code.length === 6 &&
     !!selectedTeam &&
+    !resumeTeam &&
     !!sessionSnapshot &&
     sessionSnapshot.status === "LOBBY" &&
     !occupiedColors.has(selectedTeam) &&
@@ -136,6 +184,14 @@ export function JoinTerminalView() {
 
   const handleJoin = async (event: React.FormEvent) => {
     event.preventDefault();
+
+    if (canResume && resumeTeam && sessionSnapshot) {
+      setIsJoining(true);
+      setJoinError(null);
+      storeJoinedLobbySession({ session: sessionSnapshot, team: resumeTeam });
+      navigate("/terminal", { replace: true });
+      return;
+    }
 
     if (!canJoin || !selectedTeam) {
       return;
@@ -213,6 +269,12 @@ export function JoinTerminalView() {
                   <span className="uppercase tracking-widest text-slate-500">Colores libres</span>
                   <span className="font-semibold text-cyan-200">{availableCount} / {TEAM_METADATA.length}</span>
                 </div>
+                {resumeTeam ? (
+                  <div className="mt-2 flex items-center justify-between gap-4">
+                    <span className="uppercase tracking-widest text-slate-500">Equipo detectado</span>
+                    <span className="font-semibold text-cyan-100">{resumeTeam.name}</span>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -220,51 +282,83 @@ export function JoinTerminalView() {
               <label className="text-[10px] uppercase text-slate-500 font-bold tracking-widest">
                 Seleccion de color
               </label>
+              <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-widest">
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-900/60 bg-emerald-950/20 px-3 py-1 text-emerald-200">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
+                  Libre
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-950/70 px-3 py-1 text-slate-400">
+                  <span className="h-2.5 w-2.5 rounded-full bg-slate-500"></span>
+                  Ocupado
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-cyan-900/60 bg-cyan-950/20 px-3 py-1 text-cyan-200">
+                  <span className="h-2.5 w-2.5 rounded-full bg-cyan-300"></span>
+                  Tu equipo
+                </span>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 {TEAM_METADATA.map((team) => {
-                  const isAvailable = !!sessionSnapshot && sessionSnapshot.status === "LOBBY" && !occupiedColors.has(team.color);
+                  const isResumeTeam = resumeTeam?.color === team.color;
+                  const isAvailable = !resumeTeam && !!sessionSnapshot && sessionSnapshot.status === "LOBBY" && !occupiedColors.has(team.color);
                   const isSelected = selectedTeam === team.color;
                   const availabilityLabel = !sessionSnapshot
                     ? "Pendiente"
+                    : isResumeTeam
+                    ? "Tu equipo"
                     : sessionSnapshot.status !== "LOBBY"
                     ? "Cerrado"
                     : occupiedColors.has(team.color)
                     ? "Ocupado"
-                    : "Disponible";
+                    : "Libre";
+                  const availabilityTone = isResumeTeam
+                    ? "text-cyan-200"
+                    : !isAvailable
+                    ? "text-slate-500"
+                    : "text-emerald-200";
 
                   return (
                     <button
                       key={team.color}
                       type="button"
                       onClick={() => isAvailable && setSelectedTeam(team.color)}
-                      disabled={!isAvailable || isLoadingSession || isJoining}
+                      disabled={(!isAvailable && !isResumeTeam) || isLoadingSession || isJoining}
                       className={`flex flex-col items-start gap-2 p-3 rounded-lg border text-left transition-all ${
-                        !isAvailable
-                          ? 'bg-slate-900/30 border-slate-900 text-slate-800 cursor-not-allowed opacity-50'
+                        isResumeTeam
+                          ? 'bg-cyan-950/25 border-cyan-400/70 text-cyan-50 shadow-[0_0_16px_-6px_rgba(34,211,238,0.65)]'
+                          : !isAvailable
+                          ? 'bg-slate-950/70 border-slate-800 text-slate-500 cursor-not-allowed'
                           : isSelected
                           ? `bg-slate-800 border-current ${team.textClass} shadow-[0_0_15px_-3px_currentColor]`
-                          : 'bg-slate-950/50 border-slate-800 text-slate-600 hover:border-slate-600'
+                          : 'bg-emerald-950/10 border-emerald-700/40 text-slate-100 hover:border-cyan-400 hover:bg-slate-900/80'
                       }`}
                     >
                       <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${team.swatchClass} ${isSelected ? 'animate-pulse shadow-[0_0_8px_currentColor]' : 'opacity-50'}`}></div>
+                        <div
+                          className={`h-4 w-4 rounded-full border ${team.color === "BLANCO" ? 'border-slate-500' : 'border-slate-950/80'} ${team.swatchClass} ${
+                            isSelected || isResumeTeam ? 'shadow-[0_0_10px_currentColor]' : ''
+                          }`}
+                        ></div>
                         <span className="text-xs font-bold uppercase tracking-wider">{team.shortLabel}</span>
                       </div>
-                      <span className="text-[9px] uppercase tracking-widest text-slate-500">{availabilityLabel}</span>
+                      <span className={`text-[9px] uppercase tracking-widest ${availabilityTone}`}>{availabilityLabel}</span>
                     </button>
                   );
                 })}
               </div>
               <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-3 text-[11px] leading-5 text-slate-400">
-                {selectedTeamMeta
+                {resumeTeam
+                  ? `Este navegador ya esta vinculado a ${resumeTeam.name}. Al entrar se recuperara el mismo terminal con su color original.`
+                  : selectedTeamMeta
                   ? `Tu equipo se registrara en el servidor como ${selectedTeamMeta.label}.`
                   : "El color que elijas determinara como aparecera tu equipo durante la partida."}
               </div>
               {sessionSnapshot ? (
                 <p className="text-[11px] text-slate-500 leading-5">
-                  {sessionSnapshot.status === "LOBBY"
+                  {resumeTeam
+                    ? "Tu color queda reservado para este dispositivo mientras el equipo siga existiendo en la sesion."
+                    : sessionSnapshot.status === "LOBBY"
                     ? `${sessionSnapshot.teams.length} equipos ya unidos al lobby.`
-                    : "La partida ya esta en curso y no admite nuevos equipos."}
+                    : "La partida ya esta en curso y solo permite reanudar equipos ya vinculados."}
                 </p>
               ) : (
                 <p className="text-[11px] text-slate-500 leading-5">
@@ -282,11 +376,11 @@ export function JoinTerminalView() {
             <div className="mt-4 pt-6 border-t border-slate-800">
               <button
                 type="submit"
-                disabled={!canJoin}
+                disabled={!canJoin && !canResume}
                 className="w-full bg-cyan-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none hover:bg-cyan-500 text-slate-950 font-bold uppercase tracking-widest py-4 rounded-lg flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.4)]"
               >
                 {isJoining ? <LoaderCircle className="w-5 h-5 animate-spin" /> : <Cpu className="w-5 h-5" />}
-                {isJoining ? "Conectando..." : "Unirse al lobby"}
+                {isJoining ? "Conectando..." : canResume ? "Reanudar terminal" : "Unirse al lobby"}
               </button>
             </div>
           </form>

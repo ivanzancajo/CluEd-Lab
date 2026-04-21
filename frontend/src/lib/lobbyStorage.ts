@@ -1,5 +1,13 @@
 import type { JoinedLobbySession, LobbySession, SessionStatus, TeamColor } from './sessionApi';
 
+export type StoredJoinedLobbyContext = {
+  sessionId: string;
+  accessCode: string;
+  teamId: string;
+  teamColor: TeamColor;
+  teamName: string;
+};
+
 const SESSION_ID_KEY = 'sessionId';
 const SESSION_CODE_KEY = 'sessionCode';
 const SESSION_STATUS_KEY = 'sessionStatus';
@@ -69,6 +77,26 @@ export function getStoredTeamName() {
 export function getStoredTeamColor(): TeamColor | null {
   const value = getStoredValue(TEAM_COLOR_KEY);
   return value as TeamColor | null;
+}
+
+export function getStoredJoinedLobbyContext(): StoredJoinedLobbyContext | null {
+  const sessionId = getStoredSessionId();
+  const accessCode = getStoredSessionCode();
+  const teamId = getStoredTeamId();
+  const teamColor = getStoredTeamColor();
+  const teamName = getStoredTeamName();
+
+  if (!sessionId || !accessCode || !teamId || !teamColor || !teamName) {
+    return null;
+  }
+
+  return {
+    sessionId,
+    accessCode,
+    teamId,
+    teamColor,
+    teamName,
+  };
 }
 
 function storeSessionSnapshot(session: LobbySession) {

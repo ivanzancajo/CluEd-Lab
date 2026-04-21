@@ -85,7 +85,7 @@ CREATE TABLE "partida" (
 
 -- CreateTable
 CREATE TABLE "equipo" (
-    "id_equipo" UUID NOT NULL DEFAULT uuid_generate_v4(),
+    "id_equipo" UUID NOT NULL,
     "id_partida" UUID,
     "nombre" VARCHAR(20) NOT NULL,
     "color" "color_equipo" NOT NULL,
@@ -98,7 +98,7 @@ CREATE TABLE "equipo" (
 
 -- CreateTable
 CREATE TABLE "tabla_razonamiento" (
-    "id_tabla" UUID NOT NULL DEFAULT uuid_generate_v4(),
+    "id_tabla" UUID NOT NULL,
     "id_equipo" UUID,
     "progreso" DECIMAL(5,2) DEFAULT 0.00,
 
@@ -107,7 +107,7 @@ CREATE TABLE "tabla_razonamiento" (
 
 -- CreateTable
 CREATE TABLE "anotacion" (
-    "id_anotacion" UUID NOT NULL DEFAULT uuid_generate_v4(),
+    "id_anotacion" UUID NOT NULL,
     "id_tabla" UUID,
     "contenido" TEXT,
 
@@ -116,7 +116,7 @@ CREATE TABLE "anotacion" (
 
 -- CreateTable
 CREATE TABLE "celda_razonamiento" (
-    "id_celda" UUID NOT NULL DEFAULT uuid_generate_v4(),
+    "id_celda" UUID NOT NULL,
     "id_tabla" UUID,
     "id_elem" UUID,
     "estado_deduc" "estado_deduccion" DEFAULT 'NEUTRO',
@@ -126,7 +126,7 @@ CREATE TABLE "celda_razonamiento" (
 
 -- CreateTable
 CREATE TABLE "evento" (
-    "id_evento" UUID NOT NULL DEFAULT uuid_generate_v4(),
+    "id_evento" UUID NOT NULL,
     "id_partida" UUID,
     "id_emisor" UUID,
     "id_receptor" UUID,

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Map as MapIcon, 
@@ -92,6 +92,7 @@ const CATEGORIES = {
 const TEAMS = ["Rojo", "Amarillo", "Azul", "Verde", "Morado", "Blanco"];
 
 export function TerminalView() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("map");
   const [centerImage, setCenterImage] = useState("");
   const [teamName, setTeamName] = useState(getStoredTeamName() || "Equipo sin asignar");
@@ -184,8 +185,7 @@ export function TerminalView() {
     const teamId = getStoredTeamId();
 
     if (!sessionId || !teamId) {
-      setLobbyConnectionStatus("error");
-      setLobbyError("No se ha encontrado un equipo activo para este terminal.");
+      navigate("/join", { replace: true });
       return;
     }
 
@@ -250,7 +250,7 @@ export function TerminalView() {
       window.clearInterval(heartbeatIntervalId);
       socket.disconnect();
     };
-  }, []);
+  }, [navigate]);
 
   const currentTeamMeta = teamColor ? getTeamMeta(teamColor) : null;
   const sessionStatusLabel = sessionStatus === "EN_CURSO" ? "PARTIDA EN CURSO" : "SALA DE ESPERA";

@@ -106,7 +106,7 @@ export function Landing() {
 
       <div className="relative z-10 mt-6 grid w-full max-w-6xl grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
         {/* Botones protegidos: Usamos onClick en lugar de Link directo */}
-        <button onClick={(e) => handleAdminAccess(e, '/config')} className="group relative flex min-h-[260px] flex-col items-start justify-between overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/55 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:border-purple-500 hover:bg-slate-800/85 hover:shadow-[0_0_40px_-10px_rgba(168,85,247,0.3)]">
+        <button data-cy="landing-admin-config-button" onClick={(e) => handleAdminAccess(e, '/config')} className="group relative flex min-h-[260px] flex-col items-start justify-between overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/55 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:border-purple-500 hover:bg-slate-800/85 hover:shadow-[0_0_40px_-10px_rgba(168,85,247,0.3)]">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-purple-400/70 to-transparent opacity-0 transition-opacity group-hover:opacity-100"></div>
           <div className="rounded-2xl border border-purple-900/50 bg-purple-950/20 p-4">
             <Settings className="w-10 h-10 text-slate-500 group-hover:text-purple-400 transition-colors" />
@@ -118,7 +118,7 @@ export function Landing() {
           </div>
         </button>
 
-        <button onClick={(e) => handleAdminAccess(e, '/host')} className="group relative flex min-h-[260px] flex-col items-start justify-between overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/55 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:border-yellow-500 hover:bg-slate-800/85 hover:shadow-[0_0_40px_-10px_rgba(234,179,8,0.3)]">
+        <button data-cy="landing-admin-create-session-button" onClick={(e) => handleAdminAccess(e, '/host')} className="group relative flex min-h-[260px] flex-col items-start justify-between overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/55 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:border-yellow-500 hover:bg-slate-800/85 hover:shadow-[0_0_40px_-10px_rgba(234,179,8,0.3)]">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent opacity-0 transition-opacity group-hover:opacity-100"></div>
           <div className="rounded-2xl border border-yellow-900/50 bg-yellow-950/15 p-4">
             <Zap className="w-10 h-10 text-slate-500 group-hover:text-yellow-400 transition-colors" />
@@ -167,6 +167,7 @@ export function Landing() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            data-cy="landing-login-modal"
           >
             <motion.div 
               initial={{ scale: 0.9, y: 20 }}
@@ -192,6 +193,7 @@ export function Landing() {
               <form onSubmit={handleLogin} className="flex flex-col gap-4">
                 <div>
                   <input 
+                    data-cy="landing-login-username-input"
                     type="text" 
                     placeholder="Identificador" 
                     value={username}
@@ -202,6 +204,7 @@ export function Landing() {
                 </div>
                 <div>
                   <input 
+                    data-cy="landing-login-password-input"
                     type="password" 
                     placeholder="Clave de seguridad" 
                     value={password}
@@ -212,12 +215,13 @@ export function Landing() {
                 </div>
 
                 {error && (
-                  <div className="text-red-400 text-sm text-center bg-red-400/10 py-2 rounded">
+                  <div data-cy="landing-login-error" className="text-red-400 text-sm text-center bg-red-400/10 py-2 rounded">
                     {error}
                   </div>
                 )}
 
                 <button 
+                  data-cy="landing-login-submit-button"
                   type="submit" 
                   disabled={isLoading}
                   className="mt-2 w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg uppercase tracking-widest transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

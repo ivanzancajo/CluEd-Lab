@@ -5,7 +5,9 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "cy:open": "cypress open",
+    "cy:run": "cypress run --e2e"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.3",
@@ -62,6 +64,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.0.4",
+    "cypress": "^15.14.1",
     "eslint": "^9.39.1",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",

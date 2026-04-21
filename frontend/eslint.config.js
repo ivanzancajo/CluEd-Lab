@@ -4,6 +4,9 @@ import reactPlugin from "eslint-plugin-react";
 import hooksPlugin from "eslint-plugin-react-hooks";
 
 export default tseslint.config(
+  {
+    ignores: ["dist/**", "build/**"],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -20,6 +23,19 @@ export default tseslint.config(
     },
     settings: {
       react: { version: "detect" },
+    },
+  },
+  {
+    files: ["cypress/**/*.ts"],
+    languageOptions: {
+      globals: {
+        Cypress: "readonly",
+        cy: "readonly",
+        describe: "readonly",
+        it: "readonly",
+        beforeEach: "readonly",
+        expect: "readonly",
+      },
     },
   }
 );

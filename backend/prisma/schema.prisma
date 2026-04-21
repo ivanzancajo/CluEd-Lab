@@ -55,7 +55,7 @@ enum EstadoPartida {
 }
 
 model CluedoSkin {
-  id                  String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid @map("id_skin")
+  id                  String                @id @default(uuid()) @db.Uuid @map("id_skin")
   name                String                @map("nombre") @db.VarChar(100)
   objective           String?               @map("objetivo")
   context             String?               @map("contexto")
@@ -68,7 +68,7 @@ model CluedoSkin {
 }
 
 model Elemento {
-  id               String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid @map("id_elem")
+  id               String                @id @default(uuid()) @db.Uuid @map("id_elem")
   name             String                @map("nombre") @db.VarChar(50)
   kind             TipoElemento          @map("tipo_elem")
   imageUrl         String?               @map("imagen")
@@ -96,7 +96,7 @@ model DescripcionElemento {
 }
 
 model Solucion {
-  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid @map("id_solucion")
+  id               String    @id @default(uuid()) @db.Uuid @map("id_solucion")
   subjectElementId String?   @db.Uuid @map("id_sujeto")
   objectElementId  String?   @db.Uuid @map("id_objeto")
   spaceElementId   String?   @db.Uuid @map("id_espacio")
@@ -110,7 +110,7 @@ model Solucion {
 }
 
 model Partida {
-  id         String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid @map("id_partida")
+  id         String       @id @default(uuid()) @db.Uuid @map("id_partida")
   accessCode String     @map("codigo_acceso") @db.VarChar(6)
   status     EstadoPartida? @default(LOBBY) @map("estado")
   startedAt  DateTime?    @map("inicio") @db.Timestamp(6)
@@ -128,7 +128,7 @@ model Partida {
 }
 
 model Equipo {
-  id               String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid @map("id_equipo")
+  id               String              @id @default(uuid()) @db.Uuid @map("id_equipo")
   partidaId        String?             @db.Uuid @map("id_partida")
   name             String              @map("nombre") @db.VarChar(20)
   color            ColorEquipo         @map("color")
@@ -146,7 +146,7 @@ model Equipo {
 }
 
 model TablaRazonamiento {
-  id               String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid @map("id_tabla")
+  id               String              @id @default(uuid()) @db.Uuid @map("id_tabla")
   equipoId         String?             @db.Uuid @map("id_equipo")
   progress         Decimal?            @default(0.00) @map("progreso") @db.Decimal(5, 2)
 
@@ -158,7 +158,7 @@ model TablaRazonamiento {
 }
 
 model Anotacion {
-  id               String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid @map("id_anotacion")
+  id               String              @id @default(uuid()) @db.Uuid @map("id_anotacion")
   tablaId          String?             @db.Uuid @map("id_tabla")
   content          String?             @map("contenido")
 
@@ -168,7 +168,7 @@ model Anotacion {
 }
 
 model CeldaRazonamiento {
-  id               String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid @map("id_celda")
+  id               String              @id @default(uuid()) @db.Uuid @map("id_celda")
   tablaId          String?             @db.Uuid @map("id_tabla")
   elementId        String?             @db.Uuid @map("id_elem")
   deductionState   EstadoDeduccion?    @default(NEUTRO) @map("estado_deduc")
@@ -180,7 +180,7 @@ model CeldaRazonamiento {
 }
 
 model Evento {
-  id               String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid @map("id_evento")
+  id               String              @id @default(uuid()) @db.Uuid @map("id_evento")
   partidaId        String?             @db.Uuid @map("id_partida")
   emitterId        String?             @db.Uuid @map("id_emisor")
   receiverId       String?             @db.Uuid @map("id_receptor")

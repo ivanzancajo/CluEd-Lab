@@ -478,6 +478,7 @@ export function AdminConfigView() {
     setItems: Dispatch<SetStateAction<EditableSkinItem[]>>,
     icon: ReactNode,
     type: string,
+    collectionKey: "subjects" | "objects" | "spaces",
     maxItems: number,
     showMotif: boolean
   ) => {
@@ -522,6 +523,7 @@ export function AdminConfigView() {
         {items.map((item, index) => (
           <div
             key={item.localId}
+            data-cy={`admin-config-${collectionKey}-item`}
             className="group relative flex gap-4 rounded-lg border border-slate-800 bg-slate-900 p-4 transition-colors hover:border-cyan-800"
           >
             <div className="relative flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded border border-slate-700 bg-slate-950">
@@ -542,6 +544,7 @@ export function AdminConfigView() {
                 <button
                   onClick={() => removeItem(item.localId)}
                   disabled={fieldsDisabled}
+                  data-cy={`admin-config-${collectionKey}-remove-button`}
                   className="ml-auto text-xs font-bold uppercase tracking-widest text-slate-600 hover:text-red-500 disabled:text-slate-700"
                 >
                   Remover
@@ -553,6 +556,7 @@ export function AdminConfigView() {
                   type="text"
                   value={item.name}
                   disabled={fieldsDisabled}
+                  data-cy={`admin-config-${collectionKey}-name-input`}
                   onChange={(event) => updateItem(item.localId, (currentItem) => ({ ...currentItem, name: event.target.value }))}
                   className="w-full rounded border border-slate-700 bg-slate-950 p-3 font-bold text-cyan-100 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
                   placeholder={`Nombre del ${type.toLowerCase()}...`}
@@ -563,6 +567,7 @@ export function AdminConfigView() {
                     type="text"
                     value={item.imageUrl ?? ""}
                     disabled={fieldsDisabled}
+                    data-cy={`admin-config-${collectionKey}-image-input`}
                     onChange={(event) => updateItem(item.localId, (currentItem) => ({ ...currentItem, imageUrl: event.target.value }))}
                     className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 p-3 font-mono text-xs text-cyan-100 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
                     placeholder="URL de imagen..."
@@ -606,6 +611,7 @@ export function AdminConfigView() {
                   type="text"
                   value={item.motif ?? ""}
                   disabled={fieldsDisabled}
+                  data-cy={`admin-config-${collectionKey}-motif-input`}
                   onChange={(event) => updateItem(item.localId, (currentItem) => ({ ...currentItem, motif: event.target.value }))}
                   className="w-full rounded border border-purple-900/50 bg-slate-950 p-3 text-xs text-purple-200 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-500 disabled:opacity-60"
                   placeholder="Motivo asociado a este espacio..."
@@ -615,6 +621,7 @@ export function AdminConfigView() {
               <textarea
                 value={item.desc}
                 disabled={fieldsDisabled}
+                data-cy={`admin-config-${collectionKey}-desc-input`}
                 onChange={(event) => updateItem(item.localId, (currentItem) => ({ ...currentItem, desc: event.target.value }))}
                 rows={3}
                 className="w-full resize-none rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
@@ -627,6 +634,7 @@ export function AdminConfigView() {
         <button
           onClick={addItem}
           disabled={fieldsDisabled || items.length >= maxItems}
+          data-cy={`admin-config-${collectionKey}-add-button`}
           className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-slate-700 p-4 text-xs font-bold uppercase tracking-widest text-slate-500 transition-all hover:border-cyan-500 hover:bg-slate-900/50 hover:text-cyan-400 disabled:border-slate-800 disabled:bg-transparent disabled:text-slate-700"
         >
           <Plus className="h-4 w-4" /> Añadir {type}
@@ -660,6 +668,7 @@ export function AdminConfigView() {
         <nav className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
           <button
             onClick={() => setActiveTab("list")}
+            data-cy="admin-config-tab-list"
             className={`flex items-center gap-3 rounded-lg border p-4 text-xs font-bold uppercase tracking-widest transition-all ${
               activeTab === "list"
                 ? "border-indigo-500 bg-indigo-950/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.15)]"
@@ -675,6 +684,7 @@ export function AdminConfigView() {
 
               <button
                 onClick={() => setActiveTab("general")}
+                data-cy="admin-config-tab-general"
                 className={`flex items-center gap-3 rounded-lg border p-4 text-xs font-bold uppercase tracking-widest transition-all ${
                   activeTab === "general"
                     ? "border-cyan-500 bg-cyan-950/30 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)]"
@@ -686,6 +696,7 @@ export function AdminConfigView() {
 
               <button
                 onClick={() => setActiveTab("sujetos")}
+                data-cy="admin-config-tab-subjects"
                 className={`flex items-center gap-3 rounded-lg border p-4 text-xs font-bold uppercase tracking-widest transition-all ${
                   activeTab === "sujetos"
                     ? "border-cyan-500 bg-cyan-950/30 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)]"
@@ -697,6 +708,7 @@ export function AdminConfigView() {
 
               <button
                 onClick={() => setActiveTab("objetos")}
+                data-cy="admin-config-tab-objects"
                 className={`flex items-center gap-3 rounded-lg border p-4 text-xs font-bold uppercase tracking-widest transition-all ${
                   activeTab === "objetos"
                     ? "border-emerald-500 bg-emerald-950/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
@@ -708,6 +720,7 @@ export function AdminConfigView() {
 
               <button
                 onClick={() => setActiveTab("espacios")}
+                data-cy="admin-config-tab-spaces"
                 className={`flex items-center gap-3 rounded-lg border p-4 text-xs font-bold uppercase tracking-widest transition-all ${
                   activeTab === "espacios"
                     ? "border-red-500 bg-red-950/30 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.15)]"
@@ -724,6 +737,7 @@ export function AdminConfigView() {
           <button
             onClick={handleSaveConfig}
             disabled={!canSave}
+            data-cy="admin-config-save-button"
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 py-4 font-bold uppercase tracking-widest text-slate-950 shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all active:scale-95 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none"
           >
             <Save className="h-5 w-5" /> {saving ? "Guardando..." : "Guardar Configuración"}
@@ -756,19 +770,20 @@ export function AdminConfigView() {
           ) : null}
 
           {statusMessage ? (
-            <div className="rounded-xl border border-emerald-900/60 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
+            <div data-cy="admin-config-status-message" className="rounded-xl border border-emerald-900/60 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
               {statusMessage}
             </div>
           ) : null}
 
           {errorMessage ? (
-            <div className="rounded-xl border border-red-900/60 bg-red-950/20 px-4 py-3 text-sm text-red-100">
+            <div data-cy="admin-config-error-message" className="rounded-xl border border-red-900/60 bg-red-950/20 px-4 py-3 text-sm text-red-100">
               {errorMessage}
             </div>
           ) : null}
 
           {activeTab !== "list" ? (
             <div
+              data-cy="admin-config-validation-summary"
               className={`rounded-xl border px-4 py-3 text-sm ${
                 validation.isValid
                   ? "border-emerald-900/60 bg-emerald-950/20 text-emerald-100"
@@ -816,6 +831,7 @@ export function AdminConfigView() {
                 <button
                   onClick={createNewConfig}
                   disabled={isBusy}
+                  data-cy="admin-config-create-button"
                   className="flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-3 text-xs font-bold uppercase tracking-widest text-white shadow-[0_0_15px_rgba(99,102,241,0.4)] transition-all hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500"
                 >
                   <Plus className="h-4 w-4" /> Crear Nueva
@@ -823,32 +839,34 @@ export function AdminConfigView() {
               </div>
 
               {!listLoading && configs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-slate-800 p-12 text-slate-500">
+                <div data-cy="admin-config-empty-state" className="flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-slate-800 p-12 text-slate-500">
                   <List className="h-12 w-12 opacity-50" />
                   <p>No hay configuraciones remotas guardadas.</p>
-                  <button onClick={createNewConfig} className="text-indigo-400 hover:underline">
+                  <button data-cy="admin-config-empty-create-button" onClick={createNewConfig} className="text-indigo-400 hover:underline">
                     Comienza creando una aquí
                   </button>
                 </div>
               ) : null}
 
               {configs.length > 0 ? (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div data-cy="admin-config-list" className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {configs.map((config) => (
                     <div
                       key={config.id}
                       onClick={() => void loadConfig(config.id)}
+                      data-cy="admin-config-card"
                       className={`group relative rounded-xl border border-slate-700 bg-slate-900/60 p-6 transition-all ${
                         isBusy ? "cursor-wait opacity-70" : "cursor-pointer hover:border-indigo-500"
                       }`}
                     >
                       <div className="mb-4 flex items-start justify-between gap-3">
-                        <h3 className="text-lg font-bold text-white transition-colors group-hover:text-indigo-400">
+                        <h3 data-cy="admin-config-card-title" className="text-lg font-bold text-white transition-colors group-hover:text-indigo-400">
                           {config.name}
                         </h3>
                         <button
                           onClick={(event) => void deleteConfig(config.id, event)}
                           disabled={isBusy}
+                          data-cy="admin-config-card-delete-button"
                           className="p-1 text-slate-600 transition-colors hover:text-red-500 disabled:text-slate-700"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -897,6 +915,7 @@ export function AdminConfigView() {
                     type="text"
                     value={configName}
                     disabled={fieldsDisabled}
+                    data-cy="admin-config-name-input"
                     onChange={(event) => setConfigName(event.target.value)}
                     className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 font-bold text-indigo-100 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-500 disabled:opacity-60"
                     placeholder="Ej. Clásico IT v1"
@@ -911,6 +930,7 @@ export function AdminConfigView() {
                     type="text"
                     value={gameTitle}
                     disabled={fieldsDisabled}
+                    data-cy="admin-config-game-title-input"
                     onChange={(event) => setGameTitle(event.target.value)}
                     className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 font-bold text-white outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
                     placeholder="Ej. ClueLab Creator"
@@ -926,6 +946,7 @@ export function AdminConfigView() {
                       type="text"
                       value={centerImage}
                       disabled={fieldsDisabled}
+                      data-cy="admin-config-center-image-input"
                       onChange={(event) => setCenterImage(event.target.value)}
                       className="flex-1 rounded-lg border border-slate-700 bg-slate-950 p-3 font-mono text-sm text-white outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
                       placeholder="URL de la imagen central..."
@@ -955,6 +976,7 @@ export function AdminConfigView() {
                         type="text"
                         value={cat1Name}
                         disabled={fieldsDisabled}
+                        data-cy="admin-config-cat1-input"
                         onChange={(event) => setCat1Name(event.target.value)}
                         placeholder="Ej. Sujetos"
                         className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 font-bold text-cyan-100 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-500 disabled:opacity-60"
@@ -966,6 +988,7 @@ export function AdminConfigView() {
                         type="text"
                         value={cat2Name}
                         disabled={fieldsDisabled}
+                        data-cy="admin-config-cat2-input"
                         onChange={(event) => setCat2Name(event.target.value)}
                         placeholder="Ej. Objetos"
                         className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 font-bold text-emerald-100 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-500 disabled:opacity-60"
@@ -977,6 +1000,7 @@ export function AdminConfigView() {
                         type="text"
                         value={cat3Name}
                         disabled={fieldsDisabled}
+                        data-cy="admin-config-cat3-input"
                         onChange={(event) => setCat3Name(event.target.value)}
                         placeholder="Ej. Espacios"
                         className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 font-bold text-red-100 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-500 disabled:opacity-60"
@@ -989,6 +1013,7 @@ export function AdminConfigView() {
                       id="hasMotifs"
                       checked={hasMotifs}
                       disabled={fieldsDisabled}
+                      data-cy="admin-config-has-motifs-input"
                       onChange={(event) => setHasMotifs(event.target.checked)}
                       className="h-4 w-4 rounded border-slate-700 bg-slate-950 text-purple-500 focus:ring-purple-500 focus:ring-offset-slate-950 disabled:opacity-60"
                     />
@@ -1006,6 +1031,7 @@ export function AdminConfigView() {
                     type="number"
                     value={duration}
                     disabled={fieldsDisabled}
+                    data-cy="admin-config-duration-input"
                     onChange={(event) => setDuration(event.target.value)}
                     className="w-1/3 rounded-lg border border-slate-700 bg-slate-950 p-3 font-bold text-white outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
                   />
@@ -1018,6 +1044,7 @@ export function AdminConfigView() {
                   <textarea
                     value={objective}
                     disabled={fieldsDisabled}
+                    data-cy="admin-config-objective-input"
                     onChange={(event) => setObjective(event.target.value)}
                     rows={4}
                     className="w-full resize-none rounded-lg border border-slate-700 bg-slate-950 p-4 font-mono text-sm leading-relaxed text-slate-300 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
@@ -1042,7 +1069,7 @@ export function AdminConfigView() {
                 <p className="text-sm text-slate-400">Define exactamente {REQUIRED_ITEM_COUNTS.subjects} sujetos para la skin.</p>
               </div>
 
-              {renderEditableItemList(subjects, setSubjects, <User className="h-4 w-4" />, "Sujeto", REQUIRED_ITEM_COUNTS.subjects, false)}
+              {renderEditableItemList(subjects, setSubjects, <User className="h-4 w-4" />, "Sujeto", "subjects", REQUIRED_ITEM_COUNTS.subjects, false)}
             </motion.div>
           ) : null}
 
@@ -1061,7 +1088,7 @@ export function AdminConfigView() {
                 <p className="text-sm text-slate-400">Define exactamente {REQUIRED_ITEM_COUNTS.objects} objetos para la skin.</p>
               </div>
 
-              {renderEditableItemList(objects, setObjects, <Box className="h-4 w-4" />, "Objeto", REQUIRED_ITEM_COUNTS.objects, false)}
+              {renderEditableItemList(objects, setObjects, <Box className="h-4 w-4" />, "Objeto", "objects", REQUIRED_ITEM_COUNTS.objects, false)}
             </motion.div>
           ) : null}
 
@@ -1082,7 +1109,7 @@ export function AdminConfigView() {
                 </p>
               </div>
 
-              {renderEditableItemList(spaces, setSpaces, <MapPin className="h-4 w-4" />, cat3Name, REQUIRED_ITEM_COUNTS.spaces, hasMotifs)}
+              {renderEditableItemList(spaces, setSpaces, <MapPin className="h-4 w-4" />, cat3Name, "spaces", REQUIRED_ITEM_COUNTS.spaces, hasMotifs)}
             </motion.div>
           ) : null}
         </AnimatePresence>

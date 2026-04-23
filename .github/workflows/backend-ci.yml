@@ -1,0 +1,85 @@
+name: Backend CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop
+      - main
+      - feature/**
+      - test/**
+    paths:
+      - backend/**
+      - docker-compose.backend-postgres.integration.yml
+      - .github/workflows/backend-ci.yml
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - backend/**
+      - docker-compose.backend-postgres.integration.yml
+      - .github/workflows/backend-ci.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-auth:
+    name: Build y auth API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Build backend
+        run: npm run build
+
+      - name: Test auth API
+        run: npm run test:auth-api
+
+  docker-backend-postgres:
+    name: Smoke test Docker Backend-PostgreSQL
+    runs-on: ubuntu-latest
+    needs: build-and-auth
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Verificar Docker
+        run: |
+          docker version
+          docker compose version
+
+      - name: Ejecutar smoke test SCRUM-37
+        run: npm run test:docker-backend-postgres

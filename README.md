@@ -98,6 +98,17 @@ Parar servicios:
 docker compose down
 ```
 
+## Smoke test Docker Backend-PostgreSQL
+
+Para validar SCRUM-37 con una prueba automatizada real entre contenedores:
+
+```bash
+cd backend
+npm run test:docker-backend-postgres
+```
+
+La prueba levanta un PostgreSQL efímero y un backend en Docker, sincroniza el esquema Prisma sobre esa base vacía, hace login por HTTP, crea una CluedoSkin, reinicia el contenedor del backend y vuelve a leer la skin para verificar conectividad y persistencia reales.
+
 ## Docker de despliegue
 
 Construye y levanta el frontend compilado con nginx y el backend en modo productivo:

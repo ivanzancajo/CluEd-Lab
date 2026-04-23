@@ -650,6 +650,7 @@ export function AdminConfigView() {
 
           <button
             onClick={handleLogout}
+            data-cy="admin-config-logout-button"
             className="ml-auto rounded-md border border-red-900/60 bg-slate-950/70 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-red-300 transition-colors hover:border-red-500 hover:text-red-200"
           >
             Salir

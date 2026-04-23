@@ -15,6 +15,7 @@
     "prisma:migrate:resolve": "prisma migrate resolve",
     "prisma:validate": "prisma validate",
     "test": "jest --runInBand --config jest.config.cjs",
+    "test:auth-api": "jest --runInBand --config jest.auth.config.cjs",
     "test:integration": "jest --runInBand --config jest.config.cjs"
   },
   "keywords": [],

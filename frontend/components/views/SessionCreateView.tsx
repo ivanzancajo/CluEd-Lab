@@ -71,7 +71,7 @@ export function SessionCreateView() {
       <Link to="/" className="absolute top-8 left-8 z-10 text-slate-500 hover:text-cyan-400 transition-colors p-2 rounded-md hover:bg-slate-800 flex items-center gap-2 text-sm font-bold tracking-widest uppercase">
         <ArrowLeft className="w-5 h-5" /> Volver
       </Link>
-      <button onClick={handleLogout} className="absolute top-8 right-8 z-10 text-red-300 hover:text-red-200 border border-red-900/60 hover:border-red-500 transition-colors px-4 py-2 rounded-md bg-slate-950/60 text-xs font-bold tracking-widest uppercase">
+      <button data-cy="session-create-logout-button" onClick={handleLogout} className="absolute top-8 right-8 z-10 text-red-300 hover:text-red-200 border border-red-900/60 hover:border-red-500 transition-colors px-4 py-2 rounded-md bg-slate-950/60 text-xs font-bold tracking-widest uppercase">
         Cerrar sesión
       </button>
 

@@ -223,11 +223,11 @@ export function LobbyView() {
         <div className="p-6 border-b border-cyan-800/30 grid grid-cols-2 gap-4 bg-gradient-to-b from-amber-950/10 to-transparent">
           <div className="flex flex-col gap-1 p-3 bg-slate-900 border border-slate-800 rounded-lg shadow-inner shadow-slate-950/50">
             <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><KeyRound className="w-3 h-3" /> Codigo Sesion</span>
-            <span className="text-xl font-mono font-bold tracking-widest text-emerald-400">{sessionCode}</span>
+            <span data-cy="lobby-session-code" className="text-xl font-mono font-bold tracking-widest text-emerald-400">{sessionCode}</span>
           </div>
           <div className="flex flex-col gap-1 p-3 bg-slate-900 border border-slate-800 rounded-lg shadow-inner shadow-slate-950/50">
             <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><Users className="w-3 h-3" /> Estado Activo</span>
-            <span className="text-xl font-bold font-mono tracking-widest text-cyan-300">{connectedCount}/{joinedCount}</span>
+            <span data-cy="lobby-connected-count" className="text-xl font-bold font-mono tracking-widest text-cyan-300">{connectedCount}/{joinedCount}</span>
           </div>
         </div>
 
@@ -258,14 +258,18 @@ export function LobbyView() {
                   : "border-slate-800 bg-slate-900/50 opacity-70";
 
               return (
-                <div key={team.color} className={`flex items-center gap-2 p-2 rounded border transition-all ${cardClass}`}>
+                <div
+                  key={team.color}
+                  data-cy={`lobby-team-slot-${team.color.toLowerCase()}`}
+                  className={`flex items-center gap-2 p-2 rounded border transition-all ${cardClass}`}
+                >
                   <div className="w-3 h-3 rounded-full shadow-[0_0_5px_rgba(255,255,255,0.2)]" style={{ backgroundColor: team.hexColor }}></div>
                   <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-xs font-bold text-slate-200 truncate">{team.team?.name ?? team.label}</span>
-                    <span className="text-[9px] text-slate-500 truncate" title={team.location}>{team.secondaryText}</span>
+                    <span data-cy="lobby-team-slot-name" className="text-xs font-bold text-slate-200 truncate">{team.team?.name ?? team.label}</span>
+                    <span data-cy="lobby-team-slot-secondary" className="text-[9px] text-slate-500 truncate" title={team.location}>{team.secondaryText}</span>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <span className="text-[8px] font-bold uppercase tracking-widest text-slate-400">{team.statusLabel}</span>
+                    <span data-cy="lobby-team-slot-status" className="text-[8px] font-bold uppercase tracking-widest text-slate-400">{team.statusLabel}</span>
                     {team.status === "connected" ? <Activity className="w-3 h-3 text-cyan-400 animate-pulse" /> : null}
                     {team.status === "inactive" ? <Activity className="w-3 h-3 text-amber-300" /> : null}
                   </div>
@@ -282,7 +286,7 @@ export function LobbyView() {
             </h3>
             <RefreshCw className={`w-3 h-3 text-cyan-800 ${connectionStatus === "connecting" ? "animate-spin" : ""}`} />
           </div>
-          <div className="flex-1 overflow-y-auto pr-2 space-y-3 scrollbar-thin scrollbar-thumb-cyan-900 scrollbar-track-transparent">
+          <div data-cy="lobby-event-list" className="flex-1 overflow-y-auto pr-2 space-y-3 scrollbar-thin scrollbar-thumb-cyan-900 scrollbar-track-transparent">
             {visibleEvents.map((event) => {
               const eventClass =
                 event.type === "team-disconnected"
@@ -296,12 +300,13 @@ export function LobbyView() {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   key={event.id}
+                  data-cy="lobby-event-item"
                   className={`p-3 rounded border text-xs leading-relaxed font-light ${eventClass}`}
                 >
                   <div className="flex justify-between items-start mb-1">
                     <span className="text-[10px] opacity-60 font-mono">{formatEventTime(event.occurredAt)}</span>
                   </div>
-                  {event.message}
+                  <span data-cy="lobby-event-message">{event.message}</span>
                 </motion.div>
               );
             })}

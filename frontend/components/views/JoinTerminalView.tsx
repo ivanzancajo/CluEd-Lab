@@ -239,6 +239,7 @@ export function JoinTerminalView() {
                 <KeyRound className="w-3 h-3" /> Código de Sesión
               </label>
               <input
+                data-cy="join-terminal-code-input"
                 type="text"
                 value={code}
                 onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
@@ -247,32 +248,32 @@ export function JoinTerminalView() {
                 maxLength={6}
                 required
               />
-              <div className={`mt-1 flex items-center gap-2 text-[11px] ${codeStatusMessage.tone}`}>
+              <div data-cy="join-terminal-code-status" className={`mt-1 flex items-center gap-2 text-[11px] ${codeStatusMessage.tone}`}>
                 {isLoadingSession ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <KeyRound className="h-3 w-3" />}
                 {codeStatusMessage.message}
               </div>
             </div>
 
             {sessionSnapshot ? (
-              <div className="rounded-lg border border-cyan-900/40 bg-slate-950/70 p-4 text-xs leading-5 text-slate-300">
+              <div data-cy="join-terminal-session-info" className="rounded-lg border border-cyan-900/40 bg-slate-950/70 p-4 text-xs leading-5 text-slate-300">
                 <div className="flex items-center justify-between gap-4">
                   <span className="uppercase tracking-widest text-slate-500">Partida</span>
-                  <span className="text-right font-semibold text-white">{sessionSnapshot.skin.gameTitle}</span>
+                  <span data-cy="join-terminal-session-title" className="text-right font-semibold text-white">{sessionSnapshot.skin.gameTitle}</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-4">
                   <span className="uppercase tracking-widest text-slate-500">Lobby</span>
-                  <span className={sessionSnapshot.status === "LOBBY" ? "font-semibold text-emerald-300" : "font-semibold text-amber-200"}>
+                  <span data-cy="join-terminal-session-status" className={sessionSnapshot.status === "LOBBY" ? "font-semibold text-emerald-300" : "font-semibold text-amber-200"}>
                     {sessionSnapshot.status === "LOBBY" ? "Abierto" : "Cerrado"}
                   </span>
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-4">
                   <span className="uppercase tracking-widest text-slate-500">Colores libres</span>
-                  <span className="font-semibold text-cyan-200">{availableCount} / {TEAM_METADATA.length}</span>
+                  <span data-cy="join-terminal-available-colors" className="font-semibold text-cyan-200">{availableCount} / {TEAM_METADATA.length}</span>
                 </div>
                 {resumeTeam ? (
                   <div className="mt-2 flex items-center justify-between gap-4">
                     <span className="uppercase tracking-widest text-slate-500">Equipo detectado</span>
-                    <span className="font-semibold text-cyan-100">{resumeTeam.name}</span>
+                    <span data-cy="join-terminal-resume-team" className="font-semibold text-cyan-100">{resumeTeam.name}</span>
                   </div>
                 ) : null}
               </div>
@@ -319,6 +320,7 @@ export function JoinTerminalView() {
                   return (
                     <button
                       key={team.color}
+                      data-cy={`join-terminal-team-button-${team.color.toLowerCase()}`}
                       type="button"
                       onClick={() => isAvailable && setSelectedTeam(team.color)}
                       disabled={(!isAvailable && !isResumeTeam) || isLoadingSession || isJoining}
@@ -338,14 +340,14 @@ export function JoinTerminalView() {
                             isSelected || isResumeTeam ? 'shadow-[0_0_10px_currentColor]' : ''
                           }`}
                         ></div>
-                        <span className="text-xs font-bold uppercase tracking-wider">{team.shortLabel}</span>
+                        <span data-cy="join-terminal-team-label" className="text-xs font-bold uppercase tracking-wider">{team.shortLabel}</span>
                       </div>
-                      <span className={`text-[9px] uppercase tracking-widest ${availabilityTone}`}>{availabilityLabel}</span>
+                      <span data-cy="join-terminal-team-status" className={`text-[9px] uppercase tracking-widest ${availabilityTone}`}>{availabilityLabel}</span>
                     </button>
                   );
                 })}
               </div>
-              <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-3 text-[11px] leading-5 text-slate-400">
+              <div data-cy="join-terminal-team-help" className="rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-3 text-[11px] leading-5 text-slate-400">
                 {resumeTeam
                   ? `Este navegador ya esta vinculado a ${resumeTeam.name}. Al entrar se recuperara el mismo terminal con su color original.`
                   : selectedTeamMeta
@@ -368,13 +370,14 @@ export function JoinTerminalView() {
             </div>
 
             {joinError ? (
-              <div className="rounded-lg border border-red-900/70 bg-red-950/30 px-4 py-3 text-sm text-red-100">
+              <div data-cy="join-terminal-error" className="rounded-lg border border-red-900/70 bg-red-950/30 px-4 py-3 text-sm text-red-100">
                 {joinError}
               </div>
             ) : null}
 
             <div className="mt-4 pt-6 border-t border-slate-800">
               <button
+                data-cy="join-terminal-submit"
                 type="submit"
                 disabled={!canJoin && !canResume}
                 className="w-full bg-cyan-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none hover:bg-cyan-500 text-slate-950 font-bold uppercase tracking-widest py-4 rounded-lg flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.4)]"

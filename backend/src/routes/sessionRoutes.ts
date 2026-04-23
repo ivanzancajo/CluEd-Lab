@@ -1,10 +1,15 @@
-import { randomInt, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { EstadoPartida, Prisma } from '@prisma/client';
 import { Router } from 'express';
 import type { Response } from 'express';
 import { HttpError, parseBody } from '../lib/http.js';
 import { prisma } from '../lib/prisma.js';
 import { loadSkinConfiguration } from '../lib/skinConfigs.js';
+import {
+  ACCESS_CODE_GENERATION_RETRIES,
+  createWithUniqueAccessCode,
+  generateAccessCode,
+} from '../lib/sessionAccessCode.js';
 import {
   createSessionSchema,
   joinSessionSchema,
@@ -19,10 +24,6 @@ import { verifyToken } from '../middleware/auth.js';
 import { emitSessionSnapshotUpdate } from '../socket/socketServer.js';
 
 const router = Router();
-
-const ACCESS_CODE_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-const ACCESS_CODE_LENGTH = 6;
-const ACCESS_CODE_GENERATION_RETRIES = 10;
 
 router.post('/sessions', verifyToken, async (req, res) => {
   const payload = parseBody(createSessionSchema, req.body, res);
@@ -180,11 +181,9 @@ router.post('/sessions/:accessCode/start', verifyToken, async (req, res) => {
 });
 
 async function createSessionWithUniqueCode(skinId: string): Promise<SessionSnapshot> {
-  for (let attempt = 0; attempt < ACCESS_CODE_GENERATION_RETRIES; attempt += 1) {
-    const accessCode = generateAccessCode();
-
-    try {
-      return await prisma.$transaction(
+  return createWithUniqueAccessCode(
+    (accessCode) =>
+      prisma.$transaction(
         async (tx) => {
           const skin = await loadSkinConfiguration(tx, skinId);
 
@@ -200,32 +199,20 @@ async function createSessionWithUniqueCode(skinId: string): Promise<SessionSnaps
           return loadSessionSnapshotByAccessCode(tx, accessCode);
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
-      );
-    } catch (error) {
-      if (isKnownPrismaError(error, 'P2002')) {
-        continue;
-      }
-
-      throw error;
+      ),
+    {
+      retries: ACCESS_CODE_GENERATION_RETRIES,
+      generateCode: generateAccessCode,
+      isCollisionError: (error) => isKnownPrismaError(error, 'P2002'),
+      onRetriesExhausted: () =>
+        new HttpError(503, 'No se ha podido generar un código de sesión único. Inténtalo de nuevo.'),
     }
-  }
-
-  throw new HttpError(503, 'No se ha podido generar un código de sesión único. Inténtalo de nuevo.');
+  );
 }
 
 function parseAccessCode(value: unknown, res: Response): string | null {
   const parsed = parseBody(sessionAccessCodeParamsSchema, value, res);
   return parsed?.accessCode ?? null;
-}
-
-function generateAccessCode() {
-  let code = '';
-
-  for (let index = 0; index < ACCESS_CODE_LENGTH; index += 1) {
-    code += ACCESS_CODE_CHARSET[randomInt(ACCESS_CODE_CHARSET.length)];
-  }
-
-  return code;
 }
 
 function parseDurationMinutes(value: string) {

@@ -22,11 +22,11 @@ import {
   type SessionSnapshot,
 } from '../lib/sessionSnapshots.js';
 import {
-  initializeStartedSession,
   loadTeamTerminalStateByAccessCode,
+  startSessionByAccessCode,
 } from '../lib/sessionGameplay.js';
 import { verifyToken } from '../middleware/auth.js';
-import { emitSessionSnapshotUpdate } from '../socket/socketServer.js';
+import { emitGameStarted, emitSessionSnapshotUpdate } from '../socket/socketServer.js';
 
 const router = Router();
 
@@ -152,31 +152,12 @@ router.post('/sessions/:accessCode/start', verifyToken, async (req, res) => {
 
   try {
     const session = await prisma.$transaction(
-      async (tx) => {
-        const currentSession = await tx.partida.findUnique({
-          where: { accessCode },
-          select: {
-            id: true,
-            status: true,
-          },
-        });
-
-        if (!currentSession) {
-          throw new HttpError(404, 'La sesión solicitada no existe.');
-        }
-
-        if ((currentSession.status ?? EstadoPartida.LOBBY) !== EstadoPartida.LOBBY) {
-          throw new HttpError(409, 'La partida ya ha sido iniciada o no admite esta transición.');
-        }
-
-        await initializeStartedSession(tx, currentSession.id);
-
-        return loadSessionSnapshotByAccessCode(tx, accessCode);
-      },
+      (tx) => startSessionByAccessCode(tx, accessCode),
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
     );
 
     try {
+      await emitGameStarted(session);
       await emitSessionSnapshotUpdate(session.id, {
         id: randomUUID(),
         type: 'system',

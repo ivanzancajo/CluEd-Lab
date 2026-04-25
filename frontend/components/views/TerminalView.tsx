@@ -22,7 +22,13 @@ import {
   Database
 } from "lucide-react";
 import { DiceAnimation } from "../DiceAnimation";
-import { createLobbySocketClient, emitTeamHeartbeat, subscribeTeamToLobby, type LobbyPresenceState } from "../../src/lib/lobbySocket";
+import {
+  createLobbySocketClient,
+  emitTeamHeartbeat,
+  subscribeTeamToLobby,
+  type GameStartedPayload,
+  type LobbyPresenceState,
+} from "../../src/lib/lobbySocket";
 import {
   getStoredSessionCode,
   getStoredSessionId,
@@ -37,6 +43,7 @@ import { getTeamMeta } from "../../src/lib/teamMeta";
 import {
   getSessionErrorMessage,
   getTeamTerminalState,
+  type LobbySession,
   type SessionStatus,
   type TeamColor,
   type TeamHandCard,
@@ -198,6 +205,14 @@ export function TerminalView() {
     }
   }, [suggestMode, currentRoomMock]);
 
+  const applyRealtimeSession = (session: LobbySession, currentTeam: LobbySession["teams"][number]) => {
+    storeJoinedLobbySession({ session, team: currentTeam });
+    setTeamName(currentTeam.name);
+    setTeamColor(currentTeam.color);
+    setSessionStatus(session.status);
+    setLobbyError(null);
+  };
+
   const applyGameConfig = (config: GameConfig) => {
     setCatNames({
       c1: config.cat1Name || "Sujetos",
@@ -316,6 +331,20 @@ export function TerminalView() {
 
     const heartbeatIntervalId = window.setInterval(sendHeartbeat, TEAM_HEARTBEAT_INTERVAL_MS);
 
+    const applyGameStarted = (payload: GameStartedPayload) => {
+      const currentTeam = payload.session.teams.find((team) => team.id === teamId) ?? null;
+
+      if (!currentTeam) {
+        setLobbyConnectionStatus("error");
+        setLobbyError("El equipo seleccionado ya no pertenece a la partida actual.");
+        return;
+      }
+
+      applyRealtimeSession(payload.session, currentTeam);
+      setLobbyConnectionStatus("connected");
+      setHandError(null);
+    };
+
     const applyPresenceState = (state: LobbyPresenceState) => {
       const currentTeam = state.teams.find((team) => team.id === teamId);
 
@@ -348,6 +377,7 @@ export function TerminalView() {
     });
 
     socket.on("lobby:presence-updated", applyPresenceState);
+    socket.on("gameStarted", applyGameStarted);
     socket.on("disconnect", () => {
       isSubscribed = false;
       setLobbyConnectionStatus("disconnected");
@@ -425,7 +455,7 @@ export function TerminalView() {
       </div>
 
       {!lobbyError ? (
-        <div className="px-4 py-2 bg-cyan-950/30 border-b border-cyan-900/50 text-[11px] text-cyan-100 uppercase tracking-[0.22em]">
+        <div data-cy="terminal-lobby-status-banner" className="px-4 py-2 bg-cyan-950/30 border-b border-cyan-900/50 text-[11px] text-cyan-100 uppercase tracking-[0.22em]">
           {sessionStatus === "EN_CURSO" ? "Partida iniciada por el Game Master." : "Esperando a que el Game Master inicie la partida."}
         </div>
       ) : null}
@@ -530,23 +560,24 @@ export function TerminalView() {
                   <Database className="w-3 h-3" /> INVENTARIO DE CARTAS
                 </h3>
                 {isLoadingHand ? (
-                  <div className="rounded-lg border border-cyan-900/40 bg-cyan-950/10 px-4 py-3 text-xs uppercase tracking-[0.2em] text-cyan-200">
+                  <div data-cy="terminal-hand-state" className="rounded-lg border border-cyan-900/40 bg-cyan-950/10 px-4 py-3 text-xs uppercase tracking-[0.2em] text-cyan-200">
                     Cargando cartas del equipo...
                   </div>
                 ) : handError ? (
-                  <div className="rounded-lg border border-red-900/60 bg-red-950/20 px-4 py-3 text-xs text-red-100">
+                  <div data-cy="terminal-hand-state" className="rounded-lg border border-red-900/60 bg-red-950/20 px-4 py-3 text-xs text-red-100">
                     {handError}
                   </div>
                 ) : teamHand.length === 0 ? (
-                  <div className="rounded-lg border border-slate-800 bg-slate-950/40 px-4 py-3 text-xs text-slate-400">
+                  <div data-cy="terminal-hand-state" className="rounded-lg border border-slate-800 bg-slate-950/40 px-4 py-3 text-xs text-slate-400">
                     {sessionStatus === "LOBBY"
                       ? "Las cartas se repartirán automáticamente cuando el Game Master inicie la partida."
                       : "Todavía no hay cartas disponibles para este terminal."}
                   </div>
                 ) : (
-                  <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory">
+                  <div data-cy="terminal-hand-list" className="flex gap-4 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory">
                     {teamHand.map(card => (
                       <div 
+                        data-cy="terminal-hand-card"
                         key={card.id} 
                         onClick={() => { setSelectedCard(card); setCardFlipped(false); }}
                         className={`w-28 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${card.color} ${card.bg} bg-opacity-40 flex flex-col items-center justify-start cursor-pointer snap-center hover:scale-105 transition-transform shadow-lg relative overflow-hidden`}

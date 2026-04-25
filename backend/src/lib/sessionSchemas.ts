@@ -18,5 +18,10 @@ export const sessionAccessCodeParamsSchema = z.object({
   accessCode: accessCodeSchema,
 });
 
+export const teamSessionStateParamsSchema = z.object({
+  accessCode: accessCodeSchema,
+  teamId: z.string().uuid('El identificador del equipo debe ser un UUID válido.'),
+});
+
 export type CreateSessionInput = z.infer<typeof createSessionSchema>;
 export type JoinSessionInput = z.infer<typeof joinSessionSchema>;

@@ -74,6 +74,7 @@ model Elemento {
   imageUrl         String?               @map("imagen")
 
   skinDescriptions DescripcionElemento[]
+  teamCards        CartaEquipo[]
   reasoningCells   CeldaRazonamiento[]
   subjectSolutions Solucion[]            @relation("SolutionSubject")
   objectSolutions  Solucion[]            @relation("SolutionObject")
@@ -137,12 +138,26 @@ model Equipo {
   falseAccusation  Boolean?            @default(false) @map("acusacion_falsa")
 
   partida          Partida?            @relation(fields: [partidaId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  cards            CartaEquipo[]
   emittedEvents    Evento[]            @relation("EventEmitter")
   receivedEvents   Evento[]            @relation("EventReceiver")
   reasoningTables  TablaRazonamiento[]
 
   @@unique([partidaId, color], map: "equipo_partida_color_key")
   @@map("equipo")
+}
+
+model CartaEquipo {
+  equipoId         String     @db.Uuid @map("id_equipo")
+  elementId        String     @db.Uuid @map("id_elem")
+  assignedAt       DateTime?  @default(now()) @map("asignada_en") @db.Timestamp(6)
+
+  equipo           Equipo     @relation(fields: [equipoId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  element          Elemento   @relation(fields: [elementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([equipoId, elementId])
+  @@index([elementId], map: "carta_equipo_id_elem_idx")
+  @@map("carta_equipo")
 }
 
 model TablaRazonamiento {

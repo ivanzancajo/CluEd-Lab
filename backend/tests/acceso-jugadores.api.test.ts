@@ -63,6 +63,7 @@ type TeamTerminalStateResponse = {
 const ACCESS_CODE_FORMAT_ERROR = 'El código de acceso debe tener 6 caracteres alfanuméricos.';
 const INVALID_ACCESS_CODES = ['A', 'AB', 'ABC', 'ABCD', 'ABCDE', 'ABC-12'];
 const PLAYABLE_TEAM_COLORS: readonly ColorEquipo[] = ['ROJO', 'AZUL', 'VERDE', 'BLANCO'];
+const FIVE_TEAM_COLORS: readonly ColorEquipo[] = ['ROJO', 'AMARILLO', 'AZUL', 'VERDE', 'MORADO'];
 const SIX_TEAM_COLORS: readonly ColorEquipo[] = ['ROJO', 'AMARILLO', 'AZUL', 'VERDE', 'MORADO', 'BLANCO'];
 
 type TeamCardDistribution = {
@@ -388,6 +389,39 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     expect(Math.max(...cardCounts) - Math.min(...cardCounts)).toBeLessThanOrEqual(1);
   });
 
+  it('rechaza solicitar la mano de un equipo antes de que la partida haya comenzado', async () => {
+    const seeded = await seedPlayableSession('WAIT01', PLAYABLE_TEAM_COLORS);
+
+    const response = await request(`/api/game/sessions/WAIT01/teams/${seeded.teamIds[0]}/state`);
+    const body = (await response.json()) as ErrorResponse;
+
+    expect(response.status).toBe(409);
+    expect(body).toEqual({
+      error: 'La partida todavía no ha comenzado y no hay cartas repartidas.',
+      details: undefined,
+    });
+  });
+
+  it('devuelve 404 cuando el equipo solicitado no pertenece a la sesión', async () => {
+    await seedPlayableSession('MISS01', PLAYABLE_TEAM_COLORS);
+
+    await request('/api/game/sessions/MISS01/start', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${signAdminToken({ role: 'admin', username: 'admin', sub: 'test-admin' })}`,
+      },
+    });
+
+    const response = await request('/api/game/sessions/MISS01/teams/00000000-0000-4000-8000-000000000000/state');
+    const body = (await response.json()) as ErrorResponse;
+
+    expect(response.status).toBe(404);
+    expect(body).toEqual({
+      error: 'El equipo indicado no pertenece a la sesión seleccionada.',
+      details: undefined,
+    });
+  });
+
   it('equilibra el reparto por colección cuando participan cuatro equipos', async () => {
     const seeded = await seedPlayableSession('BAL404', PLAYABLE_TEAM_COLORS);
 
@@ -412,6 +446,30 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     expect(
       getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.OBJETO]))
     ).toBeLessThanOrEqual(1);
+    expect(
+      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.ESPACIO]))
+    ).toBeLessThanOrEqual(1);
+  });
+
+  it('mantiene el reparto equilibrado cuando participan cinco equipos', async () => {
+    const seeded = await seedPlayableSession('BAL505', FIVE_TEAM_COLORS);
+
+    await request('/api/game/sessions/BAL505/start', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${signAdminToken({ role: 'admin', username: 'admin', sub: 'test-admin' })}`,
+      },
+    });
+
+    const distributions = await getTeamCardDistributions(seeded.teamIds);
+
+    expect(distributions).toHaveLength(FIVE_TEAM_COLORS.length);
+    expect(distributions.every((distribution) => distribution.total >= 3 && distribution.total <= 4)).toBe(true);
+    expect(distributions.every((distribution) => distribution[TipoElemento.SUJETO] === 1)).toBe(true);
+    expect(distributions.every((distribution) => distribution[TipoElemento.OBJETO] === 1)).toBe(true);
+    expect(distributions.every((distribution) => distribution[TipoElemento.ESPACIO] >= 1)).toBe(true);
+    expect(distributions.every((distribution) => distribution[TipoElemento.ESPACIO] <= 2)).toBe(true);
+    expect(getDistributionSpread(distributions.map((distribution) => distribution.total))).toBeLessThanOrEqual(1);
     expect(
       getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.ESPACIO]))
     ).toBeLessThanOrEqual(1);

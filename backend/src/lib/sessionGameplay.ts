@@ -39,6 +39,8 @@ type DistributedGameSetup = {
 
 type SkinConfigItem = LoadedSkinConfiguration['subjects'][number];
 
+export const MINIMUM_TEAMS_TO_START = 2;
+
 export type TeamHandCard = {
   id: string;
   kind: TipoElemento;
@@ -79,6 +81,14 @@ export async function initializeStartedSession(client: SessionGameplayClient, se
 
   const skin = await loadSkinConfiguration(client, session.skinId);
   const teams = [...session.teams].sort(sortTeamsByColor);
+
+  if (teams.length < MINIMUM_TEAMS_TO_START) {
+    throw new HttpError(
+      409,
+      `La partida necesita al menos ${MINIMUM_TEAMS_TO_START} equipos unidos para poder iniciarse.`
+    );
+  }
+
   const setup = buildDistributedGameSetup(skin, teams.map((team) => team.id));
 
   const solution = await client.solucion.create({
@@ -133,6 +143,28 @@ export async function initializeStartedSession(client: SessionGameplayClient, se
       solutionId: solution.id,
     },
   });
+}
+
+export async function startSessionByAccessCode(client: SessionGameplayClient, accessCode: string) {
+  const currentSession = await client.partida.findUnique({
+    where: { accessCode },
+    select: {
+      id: true,
+      status: true,
+    },
+  });
+
+  if (!currentSession) {
+    throw new HttpError(404, 'La sesión solicitada no existe.');
+  }
+
+  if ((currentSession.status ?? EstadoPartida.LOBBY) !== EstadoPartida.LOBBY) {
+    throw new HttpError(409, 'La partida ya ha sido iniciada o no admite esta transición.');
+  }
+
+  await initializeStartedSession(client, currentSession.id);
+
+  return loadSessionSnapshotByAccessCode(client, accessCode);
 }
 
 export async function loadTeamTerminalStateByAccessCode(

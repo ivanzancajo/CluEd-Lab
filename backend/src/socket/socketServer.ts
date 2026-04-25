@@ -4,8 +4,10 @@ import { EstadoPartida, type ColorEquipo } from '@prisma/client';
 import { Server, type Socket } from 'socket.io';
 import {
   hostLobbySubscriptionSchema,
+  startGameCommandSchema,
   teamLobbySubscriptionSchema,
   type HostLobbySubscriptionInput,
+  type StartGameCommandInput,
   type TeamLobbySubscriptionInput,
 } from '../lib/lobbySocketSchemas.js';
 import { HttpError } from '../lib/http.js';
@@ -18,6 +20,7 @@ import { prisma } from '../lib/prisma.js';
 import { env } from '../config/env.js';
 import { verifyAdminToken, type AuthTokenPayload } from '../middleware/auth.js';
 import { lobbyPresenceStore } from './lobbyPresenceStore.js';
+import { startSessionByAccessCode } from '../lib/sessionGameplay.js';
 
 type LobbyPresenceTeam = SessionTeamSnapshot & {
   connected: boolean;
@@ -44,10 +47,25 @@ export type LobbyEvent = {
   teamId?: string | undefined;
 };
 
+export type GameStartedPayload = {
+  session: SessionSnapshot;
+  occurredAt: number;
+};
+
 type LobbySubscribeAck =
   | {
       ok: true;
       state: LobbyPresenceState;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+type StartGameAck =
+  | {
+      ok: true;
+      payload: GameStartedPayload;
     }
   | {
       ok: false;
@@ -66,6 +84,7 @@ type LobbySocket = Socket<
   {
     'lobby:presence-updated': (state: LobbyPresenceState) => void;
     'lobby:event': (event: LobbyEvent) => void;
+    gameStarted: (payload: GameStartedPayload) => void;
   },
   Record<string, never>,
   LobbySocketData
@@ -163,6 +182,32 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
     }
   });
 
+  socket.on('startGame', async (payload: unknown, acknowledge?: (response: StartGameAck) => void) => {
+    try {
+      const input = parseStartGameCommand(payload);
+      requireAdminUser(socket);
+
+      const session = await prisma.$transaction(
+        (tx) => startSessionByAccessCode(tx, input.accessCode),
+        { isolationLevel: 'Serializable' }
+      );
+      const gameStartedPayload = buildGameStartedPayload(session);
+
+      broadcastLobbyUpdate(io, await buildLobbyPresenceState(session.id));
+      broadcastLobbyEvent(io, session.id, {
+        id: randomUUID(),
+        type: 'system',
+        message: 'El Game Master ha iniciado la partida.',
+        occurredAt: gameStartedPayload.occurredAt,
+      });
+      broadcastGameStarted(io, session.id, gameStartedPayload);
+
+      acknowledge?.({ ok: true, payload: gameStartedPayload });
+    } catch (error) {
+      acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });
+    }
+  });
+
   socket.on('lobby:team-heartbeat', async () => {
     if (socket.data.role !== 'team' || !socket.data.sessionId || !socket.data.teamId) {
       return;
@@ -240,6 +285,15 @@ function parseTeamSubscription(payload: unknown): TeamLobbySubscriptionInput {
   return parsed.data;
 }
 
+function parseStartGameCommand(payload: unknown): StartGameCommandInput {
+  const parsed = startGameCommandSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new HttpError(400, 'La orden de inicio de partida no es válida.', parsed.error.issues.map((issue) => issue.message));
+  }
+
+  return parsed.data;
+}
+
 function requireAdminUser(socket: LobbySocket) {
   const token = getSocketToken(socket);
 
@@ -291,6 +345,10 @@ function broadcastLobbyEvent(io: Server, sessionId: string, event: LobbyEvent) {
   io.to(getLobbyRoom(sessionId)).emit('lobby:event', event);
 }
 
+function broadcastGameStarted(io: Server, sessionId: string, payload: GameStartedPayload) {
+  io.to(getLobbyRoom(sessionId)).emit('gameStarted', payload);
+}
+
 function getLobbyRoom(sessionId: string) {
   return `${LOBBY_ROOM_PREFIX}${sessionId}`;
 }
@@ -319,6 +377,13 @@ function buildConnectionMessage(teamName: string, status: EstadoPartida, action:
   return `${teamName} ${verb} ${target}.`;
 }
 
+function buildGameStartedPayload(session: SessionSnapshot): GameStartedPayload {
+  return {
+    session,
+    occurredAt: Date.now(),
+  };
+}
+
 export async function emitSessionSnapshotUpdate(sessionId: string, event?: LobbyEvent) {
   if (!activeIo) {
     return;
@@ -330,4 +395,13 @@ export async function emitSessionSnapshotUpdate(sessionId: string, event?: Lobby
   if (event) {
     broadcastLobbyEvent(activeIo, sessionId, event);
   }
+}
+
+export async function emitGameStarted(session: SessionSnapshot) {
+  if (!activeIo) {
+    return;
+  }
+
+  const payload = buildGameStartedPayload(session);
+  broadcastGameStarted(activeIo, session.id, payload);
 }

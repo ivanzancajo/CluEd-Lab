@@ -14,6 +14,17 @@ export interface LobbyTeam {
   falseAccusation: boolean;
 }
 
+export type TeamElementKind = 'SUJETO' | 'OBJETO' | 'ESPACIO';
+
+export interface TeamHandCard {
+  id: string;
+  kind: TeamElementKind;
+  name: string;
+  desc: string;
+  imageUrl?: string;
+  motif?: string;
+}
+
 export interface LobbySession {
   id: string;
   accessCode: string;
@@ -30,12 +41,22 @@ export interface JoinedLobbySession {
   team: LobbyTeam;
 }
 
+export interface TeamTerminalState {
+  session: LobbySession;
+  team: LobbyTeam;
+  hand: TeamHandCard[];
+}
+
 interface SessionResponse {
   item: LobbySession;
 }
 
 interface JoinSessionResponse {
   item: JoinedLobbySession;
+}
+
+interface TeamTerminalStateResponse {
+  item: TeamTerminalState;
 }
 
 interface SessionErrorResponse {
@@ -60,6 +81,11 @@ export async function joinGameSession(accessCode: string, color: TeamColor) {
 
 export async function startGameSession(accessCode: string) {
   const response = await api.post<SessionResponse>(`/game/sessions/${accessCode}/start`);
+  return response.data.item;
+}
+
+export async function getTeamTerminalState(accessCode: string, teamId: string) {
+  const response = await api.get<TeamTerminalStateResponse>(`/game/sessions/${accessCode}/teams/${teamId}/state`);
   return response.data.item;
 }
 

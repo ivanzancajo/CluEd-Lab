@@ -23,10 +23,24 @@ import {
 } from "lucide-react";
 import { DiceAnimation } from "../DiceAnimation";
 import { createLobbySocketClient, emitTeamHeartbeat, subscribeTeamToLobby, type LobbyPresenceState } from "../../src/lib/lobbySocket";
-import { getStoredSessionId, getStoredTeamColor, getStoredTeamId, getStoredTeamName } from "../../src/lib/lobbyStorage";
+import {
+  getStoredSessionCode,
+  getStoredSessionId,
+  getStoredSessionStatus,
+  getStoredTeamColor,
+  getStoredTeamId,
+  getStoredTeamName,
+  storeJoinedLobbySession,
+} from "../../src/lib/lobbyStorage";
 import { TEAM_HEARTBEAT_INTERVAL_MS } from "../../src/lib/teamMonitoring";
 import { getTeamMeta } from "../../src/lib/teamMeta";
-import type { SessionStatus, TeamColor } from "../../src/lib/sessionApi";
+import {
+  getSessionErrorMessage,
+  getTeamTerminalState,
+  type SessionStatus,
+  type TeamColor,
+  type TeamHandCard,
+} from "../../src/lib/sessionApi";
 
 const boardImg = "/board-placeholder.svg";
 
@@ -52,10 +66,22 @@ interface GameConfig {
   cat1Name?: string;
   cat2Name?: string;
   cat3Name?: string;
+  centerImage?: string;
   hasMotifs?: boolean;
   subjects?: RawItem[];
   objects?: RawItem[];
   spaces?: RawItem[];
+}
+
+interface TerminalCard {
+  id: string;
+  kind: TeamHandCard["kind"];
+  name: string;
+  desc: string;
+  type: string;
+  color: string;
+  bg: string;
+  image?: string;
 }
 
 // Categorías convertidas a objetos dinámicos con avatares predefinidos (íconos tech)
@@ -91,15 +117,57 @@ const CATEGORIES = {
 
 const TEAMS = ["Rojo", "Amarillo", "Azul", "Verde", "Morado", "Blanco"];
 
+function mapHandCardToTerminalCard(card: TeamHandCard, config: GameConfig): TerminalCard {
+  if (card.kind === "SUJETO") {
+    return {
+      id: card.id,
+      kind: card.kind,
+      name: card.name,
+      desc: card.desc,
+      type: config.cat1Name || "Sujetos",
+      color: "border-blue-500",
+      bg: "bg-blue-950",
+      image: card.imageUrl,
+    };
+  }
+
+  if (card.kind === "OBJETO") {
+    return {
+      id: card.id,
+      kind: card.kind,
+      name: card.name,
+      desc: card.desc,
+      type: config.cat2Name || "Objetos",
+      color: "border-emerald-500",
+      bg: "bg-emerald-950",
+      image: card.imageUrl,
+    };
+  }
+
+  return {
+    id: card.id,
+    kind: card.kind,
+    name: card.name,
+    desc: card.desc,
+    type: config.cat3Name || "Espacios",
+    color: "border-red-500",
+    bg: "bg-red-950",
+    image: card.imageUrl,
+  };
+}
+
 export function TerminalView() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("map");
   const [centerImage, setCenterImage] = useState("");
   const [teamName, setTeamName] = useState(getStoredTeamName() || "Equipo sin asignar");
   const [teamColor, setTeamColor] = useState<TeamColor | null>(getStoredTeamColor());
-  const [sessionStatus, setSessionStatus] = useState<SessionStatus>("LOBBY");
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>(getStoredSessionStatus() ?? "LOBBY");
   const [lobbyConnectionStatus, setLobbyConnectionStatus] = useState<"connecting" | "connected" | "disconnected" | "error">("connecting");
   const [lobbyError, setLobbyError] = useState<string | null>(null);
+  const [handError, setHandError] = useState<string | null>(null);
+  const [isLoadingHand, setIsLoadingHand] = useState(false);
+  const [teamHand, setTeamHand] = useState<TerminalCard[]>([]);
   
   const [categories, setCategories] = useState<{
     c1: ElementoItem[];
@@ -115,14 +183,7 @@ export function TerminalView() {
   // Mock turn state
   const [isMyTurn, setIsMyTurn] = useState(false);
 
-  // Mock cards for inventory
-  const MOCK_CARDS = [
-    { id: "c1", name: "Alan Turing", desc: "Criptoanalista. Maestro de la deducción lógica.", type: catNames.c1, color: "border-blue-500", bg: "bg-blue-950", image: "https://images.unsplash.com/photo-1623366302587-b38b1ddaefd9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwb3J0cmFpdCUyMG1hbnxlbnwxfHx8fDE3NzUyMjg2NzN8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral" },
-    { id: "c2", name: "Osciloscopio", desc: "Capaz de emitir pulsos letales de alto voltaje.", type: catNames.c2, color: "border-emerald-500", bg: "bg-emerald-950", image: "https://images.unsplash.com/photo-1527167151437-87cf28fb6b38?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx2aW50YWdlJTIwb3NjaWxsb3Njb3BlfGVufDF8fHx8MTc3NTIzNzc2Mnww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral" },
-    { id: "c3", name: "Cámara Anecoica", desc: "Aislamiento total. Nadie escucharía un grito.", type: catNames.c3, color: "border-red-500", bg: "bg-red-950", image: "https://images.unsplash.com/photo-1624279973450-0de3a3802f31?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzb3VuZHByb29mJTIwcm9vbXxlbnwxfHx8fDE3NzUyMzc3Njl8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral" }
-  ];
-  
-  const [selectedCard, setSelectedCard] = useState<typeof MOCK_CARDS[0] | null>(null);
+  const [selectedCard, setSelectedCard] = useState<TerminalCard | null>(null);
   const [cardFlipped, setCardFlipped] = useState(false);
   const [suggestMode, setSuggestMode] = useState("hipotesis");
   
@@ -137,6 +198,35 @@ export function TerminalView() {
     }
   }, [suggestMode, currentRoomMock]);
 
+  const applyGameConfig = (config: GameConfig) => {
+    setCatNames({
+      c1: config.cat1Name || "Sujetos",
+      c2: config.cat2Name || "Objetos",
+      c3: config.cat3Name || "Espacios",
+    });
+
+    const showMotifs = config.hasMotifs === true;
+    const mapItems = (items: RawItem[], defaultIcon: React.ReactNode, defaultColor: string): ElementoItem[] => {
+      return items.map((item) => ({
+        name: item.name,
+        desc: item.desc,
+        motif: showMotifs ? item.motif : undefined,
+        avatar: defaultIcon,
+        color: defaultColor,
+      }));
+    };
+
+    setCategories({
+      c1: mapItems(config.subjects || [], <User className="w-3 h-3 text-cyan-400" />, "bg-cyan-950/30 border-cyan-800"),
+      c2: mapItems(config.objects || [], <Box className="w-3 h-3 text-emerald-400" />, "bg-emerald-950/30 border-emerald-800"),
+      c3: mapItems(config.spaces || [], <MapPin className="w-3 h-3 text-red-500" />, "bg-red-950/20 border-red-900"),
+    });
+
+    if (config.centerImage !== undefined) {
+      setCenterImage(config.centerImage || "");
+    }
+  };
+
   // Fetch active config and map to Terminal's internal state
   React.useEffect(() => {
     const savedImg = localStorage.getItem("centerImage");
@@ -147,38 +237,62 @@ export function TerminalView() {
     const activeConf = localStorage.getItem("activeConfig");
     if (activeConf) {
       try {
-        // CORRECCIÓN: Usamos la interfaz aquí para tipar el JSON.parse
         const parsed: GameConfig = JSON.parse(activeConf);
-        
-        setCatNames({
-          c1: parsed.cat1Name || "Sujetos",
-          c2: parsed.cat2Name || "Objetos",
-          c3: parsed.cat3Name || "Espacios"
-        });
-
-        const showMotifs = parsed.hasMotifs === true;
-        
-        // Map configs to the categories format expected by TerminalView
-        const mapItems = (items: RawItem[], defaultIcon: React.ReactNode, defaultColor: string): ElementoItem[] => {
-          return items.map((item) => ({
-            name: item.name,
-            desc: item.desc,
-            motif: showMotifs ? item.motif : undefined,
-            avatar: defaultIcon,
-            color: defaultColor
-          }));
-        };
-
-        setCategories({
-          c1: mapItems(parsed.subjects || [], <User className="w-3 h-3 text-cyan-400" />, "bg-cyan-950/30 border-cyan-800"),
-          c2: mapItems(parsed.objects || [], <Box className="w-3 h-3 text-emerald-400" />, "bg-emerald-950/30 border-emerald-800"),
-          c3: mapItems(parsed.spaces || [], <MapPin className="w-3 h-3 text-red-500" />, "bg-red-950/20 border-red-900")
-        });
+        applyGameConfig(parsed);
       } catch(e) {
         console.error("Error parsing config", e);
       }
     }
   }, []);
+
+  React.useEffect(() => {
+    const accessCode = getStoredSessionCode();
+    const teamId = getStoredTeamId();
+
+    if (!accessCode || !teamId || sessionStatus === "LOBBY") {
+      if (sessionStatus === "LOBBY") {
+        setHandError(null);
+        setIsLoadingHand(false);
+      }
+
+      return;
+    }
+
+    let active = true;
+    setIsLoadingHand(true);
+    setHandError(null);
+
+    getTeamTerminalState(accessCode, teamId)
+      .then((state) => {
+        if (!active) {
+          return;
+        }
+
+        const sessionConfig = state.session.skin as unknown as GameConfig;
+        storeJoinedLobbySession({ session: state.session, team: state.team });
+        applyGameConfig(sessionConfig);
+        setTeamName(state.team.name);
+        setTeamColor(state.team.color);
+        setSessionStatus(state.session.status);
+        setTeamHand(state.hand.map((card) => mapHandCardToTerminalCard(card, sessionConfig)));
+      })
+      .catch((error) => {
+        if (!active) {
+          return;
+        }
+
+        setHandError(getSessionErrorMessage(error, "No se han podido cargar las cartas del equipo."));
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoadingHand(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [sessionStatus]);
 
   React.useEffect(() => {
     const sessionId = getStoredSessionId();
@@ -253,7 +367,12 @@ export function TerminalView() {
   }, [navigate]);
 
   const currentTeamMeta = teamColor ? getTeamMeta(teamColor) : null;
-  const sessionStatusLabel = sessionStatus === "EN_CURSO" ? "PARTIDA EN CURSO" : "SALA DE ESPERA";
+  const sessionStatusLabel =
+    sessionStatus === "EN_CURSO"
+      ? "PARTIDA EN CURSO"
+      : sessionStatus === "REPARTO"
+      ? "REPARTO DE CARTAS"
+      : "SALA DE ESPERA";
   const connectionLabel =
     lobbyConnectionStatus === "connected"
       ? "CONECTADO"
@@ -410,35 +529,51 @@ export function TerminalView() {
                 <h3 className="text-[10px] font-bold tracking-widest uppercase text-slate-500 flex items-center gap-2">
                   <Database className="w-3 h-3" /> INVENTARIO DE CARTAS
                 </h3>
-                <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory">
-                  {MOCK_CARDS.map(card => (
-                    <div 
-                      key={card.id} 
-                      onClick={() => { setSelectedCard(card); setCardFlipped(false); }}
-                      className={`w-28 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${card.color} ${card.bg} bg-opacity-40 flex flex-col items-center justify-start cursor-pointer snap-center hover:scale-105 transition-transform shadow-lg relative overflow-hidden`}
-                    >
-                      <div className="w-full h-1/2 relative overflow-hidden border-b border-slate-800">
-                        {card.image ? (
-                          <img src={card.image} alt={card.name} className="w-full h-full object-cover opacity-80" />
-                        ) : (
-                          <div className="w-full h-full bg-slate-900 flex items-center justify-center">
-                            {card.type === catNames.c1 && <User className="w-5 h-5 text-slate-400 opacity-80" />}
-                            {card.type === catNames.c2 && <Box className="w-5 h-5 text-slate-400 opacity-80" />}
-                            {card.type === catNames.c3 && <MapPin className="w-5 h-5 text-slate-400 opacity-80" />}
+                {isLoadingHand ? (
+                  <div className="rounded-lg border border-cyan-900/40 bg-cyan-950/10 px-4 py-3 text-xs uppercase tracking-[0.2em] text-cyan-200">
+                    Cargando cartas del equipo...
+                  </div>
+                ) : handError ? (
+                  <div className="rounded-lg border border-red-900/60 bg-red-950/20 px-4 py-3 text-xs text-red-100">
+                    {handError}
+                  </div>
+                ) : teamHand.length === 0 ? (
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/40 px-4 py-3 text-xs text-slate-400">
+                    {sessionStatus === "LOBBY"
+                      ? "Las cartas se repartirán automáticamente cuando el Game Master inicie la partida."
+                      : "Todavía no hay cartas disponibles para este terminal."}
+                  </div>
+                ) : (
+                  <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory">
+                    {teamHand.map(card => (
+                      <div 
+                        key={card.id} 
+                        onClick={() => { setSelectedCard(card); setCardFlipped(false); }}
+                        className={`w-28 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${card.color} ${card.bg} bg-opacity-40 flex flex-col items-center justify-start cursor-pointer snap-center hover:scale-105 transition-transform shadow-lg relative overflow-hidden`}
+                      >
+                        <div className="w-full h-1/2 relative overflow-hidden border-b border-slate-800">
+                          {card.image ? (
+                            <img src={card.image} alt={card.name} className="w-full h-full object-cover opacity-80" />
+                          ) : (
+                            <div className="w-full h-full bg-slate-900 flex items-center justify-center">
+                              {card.kind === "SUJETO" && <User className="w-5 h-5 text-slate-400 opacity-80" />}
+                              {card.kind === "OBJETO" && <Box className="w-5 h-5 text-slate-400 opacity-80" />}
+                              {card.kind === "ESPACIO" && <MapPin className="w-5 h-5 text-slate-400 opacity-80" />}
+                            </div>
+                          )}
+                          <div className="absolute top-0 right-0 w-6 h-6 bg-black/60 rounded-bl-full backdrop-blur-sm border-b border-l border-slate-700/50 flex items-start justify-end p-1">
+                            {card.kind === "SUJETO" && <User className="w-3 h-3 text-cyan-400" />}
+                            {card.kind === "OBJETO" && <Box className="w-3 h-3 text-emerald-400" />}
+                            {card.kind === "ESPACIO" && <MapPin className="w-3 h-3 text-red-400" />}
                           </div>
-                        )}
-                        <div className="absolute top-0 right-0 w-6 h-6 bg-black/60 rounded-bl-full backdrop-blur-sm border-b border-l border-slate-700/50 flex items-start justify-end p-1">
-                          {card.type === catNames.c1 && <User className="w-3 h-3 text-cyan-400" />}
-                          {card.type === catNames.c2 && <Box className="w-3 h-3 text-emerald-400" />}
-                          {card.type === catNames.c3 && <MapPin className="w-3 h-3 text-red-400" />}
+                        </div>
+                        <div className="p-2 w-full flex-1 flex items-center justify-center">
+                          <span className="text-[9px] font-bold text-center leading-tight text-slate-200 uppercase px-1 line-clamp-2">{card.name}</span>
                         </div>
                       </div>
-                      <div className="p-2 w-full flex-1 flex items-center justify-center">
-                        <span className="text-[9px] font-bold text-center leading-tight text-slate-200 uppercase px-1 line-clamp-2">{card.name}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}

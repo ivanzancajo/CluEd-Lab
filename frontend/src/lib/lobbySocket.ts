@@ -1,6 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 import { getStoredAdminToken } from './auth';
-import type { LobbyTeam, SessionStatus, TeamColor } from './sessionApi';
+import type { LobbySession, LobbyTeam, SessionStatus, TeamColor } from './sessionApi';
 
 export type LobbyPresenceTeam = LobbyTeam & {
   connected: boolean;
@@ -27,6 +27,11 @@ export type LobbyEventMessage = {
   teamId?: string | undefined;
 };
 
+export type GameStartedPayload = {
+  session: LobbySession;
+  occurredAt: number;
+};
+
 export type LobbySubscribeAck =
   | {
       ok: true;
@@ -37,9 +42,20 @@ export type LobbySubscribeAck =
       error: string;
     };
 
+export type StartGameAck =
+  | {
+      ok: true;
+      payload: GameStartedPayload;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 type ServerToClientEvents = {
   'lobby:presence-updated': (state: LobbyPresenceState) => void;
   'lobby:event': (event: LobbyEventMessage) => void;
+  gameStarted: (payload: GameStartedPayload) => void;
 };
 
 type ClientToServerEvents = {
@@ -49,6 +65,7 @@ type ClientToServerEvents = {
     acknowledge: (response: LobbySubscribeAck) => void
   ) => void;
   'lobby:team-heartbeat': () => void;
+  startGame: (payload: { accessCode: string }, acknowledge: (response: StartGameAck) => void) => void;
 };
 
 export type LobbySocketClient = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -75,6 +92,12 @@ export function subscribeTeamToLobby(socket: LobbySocketClient, sessionId: strin
 
 export function emitTeamHeartbeat(socket: LobbySocketClient) {
   socket.emit('lobby:team-heartbeat');
+}
+
+export function startGameFromLobby(socket: LobbySocketClient, accessCode: string) {
+  return new Promise<StartGameAck>((resolve) => {
+    socket.emit('startGame', { accessCode }, resolve);
+  });
 }
 
 function emitWithAck<EventName extends keyof ClientToServerEvents>(

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import {
@@ -16,9 +16,12 @@ import {
 } from "lucide-react";
 import {
   createLobbySocketClient,
+  startGameFromLobby,
   subscribeHostToLobby,
+  type GameStartedPayload,
   type LobbyEventMessage,
   type LobbyPresenceState,
+  type LobbySocketClient,
 } from "../../src/lib/lobbySocket";
 import { getStoredSessionCode, getStoredSessionId, storeHostLobbySession } from "../../src/lib/lobbyStorage";
 import { getTeamMonitoringLabel, getTeamMonitoringStatus } from "../../src/lib/teamMonitoring";
@@ -28,8 +31,11 @@ import { getGameSession, getSessionErrorMessage, startGameSession } from "../../
 type LobbyConnectionStatus = "idle" | "connecting" | "connected" | "error";
 type TeamSlotStatus = "free" | "connected" | "inactive" | "disconnected";
 
+const MINIMUM_TEAMS_TO_START = 2;
+
 export function LobbyView() {
   const navigate = useNavigate();
+  const socketRef = useRef<LobbySocketClient | null>(null);
   const [sessionCode, setSessionCode] = useState("");
   const [presenceState, setPresenceState] = useState<LobbyPresenceState | null>(null);
   const [events, setEvents] = useState<LobbyEventMessage[]>([]);
@@ -50,6 +56,17 @@ export function LobbyView() {
   useEffect(() => {
     let active = true;
     const socket = createLobbySocketClient({ admin: true });
+    socketRef.current = socket;
+
+    const applyGameStarted = (payload: GameStartedPayload) => {
+      if (!active) {
+        return;
+      }
+
+      storeHostLobbySession(payload.session);
+      setLobbyError(null);
+      navigate("/board", { replace: true });
+    };
 
     const applyPresenceState = (state: LobbyPresenceState) => {
       if (!active) {
@@ -83,6 +100,7 @@ export function LobbyView() {
         }
 
         socket.on("lobby:presence-updated", applyPresenceState);
+        socket.on("gameStarted", applyGameStarted);
         socket.on("lobby:event", (event) => {
           if (!active) {
             return;
@@ -140,13 +158,30 @@ export function LobbyView() {
 
     return () => {
       active = false;
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
       socket.disconnect();
     };
   }, [navigate]);
 
+  const monitoredTeams = presenceState?.teams ?? [];
+  const connectedCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "connected").length;
+  const inactiveCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "inactive").length;
+  const disconnectedCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "disconnected").length;
+  const joinedCount = monitoredTeams.length;
+  const availableCount = TEAM_METADATA.length - joinedCount;
+  const startBlockReason =
+    !sessionCode || sessionCode === "N/A"
+      ? "No hay un codigo de partida activo para iniciar la sesion."
+      : joinedCount < MINIMUM_TEAMS_TO_START
+      ? `Se necesitan al menos ${MINIMUM_TEAMS_TO_START} equipos unidos para iniciar la partida. Ahora mismo hay ${joinedCount}.`
+      : null;
+  const isStartBlocked = isStartingGame || !!startBlockReason;
+
   const handleStartGame = async () => {
-    if (!sessionCode || sessionCode === "N/A") {
-      setLobbyError("No hay un código de partida activo para iniciar la sesión.");
+    if (startBlockReason) {
+      setLobbyError(startBlockReason);
       return;
     }
 
@@ -154,20 +189,19 @@ export function LobbyView() {
       setIsStartingGame(true);
       setLobbyError(null);
 
-      const session = await startGameSession(sessionCode);
+      const connectedSocket = socketRef.current?.connected ? socketRef.current : null;
+      const session = connectedSocket
+        ? await startSessionFromSocket(connectedSocket, sessionCode)
+        : await startGameSession(sessionCode);
+
       storeHostLobbySession(session);
-      navigate("/board");
+      navigate("/board", { replace: true });
     } catch (error) {
       setLobbyError(getSessionErrorMessage(error, "No se ha podido iniciar la partida."));
     } finally {
       setIsStartingGame(false);
     }
   };
-
-  const monitoredTeams = presenceState?.teams ?? [];
-  const connectedCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "connected").length;
-  const inactiveCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "inactive").length;
-  const disconnectedCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "disconnected").length;
   const teamSlots = TEAM_METADATA.map((teamMeta) => {
     const joinedTeam = presenceState?.teams.find((team) => team.color === teamMeta.color) ?? null;
     const teamStatus: TeamSlotStatus = !joinedTeam ? "free" : getTeamMonitoringStatus(joinedTeam, monitoringNow);
@@ -187,9 +221,48 @@ export function LobbyView() {
       secondaryText: joinedTeam ? getTeamMonitoringLabel(joinedTeam, monitoringNow) : "Color disponible",
     };
   });
-
-  const joinedCount = monitoredTeams.length;
-  const availableCount = TEAM_METADATA.length - joinedCount;
+  const lobbySummaryCards = [
+    {
+      label: "Unidos",
+      value: joinedCount,
+      detail: joinedCount === 1 ? "1 equipo listo" : `${joinedCount} equipos listos`,
+      valueClass: "text-white",
+      borderClass: "border-slate-700/80",
+      badgeClass: "border-slate-600/80 bg-slate-900/80 text-slate-200",
+      dotClass: "bg-slate-200",
+      glowClass: "from-slate-100/30 via-slate-100/10 to-transparent",
+    },
+    {
+      label: "Conectados",
+      value: connectedCount,
+      detail: connectedCount === 1 ? "1 equipo en linea" : `${connectedCount} equipos en linea`,
+      valueClass: "text-cyan-300",
+      borderClass: "border-cyan-900/60",
+      badgeClass: "border-cyan-800/60 bg-cyan-950/40 text-cyan-100",
+      dotClass: "bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.8)]",
+      glowClass: "from-cyan-400/35 via-cyan-400/10 to-transparent",
+    },
+    {
+      label: "Inactivos",
+      value: inactiveCount,
+      detail: inactiveCount === 1 ? "1 equipo sin pulso reciente" : `${inactiveCount} equipos sin pulso reciente`,
+      valueClass: "text-amber-300",
+      borderClass: "border-amber-900/60",
+      badgeClass: "border-amber-800/60 bg-amber-950/40 text-amber-100",
+      dotClass: "bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,0.75)]",
+      glowClass: "from-amber-300/35 via-amber-300/10 to-transparent",
+    },
+    {
+      label: "Libres",
+      value: availableCount,
+      detail: availableCount === 1 ? "1 color disponible" : `${availableCount} colores disponibles`,
+      valueClass: "text-emerald-300",
+      borderClass: "border-emerald-900/60",
+      badgeClass: "border-emerald-800/60 bg-emerald-950/40 text-emerald-100",
+      dotClass: "bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]",
+      glowClass: "from-emerald-300/35 via-emerald-300/10 to-transparent",
+    },
+  ];
   const visibleEvents =
     events.length > 0
       ? events
@@ -327,23 +400,28 @@ export function LobbyView() {
                 <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300">
                   La partida ya tiene codigo de acceso, pero la pantalla central sigue oculta. Comparte el codigo con los jugadores y lanza la partida solo cuando esten listos.
                 </p>
-                <div className="mt-8 grid gap-4 sm:grid-cols-4">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                    <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Unidos</p>
-                    <p className="mt-3 text-3xl font-black text-white">{joinedCount}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                    <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Conectados</p>
-                    <p className="mt-3 text-3xl font-black text-cyan-300">{connectedCount}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                    <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Inactivos</p>
-                    <p className="mt-3 text-3xl font-black text-amber-300">{inactiveCount}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                    <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Libres</p>
-                    <p className="mt-3 text-3xl font-black text-emerald-300">{availableCount}</p>
-                  </div>
+                <div className="mt-8 grid grid-cols-2 gap-3 2xl:grid-cols-4">
+                  {lobbySummaryCards.map((card) => (
+                    <div
+                      key={card.label}
+                      className={`relative overflow-hidden rounded-3xl border bg-slate-900/78 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_30px_-22px_rgba(15,23,42,0.95)] backdrop-blur-sm ${card.borderClass}`}
+                    >
+                      <div className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r ${card.glowClass}`}></div>
+                      <div className="relative flex h-full flex-col justify-between gap-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] ${card.badgeClass}`}>
+                            <span className={`h-2.5 w-2.5 rounded-full ${card.dotClass}`}></span>
+                            {card.label}
+                          </span>
+                          <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Lobby</span>
+                        </div>
+                        <div className="space-y-2">
+                          <p className={`text-4xl font-black leading-none ${card.valueClass}`}>{card.value}</p>
+                          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{card.detail}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
                 <p className="mt-4 text-xs uppercase tracking-[0.22em] text-slate-500">
                   Equipos sin senal reciente: {disconnectedCount}
@@ -361,14 +439,22 @@ export function LobbyView() {
                   </div>
                 </div>
 
-                <div className="mt-6 rounded-2xl border border-amber-900/40 bg-amber-950/10 px-4 py-3 text-sm leading-6 text-amber-100">
-                  Al pulsar Iniciar Partida se cerrara el acceso de nuevos equipos, se mostrara la pantalla central y comenzara a correr el tiempo.
+                <div
+                  data-cy="lobby-start-hint"
+                  className={`mt-6 rounded-2xl border px-4 py-3 text-sm leading-6 ${
+                    startBlockReason
+                      ? "border-red-900/40 bg-red-950/10 text-red-100"
+                      : "border-amber-900/40 bg-amber-950/10 text-amber-100"
+                  }`}
+                >
+                  {startBlockReason ?? "Al pulsar Iniciar Partida se cerrara el acceso de nuevos equipos, se mostrara la pantalla central y comenzara a correr el tiempo."}
                 </div>
 
                 <button
+                  data-cy="lobby-start-button"
                   type="button"
                   onClick={handleStartGame}
-                  disabled={isStartingGame || !sessionCode || sessionCode === "N/A"}
+                  disabled={isStartBlocked}
                   className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-500 px-6 py-5 text-lg font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_30px_rgba(16,185,129,0.28)] transition-all hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none"
                 >
                   {isStartingGame ? <LoaderCircle className="w-6 h-6 animate-spin" /> : <Play className="w-6 h-6" />}
@@ -405,4 +491,14 @@ function formatEventTime(timestamp: number) {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+async function startSessionFromSocket(socket: LobbySocketClient, accessCode: string) {
+  const response = await startGameFromLobby(socket, accessCode);
+
+  if (!response.ok) {
+    throw new Error(response.error);
+  }
+
+  return response.payload.session;
 }

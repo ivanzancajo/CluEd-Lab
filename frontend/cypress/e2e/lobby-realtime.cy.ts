@@ -33,23 +33,6 @@ const REQUIRED_COUNTS: Record<CollectionKey, number> = {
   spaces: 9,
 };
 
-function encodeBase64Url(value: string) {
-  return btoa(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function createFakeAdminToken() {
-  const header = encodeBase64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  const payload = encodeBase64Url(
-    JSON.stringify({
-      role: "admin",
-      username: "admin",
-      exp: Math.floor(Date.now() / 1000) + 60 * 60,
-    })
-  );
-
-  return `${header}.${payload}.signature`;
-}
-
 function buildItems(prefix: string, count: number) {
   return Array.from({ length: count }, (_value, index) => ({
     name: `${prefix} ${index + 1}`,

@@ -5,6 +5,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/glo
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import type { SignOptions } from 'jsonwebtoken';
+import { io as createSocketClient, type Socket } from 'socket.io-client';
+import { registerSocketServer, type GameStartedPayload, type LobbyPresenceState } from '../src/socket/socketServer.js';
 import sessionRoutes from '../src/routes/sessionRoutes.js';
 import { getTestDatabaseUrl } from './helpers/testDatabase';
 
@@ -60,6 +62,26 @@ type TeamTerminalStateResponse = {
   };
 };
 
+type LobbySubscribeResponse =
+  | {
+      ok: true;
+      state: LobbyPresenceState;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+type StartGameSocketResponse =
+  | {
+      ok: true;
+      payload: GameStartedPayload;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 const ACCESS_CODE_FORMAT_ERROR = 'El código de acceso debe tener 6 caracteres alfanuméricos.';
 const INVALID_ACCESS_CODES = ['A', 'AB', 'ABC', 'ABCD', 'ABCDE', 'ABC-12'];
 const PLAYABLE_TEAM_COLORS: readonly ColorEquipo[] = ['ROJO', 'AZUL', 'VERDE', 'BLANCO'];
@@ -82,6 +104,7 @@ const prisma = new PrismaClient({
 describe('SCRUM-35 API de acceso de jugadores', () => {
   let server: Server;
   let baseUrl = '';
+  let socketUrl = '';
 
   function signAdminToken(payload: object, expiresIn: SignOptions['expiresIn'] = '8h') {
     return jwt.sign(payload, process.env.JWT_SECRET as string, { expiresIn });
@@ -93,6 +116,7 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     app.use('/api/game', sessionRoutes);
 
     server = createServer(app);
+    registerSocketServer(server);
 
     await new Promise<void>((resolve) => {
       server.listen(0, '127.0.0.1', () => resolve());
@@ -104,6 +128,7 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     }
 
     baseUrl = `http://127.0.0.1:${(address as AddressInfo).port}`;
+    socketUrl = `http://127.0.0.1:${(address as AddressInfo).port}`;
   });
 
   beforeEach(async () => {
@@ -353,6 +378,24 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     });
   });
 
+  it('rechaza iniciar la partida cuando hay menos de dos equipos unidos', async () => {
+    await seedPlayableSession('START2', ['ROJO']);
+
+    const response = await request('/api/game/sessions/START2/start', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${signAdminToken({ role: 'admin', username: 'admin', sub: 'test-admin' })}`,
+      },
+    });
+    const body = (await response.json()) as ErrorResponse;
+
+    expect(response.status).toBe(409);
+    expect(body).toEqual({
+      error: 'La partida necesita al menos 2 equipos unidos para poder iniciarse.',
+      details: undefined,
+    });
+  });
+
   it('devuelve la mano repartida del equipo cuando la partida ya está iniciada', async () => {
     const seeded = await seedPlayableSession('HAND01', PLAYABLE_TEAM_COLORS);
 
@@ -498,6 +541,52 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     expect(
       getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.ESPACIO]))
     ).toBeLessThanOrEqual(1);
+  });
+
+  it('emite gameStarted cuando el admin inicia la partida por socket', async () => {
+    const seeded = await seedPlayableSession('SOCK01', ['ROJO', 'AZUL']);
+    const hostSocket = await connectSocketClient(socketUrl, signAdminToken({ role: 'admin', username: 'admin', sub: 'socket-admin' }));
+    const teamSocket = await connectSocketClient(socketUrl);
+
+    try {
+      const hostSubscription = await emitSocketAck<LobbySubscribeResponse>(hostSocket, 'lobby:host-subscribe', {
+        sessionId: seeded.session.id,
+      });
+      const teamSubscription = await emitSocketAck<LobbySubscribeResponse>(teamSocket, 'lobby:team-subscribe', {
+        sessionId: seeded.session.id,
+        teamId: seeded.teamIds[0],
+      });
+
+      expect(hostSubscription.ok).toBe(true);
+      expect(teamSubscription.ok).toBe(true);
+
+      const hostGameStartedPromise = waitForSocketEvent<GameStartedPayload>(hostSocket, 'gameStarted');
+      const teamGameStartedPromise = waitForSocketEvent<GameStartedPayload>(teamSocket, 'gameStarted');
+      const startResponse = await emitSocketAck<StartGameSocketResponse>(hostSocket, 'startGame', {
+        accessCode: 'SOCK01',
+      });
+      const [hostGameStarted, teamGameStarted] = await Promise.all([
+        hostGameStartedPromise,
+        teamGameStartedPromise,
+      ]);
+
+      expect(startResponse.ok).toBe(true);
+      if (!startResponse.ok) {
+        return;
+      }
+
+      expect(startResponse.payload.session.status).toBe(EstadoPartida.EN_CURSO);
+      expect(startResponse.payload.session.accessCode).toBe('SOCK01');
+      expect(startResponse.payload.session.startedAt).toEqual(expect.any(String));
+      expect(hostGameStarted.session.id).toBe(seeded.session.id);
+      expect(teamGameStarted.session.id).toBe(seeded.session.id);
+      expect(hostGameStarted.session.status).toBe(EstadoPartida.EN_CURSO);
+      expect(teamGameStarted.session.status).toBe(EstadoPartida.EN_CURSO);
+      expect(await prisma.cartaEquipo.count()).toBe(18);
+    } finally {
+      hostSocket.disconnect();
+      teamSocket.disconnect();
+    }
   });
 });
 
@@ -669,4 +758,39 @@ async function getTeamCardDistributions(teamIds: string[]) {
 
 function getDistributionSpread(values: number[]) {
   return Math.max(...values) - Math.min(...values);
+}
+
+async function connectSocketClient(socketUrl: string, token?: string) {
+  return new Promise<Socket>((resolve, reject) => {
+    const socket = createSocketClient(socketUrl, {
+      autoConnect: false,
+      auth: token ? { token } : {},
+      transports: ['websocket'],
+    });
+
+    const handleConnect = () => {
+      socket.off('connect_error', handleError);
+      resolve(socket);
+    };
+    const handleError = (error: Error) => {
+      socket.off('connect', handleConnect);
+      reject(error);
+    };
+
+    socket.once('connect', handleConnect);
+    socket.once('connect_error', handleError);
+    socket.connect();
+  });
+}
+
+async function emitSocketAck<T>(socket: Socket, eventName: string, payload: unknown) {
+  return new Promise<T>((resolve) => {
+    socket.emit(eventName, payload, resolve);
+  });
+}
+
+async function waitForSocketEvent<T>(socket: Socket, eventName: string) {
+  return new Promise<T>((resolve) => {
+    socket.once(eventName, resolve);
+  });
 }

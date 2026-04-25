@@ -8,6 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "demo:deal": "tsx src/scripts/createDealDemo.ts",
     "prisma:generate": "prisma generate",
     "prisma:pull": "prisma db pull",
     "prisma:migrate:dev": "prisma migrate dev",

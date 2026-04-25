@@ -14,12 +14,17 @@ import {
   createSessionSchema,
   joinSessionSchema,
   sessionAccessCodeParamsSchema,
+  teamSessionStateParamsSchema,
 } from '../lib/sessionSchemas.js';
 import {
   COLOR_LABELS,
   loadSessionSnapshotByAccessCode,
   type SessionSnapshot,
 } from '../lib/sessionSnapshots.js';
+import {
+  initializeStartedSession,
+  loadTeamTerminalStateByAccessCode,
+} from '../lib/sessionGameplay.js';
 import { verifyToken } from '../middleware/auth.js';
 import { emitSessionSnapshotUpdate } from '../socket/socketServer.js';
 
@@ -48,6 +53,20 @@ router.get('/sessions/:accessCode', async (req, res) => {
   try {
     const session = await loadSessionSnapshotByAccessCode(prisma, accessCode);
     res.json({ item: session });
+  } catch (error) {
+    respondUnexpectedError(res, error);
+  }
+});
+
+router.get('/sessions/:accessCode/teams/:teamId/state', async (req, res) => {
+  const teamParams = parseTeamSessionStateParams(req.params, res);
+  if (!teamParams) {
+    return;
+  }
+
+  try {
+    const teamState = await loadTeamTerminalStateByAccessCode(prisma, teamParams.accessCode, teamParams.teamId);
+    res.json({ item: teamState });
   } catch (error) {
     respondUnexpectedError(res, error);
   }
@@ -150,13 +169,7 @@ router.post('/sessions/:accessCode/start', verifyToken, async (req, res) => {
           throw new HttpError(409, 'La partida ya ha sido iniciada o no admite esta transición.');
         }
 
-        await tx.partida.update({
-          where: { id: currentSession.id },
-          data: {
-            status: EstadoPartida.EN_CURSO,
-            startedAt: new Date(),
-          },
-        });
+        await initializeStartedSession(tx, currentSession.id);
 
         return loadSessionSnapshotByAccessCode(tx, accessCode);
       },
@@ -213,6 +226,10 @@ async function createSessionWithUniqueCode(skinId: string): Promise<SessionSnaps
 function parseAccessCode(value: unknown, res: Response): string | null {
   const parsed = parseBody(sessionAccessCodeParamsSchema, value, res);
   return parsed?.accessCode ?? null;
+}
+
+function parseTeamSessionStateParams(value: unknown, res: Response) {
+  return parseBody(teamSessionStateParamsSchema, value, res);
 }
 
 function parseDurationMinutes(value: string) {

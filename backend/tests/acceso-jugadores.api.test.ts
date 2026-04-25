@@ -1,8 +1,10 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { EstadoPartida, PrismaClient } from '@prisma/client';
+import { ColorEquipo, EstadoPartida, PrismaClient, TipoElemento } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
 import express from 'express';
+import jwt from 'jsonwebtoken';
+import type { SignOptions } from 'jsonwebtoken';
 import sessionRoutes from '../src/routes/sessionRoutes.js';
 import { getTestDatabaseUrl } from './helpers/testDatabase';
 
@@ -16,6 +18,7 @@ type SessionResponse = {
     id: string;
     accessCode: string;
     status: string;
+    startedAt: string | null;
     teams: Array<{
       id: string;
       name: string;
@@ -40,8 +43,33 @@ type JoinResponse = {
   };
 };
 
+type TeamTerminalStateResponse = {
+  item: {
+    session: SessionResponse['item'];
+    team: {
+      id: string;
+      name: string;
+      color: string;
+    };
+    hand: Array<{
+      id: string;
+      kind: string;
+      name: string;
+      desc: string;
+    }>;
+  };
+};
+
 const ACCESS_CODE_FORMAT_ERROR = 'El código de acceso debe tener 6 caracteres alfanuméricos.';
 const INVALID_ACCESS_CODES = ['A', 'AB', 'ABC', 'ABCD', 'ABCDE', 'ABC-12'];
+const PLAYABLE_TEAM_COLORS: readonly ColorEquipo[] = ['ROJO', 'AZUL', 'VERDE', 'BLANCO'];
+const FIVE_TEAM_COLORS: readonly ColorEquipo[] = ['ROJO', 'AMARILLO', 'AZUL', 'VERDE', 'MORADO'];
+const SIX_TEAM_COLORS: readonly ColorEquipo[] = ['ROJO', 'AMARILLO', 'AZUL', 'VERDE', 'MORADO', 'BLANCO'];
+
+type TeamCardDistribution = {
+  teamId: string;
+  total: number;
+} & Record<TipoElemento, number>;
 
 const prisma = new PrismaClient({
   datasources: {
@@ -54,6 +82,10 @@ const prisma = new PrismaClient({
 describe('SCRUM-35 API de acceso de jugadores', () => {
   let server: Server;
   let baseUrl = '';
+
+  function signAdminToken(payload: object, expiresIn: SignOptions['expiresIn'] = '8h') {
+    return jwt.sign(payload, process.env.JWT_SECRET as string, { expiresIn });
+  }
 
   beforeAll(async () => {
     const app = express();
@@ -76,7 +108,9 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
 
   beforeEach(async () => {
     await prisma.partida.deleteMany();
+    await prisma.solucion.deleteMany();
     await prisma.cluedoSkin.deleteMany();
+    await prisma.elemento.deleteMany();
   });
 
   afterAll(async () => {
@@ -263,6 +297,208 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     expect(body.error).toBe('La solicitud contiene datos inválidos.');
     expect(body.details?.[0]).toContain('Invalid option');
   });
+
+  it('inicia la partida creando una solución y una tabla de razonamiento por equipo unido', async () => {
+    const seeded = await seedPlayableSession('START9', PLAYABLE_TEAM_COLORS);
+
+    const response = await request('/api/game/sessions/START9/start', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${signAdminToken({ role: 'admin', username: 'admin', sub: 'test-admin' })}`,
+      },
+    });
+
+    const body = (await response.json()) as SessionResponse;
+    const startedSession = await prisma.partida.findUnique({
+      where: { id: seeded.session.id },
+      include: {
+        solution: true,
+        teams: {
+          include: {
+            reasoningTables: {
+              include: {
+                cells: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(body.item.status).toBe(EstadoPartida.EN_CURSO);
+    expect(body.item.startedAt).toEqual(expect.any(String));
+    expect(startedSession?.status).toBe(EstadoPartida.EN_CURSO);
+    expect(startedSession?.startedAt).toEqual(expect.any(Date));
+    expect(startedSession?.solution).not.toBeNull();
+
+    const solution = startedSession?.solution;
+    const solutionIds = [solution?.subjectElementId, solution?.objectElementId, solution?.spaceElementId];
+
+    expect(solutionIds).not.toContain(undefined);
+    expect(solutionIds).not.toContain(null);
+    expect(seeded.subjectIds).toContain(solution?.subjectElementId ?? '');
+    expect(seeded.objectIds).toContain(solution?.objectElementId ?? '');
+    expect(seeded.spaceIds).toContain(solution?.spaceElementId ?? '');
+
+    const reasoningTables = startedSession?.teams.flatMap((team) => team.reasoningTables) ?? [];
+    const expectedCellCount = seeded.subjectIds.length + seeded.objectIds.length + seeded.spaceIds.length;
+
+    expect(reasoningTables).toHaveLength(PLAYABLE_TEAM_COLORS.length);
+    reasoningTables.forEach((table) => {
+      const elementIds = table.cells.map((cell) => cell.elementId).filter((elementId): elementId is string => Boolean(elementId));
+
+      expect(table.cells).toHaveLength(expectedCellCount);
+      expect(new Set(elementIds).size).toBe(expectedCellCount);
+    });
+  });
+
+  it('devuelve la mano repartida del equipo cuando la partida ya está iniciada', async () => {
+    const seeded = await seedPlayableSession('HAND01', PLAYABLE_TEAM_COLORS);
+
+    await request('/api/game/sessions/HAND01/start', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${signAdminToken({ role: 'admin', username: 'admin', sub: 'test-admin' })}`,
+      },
+    });
+
+    const response = await request(`/api/game/sessions/HAND01/teams/${seeded.teamIds[0]}/state`);
+    const body = (await response.json()) as TeamTerminalStateResponse;
+    const assignedCards = await prisma.cartaEquipo.findMany({
+      where: {
+        equipoId: seeded.teamIds[0],
+      },
+    });
+    const cardCounts = await Promise.all(
+      seeded.teamIds.map((teamId) =>
+        prisma.cartaEquipo.count({
+          where: {
+            equipoId: teamId,
+          },
+        })
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(body.item.session.status).toBe(EstadoPartida.EN_CURSO);
+    expect(body.item.team.id).toBe(seeded.teamIds[0]);
+    expect(body.item.hand).toHaveLength(assignedCards.length);
+    expect(new Set(body.item.hand.map((card) => card.id)).size).toBe(body.item.hand.length);
+    expect(cardCounts.reduce((sum, current) => sum + current, 0)).toBe(18);
+    expect(Math.max(...cardCounts) - Math.min(...cardCounts)).toBeLessThanOrEqual(1);
+  });
+
+  it('rechaza solicitar la mano de un equipo antes de que la partida haya comenzado', async () => {
+    const seeded = await seedPlayableSession('WAIT01', PLAYABLE_TEAM_COLORS);
+
+    const response = await request(`/api/game/sessions/WAIT01/teams/${seeded.teamIds[0]}/state`);
+    const body = (await response.json()) as ErrorResponse;
+
+    expect(response.status).toBe(409);
+    expect(body).toEqual({
+      error: 'La partida todavía no ha comenzado y no hay cartas repartidas.',
+      details: undefined,
+    });
+  });
+
+  it('devuelve 404 cuando el equipo solicitado no pertenece a la sesión', async () => {
+    await seedPlayableSession('MISS01', PLAYABLE_TEAM_COLORS);
+
+    await request('/api/game/sessions/MISS01/start', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${signAdminToken({ role: 'admin', username: 'admin', sub: 'test-admin' })}`,
+      },
+    });
+
+    const response = await request('/api/game/sessions/MISS01/teams/00000000-0000-4000-8000-000000000000/state');
+    const body = (await response.json()) as ErrorResponse;
+
+    expect(response.status).toBe(404);
+    expect(body).toEqual({
+      error: 'El equipo indicado no pertenece a la sesión seleccionada.',
+      details: undefined,
+    });
+  });
+
+  it('equilibra el reparto por colección cuando participan cuatro equipos', async () => {
+    const seeded = await seedPlayableSession('BAL404', PLAYABLE_TEAM_COLORS);
+
+    await request('/api/game/sessions/BAL404/start', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${signAdminToken({ role: 'admin', username: 'admin', sub: 'test-admin' })}`,
+      },
+    });
+
+    const distributions = await getTeamCardDistributions(seeded.teamIds);
+
+    expect(distributions).toHaveLength(PLAYABLE_TEAM_COLORS.length);
+    expect(distributions.every((distribution) => distribution.total >= 4 && distribution.total <= 5)).toBe(true);
+    expect(distributions.every((distribution) => distribution[TipoElemento.SUJETO] >= 1)).toBe(true);
+    expect(distributions.every((distribution) => distribution[TipoElemento.OBJETO] >= 1)).toBe(true);
+    expect(distributions.every((distribution) => distribution[TipoElemento.ESPACIO] === 2)).toBe(true);
+    expect(getDistributionSpread(distributions.map((distribution) => distribution.total))).toBeLessThanOrEqual(1);
+    expect(
+      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.SUJETO]))
+    ).toBeLessThanOrEqual(1);
+    expect(
+      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.OBJETO]))
+    ).toBeLessThanOrEqual(1);
+    expect(
+      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.ESPACIO]))
+    ).toBeLessThanOrEqual(1);
+  });
+
+  it('mantiene el reparto equilibrado cuando participan cinco equipos', async () => {
+    const seeded = await seedPlayableSession('BAL505', FIVE_TEAM_COLORS);
+
+    await request('/api/game/sessions/BAL505/start', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${signAdminToken({ role: 'admin', username: 'admin', sub: 'test-admin' })}`,
+      },
+    });
+
+    const distributions = await getTeamCardDistributions(seeded.teamIds);
+
+    expect(distributions).toHaveLength(FIVE_TEAM_COLORS.length);
+    expect(distributions.every((distribution) => distribution.total >= 3 && distribution.total <= 4)).toBe(true);
+    expect(distributions.every((distribution) => distribution[TipoElemento.SUJETO] === 1)).toBe(true);
+    expect(distributions.every((distribution) => distribution[TipoElemento.OBJETO] === 1)).toBe(true);
+    expect(distributions.every((distribution) => distribution[TipoElemento.ESPACIO] >= 1)).toBe(true);
+    expect(distributions.every((distribution) => distribution[TipoElemento.ESPACIO] <= 2)).toBe(true);
+    expect(getDistributionSpread(distributions.map((distribution) => distribution.total))).toBeLessThanOrEqual(1);
+    expect(
+      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.ESPACIO]))
+    ).toBeLessThanOrEqual(1);
+  });
+
+  it('mantiene tres cartas por equipo cuando se inicia una partida con seis equipos', async () => {
+    const seeded = await seedPlayableSession('BAL606', SIX_TEAM_COLORS);
+
+    await request('/api/game/sessions/BAL606/start', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${signAdminToken({ role: 'admin', username: 'admin', sub: 'test-admin' })}`,
+      },
+    });
+
+    const distributions = await getTeamCardDistributions(seeded.teamIds);
+
+    expect(distributions).toHaveLength(SIX_TEAM_COLORS.length);
+    expect(distributions.every((distribution) => distribution.total === 3)).toBe(true);
+    expect(
+      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.SUJETO]))
+    ).toBeLessThanOrEqual(1);
+    expect(
+      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.OBJETO]))
+    ).toBeLessThanOrEqual(1);
+    expect(
+      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.ESPACIO]))
+    ).toBeLessThanOrEqual(1);
+  });
 });
 
 async function seedSkinAndSession(
@@ -303,4 +539,134 @@ async function seedSkinAndSession(
   });
 
   return { skin, session };
+}
+
+async function seedPlayableSession(accessCode: string, teamColors: readonly ColorEquipo[]) {
+  const timestamp = Date.now();
+  const skin = await prisma.cluedoSkin.create({
+    data: {
+      name: `Skin ${accessCode}`,
+      objective: 'Validar inicio de partida y reparto inicial.',
+      imageUrl: '',
+      context: JSON.stringify({
+        version: 1,
+        gameTitle: 'Laboratorio de Inicio',
+        duration: '45',
+        cat1Name: 'Sujetos',
+        cat2Name: 'Objetos',
+        cat3Name: 'Espacios',
+        hasMotifs: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    },
+  });
+
+  const subjects = await createCollectionItems(skin.id, TipoElemento.SUJETO, 'Sujeto', 6);
+  const objects = await createCollectionItems(skin.id, TipoElemento.OBJETO, 'Objeto', 6);
+  const spaces = await createCollectionItems(skin.id, TipoElemento.ESPACIO, 'Espacio', 9);
+
+  const session = await prisma.partida.create({
+    data: {
+      accessCode,
+      status: EstadoPartida.LOBBY,
+      durationMinutes: 45,
+      skinId: skin.id,
+    },
+  });
+
+  for (const [index, color] of teamColors.entries()) {
+    await prisma.equipo.create({
+      data: {
+        partidaId: session.id,
+        color,
+        name: `Equipo ${index + 1}`,
+      },
+    });
+  }
+
+  return {
+    session,
+    teamIds: (
+      await prisma.equipo.findMany({
+        where: {
+          partidaId: session.id,
+        },
+        orderBy: {
+          color: 'asc',
+        },
+        select: {
+          id: true,
+        },
+      })
+    ).map((team) => team.id),
+    subjectIds: subjects.map((subject) => subject.id),
+    objectIds: objects.map((object) => object.id),
+    spaceIds: spaces.map((space) => space.id),
+  };
+}
+
+async function createCollectionItems(skinId: string, kind: TipoElemento, prefix: string, count: number) {
+  const createdElements: Array<{ id: string }> = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const element = await prisma.elemento.create({
+      data: {
+        name: `${prefix} ${index + 1}`,
+        kind,
+        imageUrl: '',
+      },
+    });
+
+    await prisma.descripcionElemento.create({
+      data: {
+        skinId,
+        elementId: element.id,
+        description: `Descripción de ${prefix} ${index + 1}`,
+        motif: kind === TipoElemento.ESPACIO ? `Motivo ${index + 1}` : null,
+      },
+    });
+
+    createdElements.push({ id: element.id });
+  }
+
+  return createdElements;
+}
+
+async function getTeamCardDistributions(teamIds: string[]) {
+  return Promise.all(
+    teamIds.map(async (teamId) => {
+      const cards = await prisma.cartaEquipo.findMany({
+        where: {
+          equipoId: teamId,
+        },
+        include: {
+          element: {
+            select: {
+              kind: true,
+            },
+          },
+        },
+      });
+
+      const distribution = {
+        teamId,
+        total: 0,
+        [TipoElemento.SUJETO]: 0,
+        [TipoElemento.OBJETO]: 0,
+        [TipoElemento.ESPACIO]: 0,
+      } satisfies TeamCardDistribution;
+
+      cards.forEach((card) => {
+        distribution.total += 1;
+        distribution[card.element.kind] += 1;
+      });
+
+      return distribution;
+    })
+  );
+}
+
+function getDistributionSpread(values: number[]) {
+  return Math.max(...values) - Math.min(...values);
 }

@@ -109,6 +109,17 @@ npm run test:docker-backend-postgres
 
 La prueba levanta un PostgreSQL efímero y un backend en Docker, sincroniza el esquema Prisma sobre esa base vacía, hace login por HTTP, crea una CluedoSkin, reinicia el contenedor del backend y vuelve a leer la skin para verificar conectividad y persistencia reales.
 
+## Demo automatizada de reparto
+
+Para generar una sesión demo ya iniciada y ver cómo queda el reparto entre equipos:
+
+```bash
+cd backend
+npm run demo:deal -- --teams=6
+```
+
+El script crea una skin de prueba con 6 sujetos, 6 objetos y 9 espacios, crea la sesión, registra los equipos indicados y devuelve por JSON el código de acceso, el id de sesión y la mano privada de cada equipo. Puedes usar `--teams=4` o cualquier valor entre `2` y `6`.
+
 ## Docker de despliegue
 
 Construye y levanta el frontend compilado con nginx y el backend en modo productivo:

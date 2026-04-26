@@ -225,41 +225,49 @@ export function LobbyView() {
     {
       label: "Unidos",
       value: joinedCount,
-      detail: joinedCount === 1 ? "1 equipo listo" : `${joinedCount} equipos listos`,
+      Icon: Users,
+      labelClass: "text-slate-100",
       valueClass: "text-white",
-      borderClass: "border-slate-700/80",
-      badgeClass: "border-slate-600/80 bg-slate-900/80 text-slate-200",
-      dotClass: "bg-slate-200",
+      borderClass: "border-slate-600/90",
+      iconShellClass: "border-slate-500/40 bg-slate-900/95",
+      iconClass: "text-slate-100",
+      surfaceClass: "from-slate-200/8 via-slate-900/20 to-transparent",
       glowClass: "from-slate-100/30 via-slate-100/10 to-transparent",
     },
     {
       label: "Conectados",
       value: connectedCount,
-      detail: connectedCount === 1 ? "1 equipo en linea" : `${connectedCount} equipos en linea`,
+      Icon: RadioTower,
+      labelClass: "text-cyan-100",
       valueClass: "text-cyan-300",
-      borderClass: "border-cyan-900/60",
-      badgeClass: "border-cyan-800/60 bg-cyan-950/40 text-cyan-100",
-      dotClass: "bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.8)]",
+      borderClass: "border-cyan-700/80",
+      iconShellClass: "border-cyan-500/25 bg-cyan-950/60",
+      iconClass: "text-cyan-300",
+      surfaceClass: "from-cyan-300/12 via-cyan-950/22 to-transparent",
       glowClass: "from-cyan-400/35 via-cyan-400/10 to-transparent",
     },
     {
       label: "Inactivos",
       value: inactiveCount,
-      detail: inactiveCount === 1 ? "1 equipo sin pulso reciente" : `${inactiveCount} equipos sin pulso reciente`,
+      Icon: Activity,
+      labelClass: "text-amber-100",
       valueClass: "text-amber-300",
-      borderClass: "border-amber-900/60",
-      badgeClass: "border-amber-800/60 bg-amber-950/40 text-amber-100",
-      dotClass: "bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,0.75)]",
+      borderClass: "border-amber-700/80",
+      iconShellClass: "border-amber-500/25 bg-amber-950/50",
+      iconClass: "text-amber-300",
+      surfaceClass: "from-amber-300/12 via-amber-950/22 to-transparent",
       glowClass: "from-amber-300/35 via-amber-300/10 to-transparent",
     },
     {
       label: "Libres",
       value: availableCount,
-      detail: availableCount === 1 ? "1 color disponible" : `${availableCount} colores disponibles`,
+      Icon: KeyRound,
+      labelClass: "text-emerald-100",
       valueClass: "text-emerald-300",
-      borderClass: "border-emerald-900/60",
-      badgeClass: "border-emerald-800/60 bg-emerald-950/40 text-emerald-100",
-      dotClass: "bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]",
+      borderClass: "border-emerald-700/80",
+      iconShellClass: "border-emerald-500/25 bg-emerald-950/50",
+      iconClass: "text-emerald-300",
+      surfaceClass: "from-emerald-300/12 via-emerald-950/22 to-transparent",
       glowClass: "from-emerald-300/35 via-emerald-300/10 to-transparent",
     },
   ];
@@ -404,20 +412,22 @@ export function LobbyView() {
                   {lobbySummaryCards.map((card) => (
                     <div
                       key={card.label}
-                      className={`relative overflow-hidden rounded-3xl border bg-slate-900/78 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_30px_-22px_rgba(15,23,42,0.95)] backdrop-blur-sm ${card.borderClass}`}
+                      className={`relative overflow-hidden rounded-[28px] border bg-slate-950/82 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_18px_30px_-22px_rgba(15,23,42,0.95)] backdrop-blur-sm ${card.borderClass}`}
                     >
+                      <div className={`absolute inset-0 bg-gradient-to-br ${card.surfaceClass}`}></div>
                       <div className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r ${card.glowClass}`}></div>
-                      <div className="relative flex h-full flex-col justify-between gap-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] ${card.badgeClass}`}>
-                            <span className={`h-2.5 w-2.5 rounded-full ${card.dotClass}`}></span>
+                      <div className="relative flex h-full min-h-[118px] flex-col justify-between gap-6">
+                        <div className="flex items-center gap-4">
+                          <div className={`rounded-2xl border p-3.5 shadow-[0_12px_24px_-18px_rgba(15,23,42,0.95)] ${card.iconShellClass}`}>
+                            <card.Icon className={`h-7 w-7 ${card.iconClass}`} />
+                          </div>
+                          <span className={`text-sm font-black uppercase tracking-[0.24em] sm:text-base ${card.labelClass}`}>
                             {card.label}
                           </span>
-                          <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Lobby</span>
                         </div>
-                        <div className="space-y-2">
-                          <p className={`text-4xl font-black leading-none ${card.valueClass}`}>{card.value}</p>
-                          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{card.detail}</p>
+                        <div className="flex items-end justify-between gap-4">
+                          <div className={`h-1.5 w-14 rounded-full bg-current opacity-80 ${card.valueClass}`}></div>
+                          <p className={`text-5xl font-black leading-none tabular-nums sm:text-6xl ${card.valueClass}`}>{card.value}</p>
                         </div>
                       </div>
                     </div>

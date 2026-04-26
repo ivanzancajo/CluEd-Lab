@@ -241,6 +241,14 @@ function respondUnexpectedError(res: Response, error: unknown) {
       res.status(404).json({ error: 'La sesión solicitada no existe.' });
       return;
     }
+
+    if (error.code === 'P2021') {
+      res.status(503).json({
+        error:
+          'La base de datos no tiene desplegado el esquema completo de partida. Sincroniza Prisma sobre un esquema válido antes de iniciar la sesión.',
+      });
+      return;
+    }
   }
 
   res.status(500).json({ error: 'Se ha producido un error interno al gestionar la sesión.' });

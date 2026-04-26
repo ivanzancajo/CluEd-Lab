@@ -4,33 +4,115 @@ import { motion } from "motion/react";
 import { ArrowLeft, MonitorPlay, Zap, FileText } from "lucide-react";
 import { clearAdminSession } from "../../src/lib/auth";
 import { storeHostLobbySession } from "../../src/lib/lobbyStorage";
-import { type GameConfig, validateSkinComposition } from "../../src/lib/skinApi";
+import {
+  getSkinConfig,
+  getSkinErrorMessage,
+  listSkinSummaries,
+  type GameConfig,
+  type SkinSummary,
+  validateSkinComposition,
+} from "../../src/lib/skinApi";
 import { createGameSession, getSessionErrorMessage } from "../../src/lib/sessionApi";
 
 export function SessionCreateView() {
   const navigate = useNavigate();
-  const [configs, setConfigs] = useState<GameConfig[]>([]);
+  const [configs, setConfigs] = useState<SkinSummary[]>([]);
   const [selectedConfigId, setSelectedConfigId] = useState<string>("");
+  const [selectedConfig, setSelectedConfig] = useState<GameConfig | null>(null);
+  const [isLoadingConfigs, setIsLoadingConfigs] = useState(false);
+  const [isLoadingSelectedConfig, setIsLoadingSelectedConfig] = useState(false);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.removeItem("sessionCode");
-    const savedConfigs = localStorage.getItem("gameConfigs");
-    if (savedConfigs) {
-      const parsed: GameConfig[] = JSON.parse(savedConfigs);
-      setConfigs(parsed);
-      if (parsed.length > 0) {
-        setSelectedConfigId(parsed[0].id);
+
+    let isCancelled = false;
+
+    const loadConfigs = async () => {
+      try {
+        setIsLoadingConfigs(true);
+        setSessionError(null);
+
+        const summaries = await listSkinSummaries();
+
+        if (isCancelled) {
+          return;
+        }
+
+        setConfigs(summaries);
+        setSelectedConfigId((currentSelectedConfigId) => {
+          if (currentSelectedConfigId && summaries.some((summary) => summary.id === currentSelectedConfigId)) {
+            return currentSelectedConfigId;
+          }
+
+          return summaries[0]?.id ?? "";
+        });
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+
+        setConfigs([]);
+        setSelectedConfigId("");
+        setSelectedConfig(null);
+        setSessionError(getSkinErrorMessage(error, "No se pudieron cargar las configuraciones disponibles."));
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingConfigs(false);
+        }
       }
-    }
+    };
+
+    void loadConfigs();
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    setSessionError(null);
+    if (!selectedConfigId) {
+      setSelectedConfig(null);
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadSelectedConfig = async () => {
+      try {
+        setIsLoadingSelectedConfig(true);
+        setSessionError(null);
+        setSelectedConfig(null);
+
+        const config = await getSkinConfig(selectedConfigId);
+
+        if (isCancelled) {
+          return;
+        }
+
+        setSelectedConfig(config);
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+
+        setSelectedConfig(null);
+        setSessionError(getSkinErrorMessage(error, "No se pudo cargar la configuración seleccionada."));
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingSelectedConfig(false);
+        }
+      }
+    };
+
+    void loadSelectedConfig();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [selectedConfigId]);
 
-  const selectedConfig = configs.find((config) => config.id === selectedConfigId) ?? null;
   const selectedConfigValidation = validateSkinComposition({
     hasMotifs: selectedConfig?.hasMotifs,
     subjects: selectedConfig?.subjects,
@@ -109,7 +191,11 @@ export function SessionCreateView() {
                 <FileText className="h-4 w-4" /> Seleccionar CluedoSkin para la partida
               </label>
 
-              {configs.length > 0 ? (
+              {isLoadingConfigs ? (
+                <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 text-sm text-slate-400">
+                  Cargando configuraciones disponibles...
+                </div>
+              ) : configs.length > 0 ? (
                 <select
                   value={selectedConfigId}
                   onChange={(event) => setSelectedConfigId(event.target.value)}
@@ -146,6 +232,10 @@ export function SessionCreateView() {
                   <p className="mt-2 font-semibold text-slate-100">{selectedConfig.duration} min</p>
                 </div>
               </div>
+            ) : isLoadingSelectedConfig ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 text-sm text-slate-400">
+                Cargando los detalles de la CluedoSkin seleccionada...
+              </div>
             ) : null}
 
             <div className="rounded-2xl border border-emerald-900/40 bg-emerald-950/20 px-4 py-4 text-sm leading-6 text-emerald-100">
@@ -166,7 +256,13 @@ export function SessionCreateView() {
 
             <button
               onClick={handleEnableGame}
-              disabled={!selectedConfig || !selectedConfigValidation.isValid || isCreatingSession}
+              disabled={
+                !selectedConfig ||
+                !selectedConfigValidation.isValid ||
+                isCreatingSession ||
+                isLoadingConfigs ||
+                isLoadingSelectedConfig
+              }
               className="w-full rounded-xl bg-emerald-600 py-5 text-lg font-black uppercase tracking-widest text-slate-950 shadow-[0_0_30px_rgba(16,185,129,0.3)] transition-all active:scale-95 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-emerald-800/60 disabled:text-slate-300"
             >
               <span className="flex items-center justify-center gap-3">

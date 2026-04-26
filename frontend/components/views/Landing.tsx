@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { isAxiosError } from "axios";
 import { Link, useNavigate } from "react-router";
 import { Monitor, Terminal as TerminalIcon, Cpu, Fingerprint, Settings, Zap, Lock, X } from "lucide-react";
@@ -7,10 +7,9 @@ import api from "../../src/lib/api";// Importamos nuestra instancia de Axios con
 import { hasStoredAdminSession, storeAdminToken } from "../../src/lib/auth";
 
 const DEFAULT_GAME_TITLE = "ClueLab Creator";
-const LEGACY_GAME_TITLE = "Cluedo Online";
 
 export function Landing() {
-  const [gameTitle, setGameTitle] = useState(DEFAULT_GAME_TITLE);
+  const gameTitle = DEFAULT_GAME_TITLE;
   const [pendingAdminPath, setPendingAdminPath] = useState("/host");
   
   // Estados para el Login (CU00)
@@ -21,21 +20,6 @@ export function Landing() {
   const [isLoading, setIsLoading] = useState(false);
   
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const savedTitle = localStorage.getItem("gameTitle");
-
-    if (savedTitle && savedTitle !== LEGACY_GAME_TITLE) {
-      setGameTitle(savedTitle);
-      return;
-    }
-
-    if (savedTitle === LEGACY_GAME_TITLE) {
-      localStorage.setItem("gameTitle", DEFAULT_GAME_TITLE);
-    }
-
-    setGameTitle(DEFAULT_GAME_TITLE);
-  }, []);
 
   // Función de Autenticación
   const handleLogin = async (e: React.FormEvent) => {

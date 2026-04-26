@@ -225,48 +225,44 @@ export function LobbyView() {
     {
       label: "Unidos",
       value: joinedCount,
-      Icon: Users,
       labelClass: "text-slate-100",
+      detail: joinedCount === 1 ? "equipo listo" : "equipos listos",
+      detailClass: "text-slate-300/90",
       valueClass: "text-white",
       borderClass: "border-slate-600/90",
-      iconShellClass: "border-slate-500/40 bg-slate-900/95",
-      iconClass: "text-slate-100",
       surfaceClass: "from-slate-200/8 via-slate-900/20 to-transparent",
       glowClass: "from-slate-100/30 via-slate-100/10 to-transparent",
     },
     {
       label: "Conectados",
       value: connectedCount,
-      Icon: RadioTower,
       labelClass: "text-cyan-100",
+      detail: connectedCount === 1 ? "equipo activo" : "equipos activos",
+      detailClass: "text-cyan-100/90",
       valueClass: "text-cyan-300",
       borderClass: "border-cyan-700/80",
-      iconShellClass: "border-cyan-500/25 bg-cyan-950/60",
-      iconClass: "text-cyan-300",
       surfaceClass: "from-cyan-300/12 via-cyan-950/22 to-transparent",
       glowClass: "from-cyan-400/35 via-cyan-400/10 to-transparent",
     },
     {
       label: "Inactivos",
       value: inactiveCount,
-      Icon: Activity,
       labelClass: "text-amber-100",
+      detail: inactiveCount === 1 ? "equipo en espera" : "equipos en espera",
+      detailClass: "text-amber-100/90",
       valueClass: "text-amber-300",
       borderClass: "border-amber-700/80",
-      iconShellClass: "border-amber-500/25 bg-amber-950/50",
-      iconClass: "text-amber-300",
       surfaceClass: "from-amber-300/12 via-amber-950/22 to-transparent",
       glowClass: "from-amber-300/35 via-amber-300/10 to-transparent",
     },
     {
       label: "Libres",
       value: availableCount,
-      Icon: KeyRound,
       labelClass: "text-emerald-100",
+      detail: availableCount === 1 ? "color disponible" : "colores disponibles",
+      detailClass: "text-emerald-100/90",
       valueClass: "text-emerald-300",
       borderClass: "border-emerald-700/80",
-      iconShellClass: "border-emerald-500/25 bg-emerald-950/50",
-      iconClass: "text-emerald-300",
       surfaceClass: "from-emerald-300/12 via-emerald-950/22 to-transparent",
       glowClass: "from-emerald-300/35 via-emerald-300/10 to-transparent",
     },
@@ -416,17 +412,17 @@ export function LobbyView() {
                     >
                       <div className={`absolute inset-0 bg-gradient-to-br ${card.surfaceClass}`}></div>
                       <div className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r ${card.glowClass}`}></div>
-                      <div className="relative flex h-full min-h-[118px] flex-col justify-between gap-6">
-                        <div className="flex items-center gap-4">
-                          <div className={`rounded-2xl border p-3.5 shadow-[0_12px_24px_-18px_rgba(15,23,42,0.95)] ${card.iconShellClass}`}>
-                            <card.Icon className={`h-7 w-7 ${card.iconClass}`} />
-                          </div>
-                          <span className={`text-sm font-black uppercase tracking-[0.24em] sm:text-base ${card.labelClass}`}>
+                      <div className="relative flex h-full min-h-[132px] flex-col justify-between gap-5">
+                        <div className="space-y-2">
+                          <p className={`text-lg font-black uppercase tracking-[0.18em] sm:text-xl ${card.labelClass}`}>
                             {card.label}
-                          </span>
+                          </p>
+                          <p className={`text-sm font-semibold uppercase tracking-[0.14em] ${card.detailClass}`}>
+                            {card.detail}
+                          </p>
                         </div>
-                        <div className="flex items-end justify-between gap-4">
-                          <div className={`h-1.5 w-14 rounded-full bg-current opacity-80 ${card.valueClass}`}></div>
+                        <div className="space-y-3">
+                          <div className={`h-1.5 w-16 rounded-full bg-current opacity-90 ${card.valueClass}`}></div>
                           <p className={`text-5xl font-black leading-none tabular-nums sm:text-6xl ${card.valueClass}`}>{card.value}</p>
                         </div>
                       </div>

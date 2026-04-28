@@ -128,7 +128,14 @@ Construye y levanta el frontend compilado con nginx y el backend en modo product
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-En despliegue, la `DATABASE_URL` del backend debe apuntar a PostgreSQL usando el host adecuado para el entorno. Si la base corre en la MV anfitriona fuera de Docker, usa `host.docker.internal` en lugar de `localhost`.
+Consulta [docs/despliegue-mv-pruebas.md](docs/despliegue-mv-pruebas.md) para el procedimiento completo en una MV Linux con PostgreSQL en el host.
+
+Puntos criticos del despliegue actual:
+
+- La URL publica de entrada debe ser la del frontend en `:8080`; nginx sirve la SPA y proxyea `/api` y `/socket.io` para mantener same-origin.
+- PostgreSQL queda fuera de `docker-compose.prod.yml`; si corre en la MV anfitriona, la `DATABASE_URL` del backend debe usar `host.docker.internal`.
+- `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` deben apuntar a la IP o DNS publico real de la MV, no a `localhost`.
+- Antes del primer arranque sobre una base ya existente, alinea Prisma manualmente; el backend productivo no aplica migraciones al iniciar.
 
 Servicios publicados:
 

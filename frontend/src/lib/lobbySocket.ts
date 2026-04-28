@@ -114,7 +114,7 @@ function resolveSocketConfig() {
   const raw = (
     import.meta.env.VITE_SOCKET_URL ||
     import.meta.env.VITE_API_URL ||
-    'http://localhost:4000/api'
+    '/api'
   ).trim();
 
   if (!raw || raw === '/api' || raw === '/api/') {

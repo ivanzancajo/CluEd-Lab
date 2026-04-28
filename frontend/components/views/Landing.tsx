@@ -39,7 +39,7 @@ export function Landing() {
         if (error.response?.status === 401) {
           setError(error.response.data?.error || "Credenciales inválidas. Acceso denegado.");
         } else if (!error.response) {
-          setError("No se puede contactar con el backend. Verifica que el servidor esté levantado en localhost:4000.");
+          setError("No se puede contactar con el backend. Verifica que el despliegue siga accesible desde esta misma URL.");
         } else {
           setError(error.response.data?.error || "No se pudo completar el inicio de sesión.");
         }

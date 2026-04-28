@@ -3,7 +3,7 @@ import { clearAdminSession, getStoredAdminToken } from './auth';
 
 // Creamos una instancia base para no tener que repetir la URL en cada petición
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
 });
 
 // Interceptor: Antes de que salga cualquier petición, comprobamos si hay un token

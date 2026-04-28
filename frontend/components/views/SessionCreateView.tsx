@@ -14,6 +14,99 @@ import {
 } from "../../src/lib/skinApi";
 import { createGameSession, getSessionErrorMessage } from "../../src/lib/sessionApi";
 
+const GAME_CONFIGS_KEY = "gameConfigs";
+const ACTIVE_CONFIG_KEY = "activeConfig";
+const DURATION_KEY = "duration";
+const GAME_TITLE_KEY = "gameTitle";
+const CENTER_IMAGE_KEY = "centerImage";
+
+function readStoredConfigs() {
+  if (typeof window === "undefined") {
+    return [] as GameConfig[];
+  }
+
+  const stored = localStorage.getItem(GAME_CONFIGS_KEY);
+  if (!stored) {
+    return [] as GameConfig[];
+  }
+
+  try {
+    const parsed = JSON.parse(stored) as unknown;
+    return Array.isArray(parsed) ? (parsed as GameConfig[]) : ([] as GameConfig[]);
+  } catch {
+    return [] as GameConfig[];
+  }
+}
+
+function readStoredActiveConfig() {
+  if (typeof window === "undefined") {
+    return null as GameConfig | null;
+  }
+
+  const stored = localStorage.getItem(ACTIVE_CONFIG_KEY);
+  if (!stored) {
+    return null as GameConfig | null;
+  }
+
+  try {
+    return JSON.parse(stored) as GameConfig;
+  } catch {
+    return null as GameConfig | null;
+  }
+}
+
+function storeConfigList(configs: GameConfig[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  localStorage.setItem(GAME_CONFIGS_KEY, JSON.stringify(configs));
+}
+
+function upsertStoredConfig(config: GameConfig) {
+  const storedConfigs = readStoredConfigs();
+  const configIndex = storedConfigs.findIndex((candidate) => candidate.id === config.id);
+
+  if (configIndex === -1) {
+    storeConfigList([...storedConfigs, config]);
+    return;
+  }
+
+  const nextConfigs = [...storedConfigs];
+  nextConfigs[configIndex] = config;
+  storeConfigList(nextConfigs);
+}
+
+function syncStoredActiveConfig(config: GameConfig) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  localStorage.setItem(ACTIVE_CONFIG_KEY, JSON.stringify(config));
+  localStorage.setItem(DURATION_KEY, config.duration);
+  localStorage.setItem(GAME_TITLE_KEY, config.gameTitle);
+  localStorage.setItem(CENTER_IMAGE_KEY, config.centerImage);
+}
+
+function toStoredSummary(config: GameConfig): SkinSummary {
+  return {
+    id: config.id,
+    name: config.name,
+    gameTitle: config.gameTitle,
+    duration: config.duration,
+    centerImage: config.centerImage,
+    cat1Name: config.cat1Name,
+    cat2Name: config.cat2Name,
+    cat3Name: config.cat3Name,
+    hasMotifs: config.hasMotifs,
+    createdAt: config.createdAt,
+    updatedAt: config.updatedAt,
+    subjectCount: config.subjects.length,
+    objectCount: config.objects.length,
+    spaceCount: config.spaces.length,
+  };
+}
+
 export function SessionCreateView() {
   const navigate = useNavigate();
   const [configs, setConfigs] = useState<SkinSummary[]>([]);
@@ -26,6 +119,20 @@ export function SessionCreateView() {
 
   useEffect(() => {
     localStorage.removeItem("sessionCode");
+
+    const storedConfigs = readStoredConfigs();
+    const storedActiveConfig = readStoredActiveConfig();
+    const fallbackConfig = storedActiveConfig ?? storedConfigs[0] ?? null;
+
+    if (storedConfigs.length > 0) {
+      setConfigs(storedConfigs.map(toStoredSummary));
+    }
+
+    if (fallbackConfig) {
+      setSelectedConfig(fallbackConfig);
+      setSelectedConfigId(fallbackConfig.id);
+      syncStoredActiveConfig(fallbackConfig);
+    }
 
     let isCancelled = false;
 
@@ -46,6 +153,10 @@ export function SessionCreateView() {
             return currentSelectedConfigId;
           }
 
+          if (storedActiveConfig && summaries.some((summary) => summary.id === storedActiveConfig.id)) {
+            return storedActiveConfig.id;
+          }
+
           return summaries[0]?.id ?? "";
         });
       } catch (error) {
@@ -53,10 +164,24 @@ export function SessionCreateView() {
           return;
         }
 
-        setConfigs([]);
-        setSelectedConfigId("");
-        setSelectedConfig(null);
-        setSessionError(getSkinErrorMessage(error, "No se pudieron cargar las configuraciones disponibles."));
+        const storedSummaries = storedConfigs.map(toStoredSummary);
+
+        setConfigs(storedSummaries);
+        setSelectedConfigId(fallbackConfig?.id ?? "");
+        setSelectedConfig(fallbackConfig);
+
+        if (fallbackConfig) {
+          syncStoredActiveConfig(fallbackConfig);
+        }
+
+        setSessionError(
+          getSkinErrorMessage(
+            error,
+            storedSummaries.length > 0
+              ? "No se pudieron refrescar las configuraciones remotas. Mostrando las guardadas en este navegador."
+              : "No se pudieron cargar las configuraciones disponibles."
+          )
+        );
       } finally {
         if (!isCancelled) {
           setIsLoadingConfigs(false);
@@ -77,13 +202,26 @@ export function SessionCreateView() {
       return;
     }
 
+    const storedActiveConfig = readStoredActiveConfig();
+    const cachedConfig =
+      readStoredConfigs().find((config) => config.id === selectedConfigId) ??
+      (storedActiveConfig?.id === selectedConfigId ? storedActiveConfig : null);
+
+    if (cachedConfig) {
+      setSelectedConfig(cachedConfig);
+      syncStoredActiveConfig(cachedConfig);
+    }
+
     let isCancelled = false;
 
     const loadSelectedConfig = async () => {
       try {
         setIsLoadingSelectedConfig(true);
         setSessionError(null);
-        setSelectedConfig(null);
+
+        if (!cachedConfig) {
+          setSelectedConfig(null);
+        }
 
         const config = await getSkinConfig(selectedConfigId);
 
@@ -92,13 +230,17 @@ export function SessionCreateView() {
         }
 
         setSelectedConfig(config);
+        upsertStoredConfig(config);
+        syncStoredActiveConfig(config);
       } catch (error) {
         if (isCancelled) {
           return;
         }
 
-        setSelectedConfig(null);
-        setSessionError(getSkinErrorMessage(error, "No se pudo cargar la configuración seleccionada."));
+        if (!cachedConfig) {
+          setSelectedConfig(null);
+          setSessionError(getSkinErrorMessage(error, "No se pudo cargar la configuración seleccionada."));
+        }
       } finally {
         if (!isCancelled) {
           setIsLoadingSelectedConfig(false);

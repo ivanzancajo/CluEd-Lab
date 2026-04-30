@@ -29,22 +29,25 @@ describe('skinConfigs con datos heredados', () => {
               elementId: 'elem-1',
               description: 'Sujeto valido',
               motif: null,
-              element: {
-                id: 'elem-1',
-                name: 'Ada',
-                kind: TipoElemento.SUJETO,
-                imageUrl: null,
-              },
             },
             {
               skinId: 'skin-1',
               elementId: 'elem-huerfano',
               description: 'Registro roto',
               motif: null,
-              element: null,
             },
           ],
         }),
+      },
+      elemento: {
+        findMany: async () => [
+          {
+            id: 'elem-1',
+            name: 'Ada',
+            kind: TipoElemento.SUJETO,
+            imageUrl: null,
+          },
+        ],
       },
     };
 

@@ -2,10 +2,9 @@ import { TipoElemento, type DescripcionElemento, type Elemento } from '@prisma/c
 import { HttpError } from './http.js';
 import { prisma } from './prisma.js';
 
-type PrismaSkinReader = Pick<typeof prisma, 'cluedoSkin'>;
+type PrismaSkinReader = Pick<typeof prisma, 'cluedoSkin'> & Partial<Pick<typeof prisma, 'elemento'>>;
 type SkinDescriptionRecord = DescripcionElemento & {
-  motif?: string | null;
-  element: Elemento | null;
+  element?: Elemento | null;
 };
 type SkinWithDescriptions = {
   id: string;
@@ -13,7 +12,7 @@ type SkinWithDescriptions = {
   objective: string | null;
   context: string | null;
   imageUrl: string | null;
-  elementDescriptions: SkinDescriptionRecord[];
+  elementDescriptions: DescripcionElemento[];
 };
 
 export type SkinContextMetadata = {
@@ -139,11 +138,7 @@ export async function loadSkinConfiguration(client: PrismaSkinReader, skinId: st
   const skin = (await client.cluedoSkin.findUnique({
     where: { id: skinId },
     include: {
-      elementDescriptions: {
-        include: {
-          element: true,
-        },
-      },
+      elementDescriptions: true,
     },
   })) as SkinWithDescriptions | null;
 
@@ -152,6 +147,7 @@ export async function loadSkinConfiguration(client: PrismaSkinReader, skinId: st
   }
 
   const metadata = parseSkinContext(skin.context, skin.name);
+  const descriptions = await attachElementsToDescriptions(client, skin.elementDescriptions);
 
   return {
     id: skin.id,
@@ -164,12 +160,36 @@ export async function loadSkinConfiguration(client: PrismaSkinReader, skinId: st
     cat2Name: metadata.cat2Name,
     cat3Name: metadata.cat3Name,
     hasMotifs: metadata.hasMotifs,
-    subjects: buildConfigItems(skin.elementDescriptions, TipoElemento.SUJETO),
-    objects: buildConfigItems(skin.elementDescriptions, TipoElemento.OBJETO),
-    spaces: buildConfigItems(skin.elementDescriptions, TipoElemento.ESPACIO),
+    subjects: buildConfigItems(descriptions, TipoElemento.SUJETO),
+    objects: buildConfigItems(descriptions, TipoElemento.OBJETO),
+    spaces: buildConfigItems(descriptions, TipoElemento.ESPACIO),
     createdAt: metadata.createdAt,
     updatedAt: metadata.updatedAt,
   };
+}
+
+async function attachElementsToDescriptions(client: PrismaSkinReader, descriptions: DescripcionElemento[]) {
+  const elementReader = client.elemento ?? prisma.elemento;
+  const elementIds = [...new Set(descriptions.map((description) => description.elementId))];
+
+  if (elementIds.length === 0) {
+    return descriptions.map((description) => ({ ...description, element: null }));
+  }
+
+  const elements = await elementReader.findMany({
+    where: {
+      id: {
+        in: elementIds,
+      },
+    },
+  });
+
+  const elementsById = new Map(elements.map((element) => [element.id, element]));
+
+  return descriptions.map((description) => ({
+    ...description,
+    element: elementsById.get(description.elementId) ?? null,
+  }));
 }
 
 function createFallbackMetadata(fallbackName: string): SkinContextMetadata {

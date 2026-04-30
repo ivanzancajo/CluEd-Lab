@@ -136,6 +136,7 @@ Puntos criticos del despliegue actual:
 - PostgreSQL queda fuera de `docker-compose.prod.yml`; si corre en la MV anfitriona, la `DATABASE_URL` del backend debe usar `host.docker.internal`.
 - `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` deben apuntar a la IP o DNS publico real de la MV, no a `localhost`.
 - Antes del primer arranque sobre una base ya existente, alinea Prisma manualmente; el backend productivo no aplica migraciones al iniciar.
+- Si la red de la MV no es alcanzable desde el cliente, usa la alternativa temporal documentada en [docs/despliegue-mv-pruebas.md](docs/despliegue-mv-pruebas.md) para exponer la app con un tunel HTTPS saliente.
 
 Servicios publicados:
 

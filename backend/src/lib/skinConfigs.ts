@@ -5,7 +5,7 @@ import { prisma } from './prisma.js';
 type PrismaSkinReader = Pick<typeof prisma, 'cluedoSkin'>;
 type SkinDescriptionRecord = DescripcionElemento & {
   motif?: string | null;
-  element: Elemento;
+  element: Elemento | null;
 };
 type SkinWithDescriptions = {
   id: string;
@@ -112,18 +112,20 @@ export function parseSkinContext(rawContext: string | null, fallbackName: string
   return fallback;
 }
 
-export function countCollectionsByKind(descriptions: Array<{ element: { kind: TipoElemento } }>) {
+export function countCollectionsByKind(
+  descriptions: Array<{ element?: { kind?: TipoElemento | null } | null }>
+) {
   return descriptions.reduce(
     (accumulator, description) => {
-      if (description.element.kind === TipoElemento.SUJETO) {
+      if (description.element?.kind === TipoElemento.SUJETO) {
         accumulator.subjects += 1;
       }
 
-      if (description.element.kind === TipoElemento.OBJETO) {
+      if (description.element?.kind === TipoElemento.OBJETO) {
         accumulator.objects += 1;
       }
 
-      if (description.element.kind === TipoElemento.ESPACIO) {
+      if (description.element?.kind === TipoElemento.ESPACIO) {
         accumulator.spaces += 1;
       }
 
@@ -210,7 +212,10 @@ function getTimestampValue(value: unknown, fallback = 0) {
 
 function buildConfigItems(descriptions: SkinDescriptionRecord[], kind: TipoElemento) {
   return descriptions
-    .filter((description) => description.element.kind === kind)
+    .filter(
+      (description): description is SkinDescriptionRecord & { element: Elemento } =>
+        description.element?.kind === kind
+    )
     .sort((left, right) => left.element.name.localeCompare(right.element.name, 'es'))
     .map((description) => ({
       id: description.elementId,

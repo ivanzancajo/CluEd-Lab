@@ -53,21 +53,37 @@ router.get('/skins', async (_req, res) => {
     const skins = await prisma.cluedoSkin.findMany({
       include: {
         elementDescriptions: {
-          include: {
-            element: {
-              select: {
-                kind: true,
-              },
-            },
+          select: {
+            elementId: true,
           },
         },
       },
     });
 
+    const elementIds = [...new Set(skins.flatMap((skin) => skin.elementDescriptions.map((description) => description.elementId)))];
+    const elements = elementIds.length > 0
+      ? await prisma.elemento.findMany({
+          where: {
+            id: {
+              in: elementIds,
+            },
+          },
+          select: {
+            id: true,
+            kind: true,
+          },
+        })
+      : [];
+    const elementsById = new Map(elements.map((element) => [element.id, element]));
+
     const items = skins
       .map((skin) => {
         const metadata = parseSkinContext(skin.context, skin.name);
-        const counts = countCollectionsByKind(skin.elementDescriptions);
+        const counts = countCollectionsByKind(
+          skin.elementDescriptions.map((description) => ({
+            element: elementsById.get(description.elementId) ?? null,
+          }))
+        );
 
         return {
           id: skin.id,

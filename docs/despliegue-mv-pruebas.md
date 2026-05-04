@@ -86,16 +86,22 @@ listen_addresses = '*'
 port = 5432
 ```
 
-3. Averigua la subred que usa Docker en la MV:
+3. Averigua la subred real que usa el despliegue de Docker Compose en la MV. En este proyecto suele ser `tfg_default`:
 
 ```bash
-docker network inspect bridge --format '{{(index .IPAM.Config 0).Subnet}}'
+docker network inspect tfg_default --format '{{(index .IPAM.Config 0).Subnet}}'
 ```
 
-4. Permite esa subred en `pg_hba.conf`. Ejemplo para la red bridge por defecto:
+Si la red tiene otro nombre, lista primero las redes y luego inspecciona la correcta:
+
+```bash
+docker network ls
+```
+
+4. Permite esa subred en `pg_hba.conf`. Ejemplo para una red Compose real:
 
 ```conf
-host    cluedo_db    cluedo_admin    172.17.0.0/16    scram-sha-256
+host    cluedo_db    cluedo_admin    172.18.0.0/16    scram-sha-256
 ```
 
 5. Reinicia PostgreSQL y comprueba que escucha en `5432`:
@@ -110,6 +116,7 @@ Notas:
 - `host.docker.internal` solo resuelve dentro del contenedor porque [docker-compose.prod.yml](../docker-compose.prod.yml) anade `extra_hosts` con `host-gateway`.
 - Si tu host usa una subred distinta a `172.17.0.0/16`, reemplaza la regla de `pg_hba.conf` por la real.
 - Si `postgresql.conf` o `pg_hba.conf` estan en otra ruta segun la distro, aplica el mismo criterio en la ubicacion correcta.
+- Si `/health` y `/api/auth/login` responden pero `/api/config/skins` devuelve `500`, sospecha primero de `pg_hba.conf`: el backend puede arrancar sin tocar la base y fallar solo al primer acceso real a PostgreSQL.
 
 ## Ejemplo completo de backend/.env
 
@@ -263,6 +270,16 @@ curl -i "https://tu-subdominio.trycloudflare.com/socket.io/?EIO=4&transport=poll
 
 Mantén vivo el proceso o contenedor de `cloudflared`: cuando se detiene, la URL deja de ser valida.
 
+Si `cloudflared` falla al crear el quick tunnel o la MV no tiene escritorio grafico, usa un tunel SSH local desde tu equipo cliente hasta el puerto `8080` de la MV. Si el laboratorio publica SSH por un puerto alternativo, añade `-p`:
+
+```bash
+ssh -N -L 8080:127.0.0.1:8080 usuario@IP_O_HOST_DE_LA_MV
+# Ejemplo con puerto SSH no estandar:
+ssh -p 20381 -N -L 8080:127.0.0.1:8080 usuario@virtual.lab.inf.uva.es
+```
+
+En ese caso, abre `http://127.0.0.1:8080` en el navegador de tu equipo cliente. Si el navegador accede por `localhost` o `127.0.0.1`, recuerda incluir temporalmente esos origenes en `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` antes de recrear el backend.
+
 ## Verificaciones con curl
 
 ### Healthcheck del backend desde la MV
@@ -290,6 +307,20 @@ curl -i "http://IP_O_DNS_PUBLICO_DE_LA_MV:8080/socket.io/?EIO=4&transport=pollin
 ```
 
 Debes ver una respuesta `200` con el payload inicial del handshake de Socket.IO.
+
+### Verificacion visual desde un navegador externo
+
+Una vez validados `GET /health`, `POST /api/auth/login`, `GET /api/config/skins` y `socket.io`, comprueba la UI desde un navegador real, ya sea por IP publica, por quick tunnel HTTPS o por tunel SSH local.
+
+Checklist minimo:
+
+- La portada carga en `:8080`.
+- El login de administrador funciona.
+- En `Configurar CluedoSkin` aparecen skins remotas.
+- En `Crear sesion` aparecen skins remotas.
+- Se puede crear una sesion y llegar al lobby.
+- Dos equipos pueden unirse y el lobby se actualiza en tiempo real.
+- La partida puede iniciarse desde el host.
 
 ## Verificaciones con logs
 

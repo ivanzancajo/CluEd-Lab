@@ -14,6 +14,27 @@ export interface LobbyTeam {
   falseAccusation: boolean;
 }
 
+export interface TeamMoveNode {
+  id: string;
+  label: string;
+  positionX: number;
+  positionY: number;
+  kind: 'spawn' | 'square' | 'room';
+  stepsRequired?: number;
+}
+
+export interface TeamMoveState {
+  diceRoll: number;
+  currentNode: TeamMoveNode;
+  destinationNodes: TeamMoveNode[];
+}
+
+export interface TeamMoveResult {
+  diceRoll: number;
+  currentNode: TeamMoveNode;
+  session: LobbySession;
+}
+
 export type TeamElementKind = 'SUJETO' | 'OBJETO' | 'ESPACIO';
 
 export interface TeamHandCard {
@@ -59,6 +80,14 @@ interface TeamTerminalStateResponse {
   item: TeamTerminalState;
 }
 
+interface TeamMoveStateResponse {
+  item: TeamMoveState;
+}
+
+interface MoveTeamResponse {
+  item: TeamMoveResult;
+}
+
 interface SessionErrorResponse {
   error?: string;
   details?: string[];
@@ -86,6 +115,21 @@ export async function startGameSession(accessCode: string) {
 
 export async function getTeamTerminalState(accessCode: string, teamId: string) {
   const response = await api.get<TeamTerminalStateResponse>(`/game/sessions/${accessCode}/teams/${teamId}/state`);
+  return response.data.item;
+}
+
+export async function getTeamMoveState(accessCode: string, teamId: string, diceRoll: number) {
+  const response = await api.get<TeamMoveStateResponse>(`/game/sessions/${accessCode}/teams/${teamId}/moves`, {
+    params: { diceRoll },
+  });
+  return response.data.item;
+}
+
+export async function moveTeam(accessCode: string, teamId: string, targetNodeId: string, diceRoll: number) {
+  const response = await api.post<MoveTeamResponse>(`/game/sessions/${accessCode}/teams/${teamId}/move`, {
+    targetNodeId,
+    diceRoll,
+  });
   return response.data.item;
 }
 

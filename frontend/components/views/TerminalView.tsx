@@ -29,6 +29,7 @@ import {
   type GameStartedPayload,
   type LobbyPresenceState,
 } from "../../src/lib/lobbySocket";
+import { BOARD_CENTER_IMAGE_BOUNDS, mapBoardSpaces, readStoredBoardTheme, toBoardPercent, type StoredBoardTheme } from "../../src/lib/boardTheme";
 import {
   getStoredSessionCode,
   getStoredSessionId,
@@ -42,14 +43,26 @@ import { TEAM_HEARTBEAT_INTERVAL_MS } from "../../src/lib/teamMonitoring";
 import { getTeamMeta } from "../../src/lib/teamMeta";
 import {
   getSessionErrorMessage,
+  getTeamMoveState,
   getTeamTerminalState,
+  moveTeam,
   type LobbySession,
   type SessionStatus,
   type TeamColor,
   type TeamHandCard,
+  type TeamMoveNode,
 } from "../../src/lib/sessionApi";
-
-const boardImg = "/board-placeholder.svg";
+import { ThemedBoard } from "../game/ThemedBoard";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 
 interface ElementoItem {
   name: string;
@@ -89,6 +102,35 @@ interface TerminalCard {
   color: string;
   bg: string;
   image?: string;
+}
+
+const BOARD_DESTINATION_HITBOX = {
+  squarePercent: 4.4,
+  spawnPercent: 5.2,
+  roomWidthPercent: 11.5,
+  roomHeightPercent: 9.8,
+};
+
+function getBoardDestinationHitboxStyle(destinationNode: TeamMoveNode) {
+  if (destinationNode.kind === "room") {
+    return {
+      left: toBoardPercent(destinationNode.positionX),
+      top: toBoardPercent(destinationNode.positionY),
+      width: `${BOARD_DESTINATION_HITBOX.roomWidthPercent}%`,
+      height: `${BOARD_DESTINATION_HITBOX.roomHeightPercent}%`,
+    };
+  }
+
+  const nodeSize = destinationNode.kind === "spawn"
+    ? BOARD_DESTINATION_HITBOX.spawnPercent
+    : BOARD_DESTINATION_HITBOX.squarePercent;
+
+  return {
+    left: toBoardPercent(destinationNode.positionX),
+    top: toBoardPercent(destinationNode.positionY),
+    width: `${nodeSize}%`,
+    height: `${nodeSize}%`,
+  };
 }
 
 // Categorías convertidas a objetos dinámicos con avatares predefinidos (íconos tech)
@@ -167,6 +209,8 @@ export function TerminalView() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("map");
   const [centerImage, setCenterImage] = useState("");
+  const [boardTheme, setBoardTheme] = useState<StoredBoardTheme | null>(() => readStoredBoardTheme());
+  const [boardTeams, setBoardTeams] = useState<LobbySession["teams"]>([]);
   const [teamName, setTeamName] = useState(getStoredTeamName() || "Equipo sin asignar");
   const [teamColor, setTeamColor] = useState<TeamColor | null>(getStoredTeamColor());
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>(getStoredSessionStatus() ?? "LOBBY");
@@ -175,6 +219,15 @@ export function TerminalView() {
   const [handError, setHandError] = useState<string | null>(null);
   const [isLoadingHand, setIsLoadingHand] = useState(false);
   const [teamHand, setTeamHand] = useState<TerminalCard[]>([]);
+  const [destinationNodes, setDestinationNodes] = useState<TeamMoveNode[]>([]);
+  const [selectedDestinationNodeId, setSelectedDestinationNodeId] = useState("");
+  const [isMoveConfirmOpen, setIsMoveConfirmOpen] = useState(false);
+  const [currentMoveNode, setCurrentMoveNode] = useState<TeamMoveNode | null>(null);
+  const [lastDiceRoll, setLastDiceRoll] = useState<number | null>(null);
+  const [diceResetSignal, setDiceResetSignal] = useState(0);
+  const [isLoadingMoves, setIsLoadingMoves] = useState(false);
+  const [isMovingPawn, setIsMovingPawn] = useState(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
   
   const [categories, setCategories] = useState<{
     c1: ElementoItem[];
@@ -210,10 +263,97 @@ export function TerminalView() {
     setTeamName(currentTeam.name);
     setTeamColor(currentTeam.color);
     setSessionStatus(session.status);
+    setBoardTeams(session.teams);
     setLobbyError(null);
   };
 
+  const refreshMoveState = async (diceRoll: number) => {
+    const accessCode = getStoredSessionCode();
+    const teamId = getStoredTeamId();
+
+    if (!accessCode || !teamId || sessionStatus !== "EN_CURSO") {
+      setDestinationNodes([]);
+      setSelectedDestinationNodeId("");
+      setIsMoveConfirmOpen(false);
+      setCurrentMoveNode(null);
+      setLastDiceRoll(null);
+      return;
+    }
+
+    setLastDiceRoll(diceRoll);
+    setDestinationNodes([]);
+    setSelectedDestinationNodeId("");
+    setIsMoveConfirmOpen(false);
+    setMoveError(null);
+    setIsLoadingMoves(true);
+
+    try {
+      const moveState = await getTeamMoveState(accessCode, teamId, diceRoll);
+      setCurrentMoveNode(moveState.currentNode);
+      setDestinationNodes(moveState.destinationNodes);
+      setMoveError(null);
+    } catch (error) {
+      setDestinationNodes([]);
+      setMoveError(getSessionErrorMessage(error, "No se ha podido preparar la selección de destino."));
+    } finally {
+      setIsLoadingMoves(false);
+    }
+  };
+
+  const handleDestinationNodePress = (destinationNodeId: string) => {
+    setSelectedDestinationNodeId(destinationNodeId);
+    setMoveError(null);
+    setIsMoveConfirmOpen(true);
+  };
+
+  const handleMoveConfirmOpenChange = (open: boolean) => {
+    setIsMoveConfirmOpen(open);
+
+    if (!open) {
+      setSelectedDestinationNodeId("");
+    }
+  };
+
+  const handleMovePawn = async (targetNodeId = selectedDestinationNodeId) => {
+    const accessCode = getStoredSessionCode();
+    const teamId = getStoredTeamId();
+
+    if (!accessCode || !teamId || lastDiceRoll === null || !targetNodeId) {
+      return;
+    }
+
+    const selectedDestinationNode = destinationNodes.find((node) => node.id === targetNodeId) ?? null;
+    setIsMoveConfirmOpen(false);
+    setIsMovingPawn(true);
+
+    try {
+      const moveResult = await moveTeam(accessCode, teamId, targetNodeId, lastDiceRoll);
+      const currentTeam = moveResult.session.teams.find((team) => team.id === teamId);
+
+      setBoardTeams(moveResult.session.teams);
+      setCurrentMoveNode(moveResult.currentNode);
+      setDestinationNodes([]);
+      setSelectedDestinationNodeId("");
+      setLastDiceRoll(null);
+      setMoveError(null);
+      setDiceResetSignal((previousValue) => previousValue + 1);
+
+      if (currentTeam) {
+        applyRealtimeSession(moveResult.session, currentTeam);
+      }
+    } catch (error) {
+      const fallbackMessage = selectedDestinationNode
+        ? `El movimiento hacia ${selectedDestinationNode.label} no es válido para la tirada actual. Prueba con otra casilla o sala.`
+        : "El movimiento no es válido para la tirada actual. Prueba con otra casilla o sala.";
+
+      setMoveError(getSessionErrorMessage(error, fallbackMessage));
+    } finally {
+      setIsMovingPawn(false);
+    }
+  };
+
   const applyGameConfig = (config: GameConfig) => {
+    setBoardTheme(config);
     setCatNames({
       c1: config.cat1Name || "Sujetos",
       c2: config.cat2Name || "Objetos",
@@ -244,19 +384,16 @@ export function TerminalView() {
 
   // Fetch active config and map to Terminal's internal state
   React.useEffect(() => {
+    const storedTheme = readStoredBoardTheme();
+
+    if (storedTheme) {
+      applyGameConfig(storedTheme as GameConfig);
+      return;
+    }
+
     const savedImg = localStorage.getItem("centerImage");
     if (savedImg) {
       setCenterImage(savedImg);
-    }
-    
-    const activeConf = localStorage.getItem("activeConfig");
-    if (activeConf) {
-      try {
-        const parsed: GameConfig = JSON.parse(activeConf);
-        applyGameConfig(parsed);
-      } catch(e) {
-        console.error("Error parsing config", e);
-      }
     }
   }, []);
 
@@ -286,6 +423,7 @@ export function TerminalView() {
         const sessionConfig = state.session.skin as unknown as GameConfig;
         storeJoinedLobbySession({ session: state.session, team: state.team });
         applyGameConfig(sessionConfig);
+        setBoardTeams(state.session.teams);
         setTeamName(state.team.name);
         setTeamColor(state.team.color);
         setSessionStatus(state.session.status);
@@ -354,6 +492,16 @@ export function TerminalView() {
         return;
       }
 
+      setBoardTeams(
+        state.teams.map((team) => ({
+          id: team.id,
+          name: team.name,
+          color: team.color,
+          positionX: team.positionX,
+          positionY: team.positionY,
+          falseAccusation: team.falseAccusation,
+        }))
+      );
       setTeamName(currentTeam.name);
       setTeamColor(currentTeam.color);
       setSessionStatus(state.status);
@@ -396,6 +544,19 @@ export function TerminalView() {
     };
   }, [navigate]);
 
+  React.useEffect(() => {
+    if (!isMyTurn || activeTab !== "map" || sessionStatus !== "EN_CURSO") {
+      setDestinationNodes([]);
+      setSelectedDestinationNodeId("");
+      setIsMoveConfirmOpen(false);
+      setLastDiceRoll(null);
+      setMoveError(null);
+      setIsLoadingMoves(false);
+      setDiceResetSignal((previousValue) => previousValue + 1);
+      return;
+    }
+  }, [activeTab, isMyTurn, sessionStatus]);
+
   const currentTeamMeta = teamColor ? getTeamMeta(teamColor) : null;
   const sessionStatusLabel =
     sessionStatus === "EN_CURSO"
@@ -427,6 +588,18 @@ export function TerminalView() {
     if (state === 2) return <X className="w-4 h-4 text-red-500" />;
     return null;
   };
+
+  const boardSpaces = mapBoardSpaces(boardTheme);
+  const boardPawns = boardTeams.map((team) => ({
+    id: team.id,
+    color: team.color,
+    positionX: team.positionX,
+    positionY: team.positionY,
+    opacity: team.id === getStoredTeamId() ? 1 : 0.92,
+    isCurrent: team.id === getStoredTeamId(),
+  }));
+  const selectedDestinationNode = destinationNodes.find((node) => node.id === selectedDestinationNodeId) ?? null;
+  const canSelectBoardDestination = isMyTurn && lastDiceRoll !== null && !isLoadingMoves && destinationNodes.length > 0;
 
   return (
     <div className="flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#020617] text-cyan-400 font-mono relative overflow-hidden shadow-2xl border-x border-slate-900">
@@ -479,80 +652,182 @@ export function TerminalView() {
             >
               {/* Responsive Container for Mobile/Tablet */}
               <div className="w-full aspect-[4/5] sm:aspect-square relative bg-black/50 rounded-b-xl border-b-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex-shrink-0 flex items-center justify-center overflow-hidden">
-                 <img src={boardImg} alt="Map" className="w-full h-full object-contain pointer-events-none" />
-                 
-                 {/* Optional Center Image Overlay */}
-                 {centerImage && (
-                   <div className="absolute top-[48%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[30%] h-[30%] pointer-events-none z-10 flex items-center justify-center">
-                     <img src={centerImage} alt="Center Logo" className="max-w-full max-h-full object-contain drop-shadow-[0_0_15px_rgba(0,0,0,0.8)]" />
-                   </div>
-                 )}
-                 
-                 {/* Current position indicator */}
-                 <div className="absolute top-[35%] left-[45%] -translate-x-1/2 -translate-y-1/2 w-4 h-4 sm:w-6 sm:h-6 rounded-full border-2 border-slate-900 bg-red-500 shadow-[0_0_15px_rgba(239,68,68,1)] flex items-center justify-center animate-bounce z-20">
-                    <Crosshair className="w-2 h-2 sm:w-3 sm:h-3 text-white" />
-                 </div>
+                 <ThemedBoard
+                   centerImage={isMyTurn ? centerImage : ""}
+                   spaces={boardSpaces}
+                   pawns={boardPawns}
+                   boardImageAlt="Mapa temático de la partida"
+                   dataCy="terminal-themed-board"
+                 >
+                   {canSelectBoardDestination ? (
+                     <div className="absolute inset-0 z-20 pointer-events-none">
+                       {destinationNodes.map((destinationNode) => (
+                         <button
+                           key={destinationNode.id}
+                           type="button"
+                           data-cy={`terminal-board-node-${destinationNode.id}`}
+                           onClick={() => handleDestinationNodePress(destinationNode.id)}
+                           disabled={isMovingPawn}
+                           className={`pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 bg-transparent p-0 opacity-0 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 ${destinationNode.kind === "room" ? "rounded-2xl" : "rounded-full"}`}
+                           style={getBoardDestinationHitboxStyle(destinationNode)}
+                           title={`Seleccionar destino ${destinationNode.label}`}
+                           aria-label={`Seleccionar destino ${destinationNode.label}`}
+                         />
+                       ))}
+                     </div>
+                   ) : null}
 
-                 {/* Center Area for Dice (Only on My Turn) */}
-                 {isMyTurn && (
-                   <div className="absolute top-[46%] left-[49%] -translate-x-1/2 -translate-y-1/2 z-30 scale-[0.45] sm:scale-[0.55] origin-center">
-                     <DiceAnimation onRollComplete={(val) => console.log('Rolled:', val)} />
-                   </div>
-                 )}
-
-                 {/* Card Modal Overlay */}
-                 <AnimatePresence>
-                   {selectedCard && (
-                     <motion.div 
-                       initial={{ opacity: 0 }}
-                       animate={{ opacity: 1 }}
-                       exit={{ opacity: 0 }}
-                       className="absolute inset-0 bg-black/80 z-40 flex items-center justify-center p-6 backdrop-blur-sm"
-                       onClick={() => {
-                         setSelectedCard(null);
-                         setCardFlipped(false);
+                   {/* Center Area for Dice (Only on My Turn) */}
+                   {isMyTurn && (
+                     <div
+                       className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
+                       style={{
+                         left: toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionX),
+                         top: toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionY),
+                         width: `${BOARD_CENTER_IMAGE_BOUNDS.widthPercent}%`,
+                         height: `${BOARD_CENTER_IMAGE_BOUNDS.heightPercent}%`,
                        }}
                      >
-                       <motion.div 
-                         initial={{ scale: 0.8, y: 20 }}
-                         animate={{ scale: 1, y: 0, rotateY: cardFlipped ? 180 : 0 }}
-                         exit={{ scale: 0.8, opacity: 0 }}
-                         transition={{ duration: 0.4, type: "spring" }}
-                         onClick={(e) => { e.stopPropagation(); setCardFlipped(!cardFlipped); }}
-                         className={`w-48 aspect-[2.5/3.5] rounded-xl border-4 ${selectedCard.color} shadow-[0_0_30px_rgba(0,0,0,0.8)] relative cursor-pointer [transform-style:preserve-3d]`}
-                       >
-                         {/* Front of card */}
-                         <div className={`absolute inset-0 [backface-visibility:hidden] flex flex-col items-center justify-start text-center ${selectedCard.bg} bg-opacity-90 overflow-hidden rounded-lg`}>
-                           <div className="w-full h-[60%] bg-black/40 border-b border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden">
-                             {selectedCard.image ? (
-                               <img src={selectedCard.image} alt={selectedCard.name} className="w-full h-full object-cover opacity-90" />
-                             ) : (
-                               <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
-                                 {selectedCard.type === catNames.c1 && <User className="w-6 h-6 text-slate-300" />}
-                                 {selectedCard.type === catNames.c2 && <Box className="w-6 h-6 text-slate-300" />}
-                                 {selectedCard.type === catNames.c3 && <MapPin className="w-6 h-6 text-slate-300" />}
-                               </div>
-                             )}
-                           </div>
-                           <div className="w-full flex-1 flex flex-col items-center justify-center p-2">
-                             <h4 className="font-bold text-sm tracking-widest uppercase text-white drop-shadow-md leading-tight line-clamp-2 px-1">{selectedCard.name}</h4>
-                             <span className="text-[9px] uppercase tracking-widest text-slate-400 mt-2 bg-black/50 px-2 py-1 rounded border border-slate-800">{selectedCard.type}</span>
-                           </div>
-                         </div>
-                         
-                         {/* Back of card */}
-                         <div className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] flex flex-col items-center justify-center p-4 text-center bg-slate-950 border border-slate-700">
-                           <h4 className="font-bold text-xs tracking-widest uppercase text-slate-300 mb-4 border-b border-slate-800 pb-2 w-full">{selectedCard.name}</h4>
-                           <p className="text-xs text-slate-400 leading-relaxed font-mono">{selectedCard.desc}</p>
-                           <div className="mt-auto text-[8px] text-cyan-500 uppercase tracking-widest animate-pulse flex gap-1 items-center">
-                              Toca para voltear
-                           </div>
-                         </div>
-                       </motion.div>
-                     </motion.div>
+                       <div className="scale-[0.28] sm:scale-[0.34] md:scale-[0.42] origin-center">
+                         <DiceAnimation
+                           dataCy="terminal-dice-roll"
+                           disabled={sessionStatus !== "EN_CURSO" || isLoadingMoves || isMovingPawn}
+                           resetSignal={diceResetSignal}
+                           onRollComplete={(diceRoll) => {
+                             void refreshMoveState(diceRoll);
+                           }}
+                         />
+                       </div>
+                     </div>
                    )}
-                 </AnimatePresence>
+
+                   {/* Card Modal Overlay */}
+                   <AnimatePresence>
+                     {selectedCard && (
+                       <motion.div 
+                         initial={{ opacity: 0 }}
+                         animate={{ opacity: 1 }}
+                         exit={{ opacity: 0 }}
+                         className="absolute inset-0 bg-black/80 z-40 flex items-center justify-center p-6 backdrop-blur-sm"
+                         onClick={() => {
+                           setSelectedCard(null);
+                           setCardFlipped(false);
+                         }}
+                       >
+                         <motion.div 
+                           initial={{ scale: 0.8, y: 20 }}
+                           animate={{ scale: 1, y: 0, rotateY: cardFlipped ? 180 : 0 }}
+                           exit={{ scale: 0.8, opacity: 0 }}
+                           transition={{ duration: 0.4, type: "spring" }}
+                           onClick={(e) => { e.stopPropagation(); setCardFlipped(!cardFlipped); }}
+                           className={`w-48 aspect-[2.5/3.5] rounded-xl border-4 ${selectedCard.color} shadow-[0_0_30px_rgba(0,0,0,0.8)] relative cursor-pointer [transform-style:preserve-3d]`}
+                         >
+                           {/* Front of card */}
+                           <div className={`absolute inset-0 [backface-visibility:hidden] flex flex-col items-center justify-start text-center ${selectedCard.bg} bg-opacity-90 overflow-hidden rounded-lg`}>
+                             <div className="w-full h-[60%] bg-black/40 border-b border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden">
+                               {selectedCard.image ? (
+                                 <img src={selectedCard.image} alt={selectedCard.name} className="w-full h-full object-cover opacity-90" />
+                               ) : (
+                                 <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
+                                   {selectedCard.type === catNames.c1 && <User className="w-6 h-6 text-slate-300" />}
+                                   {selectedCard.type === catNames.c2 && <Box className="w-6 h-6 text-slate-300" />}
+                                   {selectedCard.type === catNames.c3 && <MapPin className="w-6 h-6 text-slate-300" />}
+                                 </div>
+                               )}
+                             </div>
+                             <div className="w-full flex-1 flex flex-col items-center justify-center p-2">
+                               <h4 className="font-bold text-sm tracking-widest uppercase text-white drop-shadow-md leading-tight line-clamp-2 px-1">{selectedCard.name}</h4>
+                               <span className="text-[9px] uppercase tracking-widest text-slate-400 mt-2 bg-black/50 px-2 py-1 rounded border border-slate-800">{selectedCard.type}</span>
+                             </div>
+                           </div>
+                           
+                           {/* Back of card */}
+                           <div className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] flex flex-col items-center justify-center p-4 text-center bg-slate-950 border border-slate-700">
+                             <h4 className="font-bold text-xs tracking-widest uppercase text-slate-300 mb-4 border-b border-slate-800 pb-2 w-full">{selectedCard.name}</h4>
+                             <p className="text-xs text-slate-400 leading-relaxed font-mono">{selectedCard.desc}</p>
+                             <div className="mt-auto text-[8px] text-cyan-500 uppercase tracking-widest animate-pulse flex gap-1 items-center">
+                                Toca para voltear
+                             </div>
+                           </div>
+                         </motion.div>
+                       </motion.div>
+                     )}
+                   </AnimatePresence>
+                 </ThemedBoard>
               </div>
+
+              {sessionStatus === "EN_CURSO" ? (
+                <div className="w-full px-4 pt-4">
+                  <div className="rounded-xl border border-cyan-900/50 bg-slate-950/70 px-4 py-3 shadow-[0_0_20px_rgba(0,0,0,0.35)]">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-[10px] font-bold tracking-widest uppercase text-cyan-300">Movimiento del peón</h3>
+                      <span className="text-[9px] uppercase tracking-[0.2em] text-slate-500">
+                        {currentMoveNode ? `Posición: ${currentMoveNode.label}` : "Tira para calcular alcance"}
+                      </span>
+                    </div>
+
+                    {!isMyTurn ? (
+                      <p className="mt-3 text-[11px] text-slate-400">
+                        Activa MI TURNO para consultar y ejecutar movimientos desde la terminal.
+                      </p>
+                    ) : lastDiceRoll === null ? (
+                      <p className="mt-3 text-[11px] text-slate-400">
+                        Tira los dados y luego pulsa directamente una casilla o una sala del tablero. La terminal te pedirá confirmar el movimiento.
+                      </p>
+                    ) : isLoadingMoves ? (
+                      <p className="mt-3 text-[11px] text-cyan-200 uppercase tracking-[0.18em]">
+                        Preparando selector de destino...
+                      </p>
+                    ) : destinationNodes.length === 0 ? (
+                      <p className="mt-3 text-[11px] text-slate-400">
+                        No se han encontrado destinos configurados para este tablero.
+                      </p>
+                    ) : (
+                      <div className="mt-3 space-y-3">
+                        {moveError ? (
+                          <p className="text-[11px] text-red-200">
+                            {moveError}
+                          </p>
+                        ) : null}
+                        <p className="mb-2 text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                          Tirada actual: {lastDiceRoll}. El mapa no resalta alcance; pulsa una casilla o una sala del tablero para abrir la confirmación del movimiento.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              <AlertDialog open={isMoveConfirmOpen} onOpenChange={handleMoveConfirmOpenChange}>
+                <AlertDialogContent data-cy="terminal-move-confirm-dialog" className="max-w-sm border-cyan-900/60 bg-slate-950 text-cyan-100">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="text-sm font-black uppercase tracking-[0.18em] text-cyan-300">
+                      Confirmar movimiento
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="text-sm text-slate-300">
+                      {selectedDestinationNode
+                        ? `Vas a ${selectedDestinationNode.kind === "room" ? "entrar en" : "moverte a"} ${selectedDestinationNode.label}. El backend validará la tirada antes de aplicar el cambio.`
+                        : "Selecciona una casilla o sala del tablero para preparar el movimiento."}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel
+                      data-cy="terminal-move-cancel"
+                      className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 hover:text-white"
+                    >
+                      Cancelar
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      data-cy="terminal-move-confirm"
+                      className="bg-emerald-600 text-slate-950 hover:bg-emerald-500"
+                      disabled={isMovingPawn || !selectedDestinationNode}
+                      onClick={() => void handleMovePawn(selectedDestinationNode?.id)}
+                    >
+                      Confirmar movimiento
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               
               {/* Inventory Cards List */}
               <div className="w-full flex-1 p-4 flex flex-col gap-3 min-h-[160px]">

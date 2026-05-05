@@ -25,11 +25,11 @@ import {
   getStoredSessionStartedAt,
   storeHostLobbySession,
 } from "../../src/lib/lobbyStorage";
+import { mapBoardSpaces, readStoredActiveBoardConfig } from "../../src/lib/boardTheme";
 import { getTeamMonitoringLabel, getTeamMonitoringStatus } from "../../src/lib/teamMonitoring";
 import { TEAM_METADATA } from "../../src/lib/teamMeta";
 import { getGameSession, getSessionErrorMessage } from "../../src/lib/sessionApi";
-
-const boardImg = "/board-placeholder.svg";
+import { ThemedBoard } from "../game/ThemedBoard";
 
 type BoardConnectionStatus = "idle" | "connecting" | "connected" | "error";
 type TeamSlotStatus = "free" | "connected" | "inactive" | "disconnected";
@@ -38,7 +38,7 @@ export function BoardView() {
   const navigate = useNavigate();
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [sessionCode, setSessionCode] = useState("");
-  const [centerImage, setCenterImage] = useState("");
+  const [boardConfig, setBoardConfig] = useState(() => readStoredActiveBoardConfig());
   const [presenceState, setPresenceState] = useState<LobbyPresenceState | null>(null);
   const [events, setEvents] = useState<LobbyEventMessage[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<BoardConnectionStatus>("idle");
@@ -47,7 +47,7 @@ export function BoardView() {
 
   useEffect(() => {
     setSessionCode(getStoredSessionCode() || "N/A");
-    setCenterImage(localStorage.getItem("centerImage") || "");
+    setBoardConfig(readStoredActiveBoardConfig());
     setTimeRemaining(
       calculateRemainingSeconds(getStoredSessionStartedAt(), getStoredSessionDurationSeconds() ?? 0)
     );
@@ -213,6 +213,20 @@ export function BoardView() {
           },
         ];
 
+  const boardSpaces = mapBoardSpaces(boardConfig);
+  const boardPawns = monitoredTeams.map((team) => ({
+    id: team.id,
+    color: team.color,
+    positionX: team.positionX,
+    positionY: team.positionY,
+    opacity:
+      getTeamMonitoringStatus(team, monitoringNow) === "connected"
+        ? 1
+        : getTeamMonitoringStatus(team, monitoringNow) === "inactive"
+        ? 0.7
+        : 0.35,
+  }));
+
   return (
     <div className="flex w-full h-screen bg-[#020617] text-cyan-400 font-mono overflow-hidden">
       <div className="w-[380px] h-full bg-slate-900/40 border-r border-cyan-800/50 shadow-[4px_0_24px_-4px_rgba(6,182,212,0.15)] flex flex-col relative z-20 backdrop-blur-md">
@@ -324,39 +338,13 @@ export function BoardView() {
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+CjxyZWN0IHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgZmlsbD0ibm9uZSIvPgo8cGF0aCBkPSJNMCA0MGg0MHYtMUgwem0zOSAwSDQwaC0xdjQwSDB6IiBmaWxsPSJyZ2JhKDMsIDEwNSwgMTYxLCAwLjA1KSIvPgo8L3N2Zz4=')] z-0"></div>
 
         <div className="relative z-10 w-full max-w-5xl aspect-square bg-[#380b0b] rounded-xl shadow-[0_0_60px_-10px_rgba(0,0,0,1)] border-4 border-slate-800 p-2 flex items-center justify-center">
-          <div className="relative w-full h-full rounded-lg overflow-hidden border border-[#5c1a1a]">
-            <img src={boardImg} alt="Tablero de partida" className="w-full h-full object-contain" />
-
-            {centerImage ? (
-              <div className="absolute top-[48%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[30%] h-[30%] pointer-events-none z-10 flex items-center justify-center">
-                <img src={centerImage} alt="Center Logo" className="max-w-full max-h-full object-contain drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]" />
-              </div>
-            ) : null}
-
-            {teamSlots.map((team) => {
-              const isJoined = team.status !== "free";
-              const pawnOpacity = team.status === "connected" ? 1 : team.status === "inactive" ? 0.7 : team.status === "disconnected" ? 0.35 : 0.15;
-
-              return (
-                <motion.div
-                  key={team.color}
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1, opacity: pawnOpacity }}
-                  transition={{ type: "spring", stiffness: 200, damping: 10 }}
-                  className="absolute w-8 h-8 md:w-10 md:h-10 rounded-full border-[3px] border-slate-900 shadow-[0_0_15px_rgba(0,0,0,0.8)] z-20 flex items-center justify-center"
-                  style={{
-                    backgroundColor: isJoined ? team.hexColor : "transparent",
-                    borderColor: team.hexColor,
-                    top: team.position.top,
-                    left: team.position.left,
-                    transform: "translate(-50%, -50%)",
-                  }}
-                >
-                  <div className={`rounded-full ${isJoined ? "w-1/2 h-1/2 bg-white/30 backdrop-blur-sm" : "w-3 h-3 border border-current opacity-70"}`}></div>
-                </motion.div>
-              );
-            })}
-          </div>
+          <ThemedBoard
+            boardAlt="Tablero de partida"
+            centerImage={boardConfig?.centerImage}
+            spaces={boardSpaces}
+            teams={boardPawns}
+            dataCy="host-themed-board"
+          />
 
           <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-cyan-800 -translate-x-4 -translate-y-4"></div>
           <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-cyan-800 translate-x-4 -translate-y-4"></div>

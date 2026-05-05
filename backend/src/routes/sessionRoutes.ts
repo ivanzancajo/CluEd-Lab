@@ -13,8 +13,10 @@ import {
 import {
   createSessionSchema,
   joinSessionSchema,
+  moveTeamSchema,
   sessionAccessCodeParamsSchema,
   teamSessionStateParamsSchema,
+  teamMovesQuerySchema,
 } from '../lib/sessionSchemas.js';
 import {
   COLOR_LABELS,
@@ -25,6 +27,11 @@ import {
   loadTeamTerminalStateByAccessCode,
   startSessionByAccessCode,
 } from '../lib/sessionGameplay.js';
+import {
+  loadTeamMoveStateByAccessCode,
+  moveTeamByAccessCode,
+} from '../lib/sessionMovement.js';
+import { getTeamSpawnPosition } from '../lib/teamSpawnPositions.js';
 import { verifyToken } from '../middleware/auth.js';
 import { emitGameStarted, emitSessionSnapshotUpdate } from '../socket/socketServer.js';
 
@@ -67,6 +74,68 @@ router.get('/sessions/:accessCode/teams/:teamId/state', async (req, res) => {
   try {
     const teamState = await loadTeamTerminalStateByAccessCode(prisma, teamParams.accessCode, teamParams.teamId);
     res.json({ item: teamState });
+  } catch (error) {
+    respondUnexpectedError(res, error);
+  }
+});
+
+router.get('/sessions/:accessCode/teams/:teamId/moves', async (req, res) => {
+  const teamParams = parseTeamSessionStateParams(req.params, res);
+  if (!teamParams) {
+    return;
+  }
+
+  const query = parseBody(teamMovesQuerySchema, req.query, res);
+  if (!query) {
+    return;
+  }
+
+  try {
+    const moveState = await loadTeamMoveStateByAccessCode(prisma, teamParams.accessCode, teamParams.teamId, query.diceRoll);
+    res.json({ item: moveState });
+  } catch (error) {
+    respondUnexpectedError(res, error);
+  }
+});
+
+router.post('/sessions/:accessCode/teams/:teamId/move', async (req, res) => {
+  const teamParams = parseTeamSessionStateParams(req.params, res);
+  if (!teamParams) {
+    return;
+  }
+
+  const payload = parseBody(moveTeamSchema, req.body, res);
+  if (!payload) {
+    return;
+  }
+
+  try {
+    const moveResult = await prisma.$transaction(
+      (tx) => moveTeamByAccessCode(tx, teamParams.accessCode, teamParams.teamId, payload.targetNodeId, payload.diceRoll),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+    const session = await loadSessionSnapshotByAccessCode(prisma, teamParams.accessCode);
+
+    try {
+      await emitSessionSnapshotUpdate(moveResult.sessionId, {
+        id: randomUUID(),
+        type: 'system',
+        message: `${moveResult.teamName} se ha movido a ${moveResult.currentNode.label}.`,
+        occurredAt: Date.now(),
+        teamColor: moveResult.teamColor,
+        teamId: moveResult.teamId,
+      });
+    } catch {
+      // El movimiento ya quedó persistido; un fallo de broadcast no debe revertirlo.
+    }
+
+    res.json({
+      item: {
+        session,
+        diceRoll: moveResult.diceRoll,
+        currentNode: moveResult.currentNode,
+      },
+    });
   } catch (error) {
     respondUnexpectedError(res, error);
   }
@@ -118,6 +187,7 @@ router.post('/sessions/:accessCode/join', async (req, res) => {
             partidaId: session.id,
             color: payload.color,
             name: COLOR_LABELS[payload.color],
+            ...getTeamSpawnPosition(payload.color),
           },
         });
 

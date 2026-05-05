@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 
 interface DiceFaceProps {
@@ -48,14 +48,31 @@ const DiceFace: React.FC<DiceFaceProps> = ({ value }) => {
   );
 };
 
-export const DiceAnimation = ({ onRollComplete }: { onRollComplete: (val: number) => void }) => {
+export const DiceAnimation = ({
+  onRollComplete,
+  disabled = false,
+  dataCy,
+  resetSignal = 0,
+}: {
+  onRollComplete: (val: number) => void;
+  disabled?: boolean;
+  dataCy?: string;
+  resetSignal?: number;
+}) => {
   const [dice1, setDice1] = useState(1);
   const [dice2, setDice2] = useState(1);
   const [isRolling, setIsRolling] = useState(false);
   const [hasRolled, setHasRolled] = useState(false);
 
+  useEffect(() => {
+    setDice1(1);
+    setDice2(1);
+    setIsRolling(false);
+    setHasRolled(false);
+  }, [resetSignal]);
+
   const startRoll = () => {
-    if (isRolling) return;
+    if (isRolling || disabled) return;
     setIsRolling(true);
     setHasRolled(true);
     
@@ -79,9 +96,10 @@ export const DiceAnimation = ({ onRollComplete }: { onRollComplete: (val: number
 
   return (
     <button 
+      data-cy={dataCy}
       onClick={startRoll}
-      disabled={isRolling}
-      className={`relative z-30 p-3 rounded-xl bg-slate-950/60 backdrop-blur-sm border border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.3)] flex flex-col items-center justify-center transition-all duration-300 ${isRolling ? 'scale-110' : 'hover:scale-105 active:scale-95'}`}
+      disabled={isRolling || disabled}
+      className={`relative z-30 p-3 rounded-xl bg-slate-950/60 backdrop-blur-sm border border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.3)] flex flex-col items-center justify-center transition-all duration-300 ${isRolling ? 'scale-110' : 'hover:scale-105 active:scale-95'} ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
     >
       <div className="flex flex-col gap-3">
         <motion.div

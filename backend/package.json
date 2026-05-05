@@ -18,6 +18,7 @@
     "test": "jest --runInBand --config jest.config.cjs",
     "test:auth-api": "jest --runInBand --config jest.auth.config.cjs",
     "test:integration": "jest --runInBand --config jest.config.cjs",
+    "test:unit": "jest --runInBand --config jest.unit.config.cjs",
     "test:docker-backend-postgres": "tsx tests/backend-postgres.container.integration.ts"
   },
   "keywords": [],

@@ -133,8 +133,8 @@ model Equipo {
   partidaId        String?             @db.Uuid @map("id_partida")
   name             String              @map("nombre") @db.VarChar(20)
   color            ColorEquipo         @map("color")
-  positionX        Int?                @default(0) @map("pos_x")
-  positionY        Int?                @default(0) @map("pos_y")
+  positionX        Float?              @default(0) @map("pos_x")
+  positionY        Float?              @default(0) @map("pos_y")
   falseAccusation  Boolean?            @default(false) @map("acusacion_falsa")
 
   partida          Partida?            @relation(fields: [partidaId], references: [id], onDelete: Cascade, onUpdate: NoAction)

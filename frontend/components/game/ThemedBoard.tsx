@@ -2,6 +2,12 @@ import type { ReactNode } from 'react';
 import { Crosshair } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
+  BOARD_GRID_COLUMNS_PERCENT,
+  BOARD_GRID_ROWS_PERCENT,
+  BOARD_MOVEMENT_NODE_LIST,
+} from '../../src/lib/boardMovement';
+import type { BoardDebugProbe } from '../../src/lib/boardDebug';
+import {
   BOARD_BASE_IMAGE_PATH,
   BOARD_CENTER_IMAGE_BOUNDS,
   BOARD_SPACE_SLOTS,
@@ -25,9 +31,16 @@ type ThemedBoardProps = {
   boardAlt?: string;
   boardImageAlt?: string;
   centerImage?: string;
+  centerImageAlt?: string;
   spaces: BoardSpaceLabel[];
+  showSpaceLabels?: boolean;
   teams?: ThemedBoardTeam[];
   pawns?: ThemedBoardTeam[];
+  showDebugOverlay?: boolean;
+  debugProbe?: BoardDebugProbe | null;
+  debugHighlightedNodeIds?: string[];
+  spaceNameScale?: number;
+  spaceMotifScale?: number;
   children?: ReactNode;
   className?: string;
   dataCy?: string;
@@ -39,15 +52,24 @@ export function ThemedBoard({
   boardAlt,
   boardImageAlt,
   centerImage,
+  centerImageAlt,
   spaces,
+  showSpaceLabels = true,
   teams,
   pawns,
+  showDebugOverlay = false,
+  debugProbe,
+  debugHighlightedNodeIds,
+  spaceNameScale = 1,
+  spaceMotifScale = 1,
   children,
   className,
   dataCy,
 }: ThemedBoardProps) {
   const resolvedBoardAlt = boardImageAlt ?? boardAlt ?? 'Tablero temático';
+  const resolvedCenterImageAlt = centerImageAlt ?? 'Imagen central de la skin';
   const boardPawns = pawns ?? teams ?? [];
+  const highlightedNodeIds = new Set(debugHighlightedNodeIds ?? []);
 
   return (
     <div
@@ -56,7 +78,7 @@ export function ThemedBoard({
     >
       <img src={BOARD_BASE_IMAGE_PATH} alt={resolvedBoardAlt} className="w-full h-full object-contain" />
 
-      {spaces.map((space, index) => {
+      {showSpaceLabels ? spaces.map((space, index) => {
         const slot = BOARD_SPACE_SLOTS[index];
         if (!slot) {
           return null;
@@ -78,7 +100,7 @@ export function ThemedBoard({
               <p
                 className="font-black leading-[0.98] tracking-[0.01em] text-[#1b5a6d]"
                 style={{
-                  fontSize: slot.nameSize,
+                  fontSize: scaleBoardFontSize(slot.nameSize, spaceNameScale),
                   textAlign: slot.textAlign ?? 'center',
                 }}
               >
@@ -88,7 +110,7 @@ export function ThemedBoard({
                 <p
                   className="mt-1 leading-[1] text-[#6b5231]"
                   style={{
-                    fontSize: slot.motifSize,
+                    fontSize: scaleBoardFontSize(slot.motifSize, spaceMotifScale),
                     textAlign: slot.textAlign ?? 'center',
                   }}
                 >
@@ -98,7 +120,7 @@ export function ThemedBoard({
             </div>
           </div>
         );
-      })}
+      }) : null}
 
       {centerImage ? (
         <div
@@ -113,7 +135,7 @@ export function ThemedBoard({
         >
           <img
             src={centerImage}
-            alt="Imagen central de la skin"
+            alt={resolvedCenterImageAlt}
             className="h-full w-full object-contain"
           />
         </div>
@@ -151,13 +173,225 @@ export function ThemedBoard({
         );
       })}
 
+      {showDebugOverlay ? (
+        <BoardDebugOverlay debugProbe={debugProbe} highlightedNodeIds={highlightedNodeIds} />
+      ) : null}
+
       {children}
+    </div>
+  );
+}
+
+function BoardDebugOverlay({
+  debugProbe,
+  highlightedNodeIds,
+}: {
+  debugProbe?: BoardDebugProbe | null;
+  highlightedNodeIds: Set<string>;
+}) {
+  const probedNode = debugProbe?.nearestNodeId
+    ? BOARD_MOVEMENT_NODE_LIST.find((node) => node.id === debugProbe.nearestNodeId) ?? null
+    : null;
+  const probedGridPosition = debugProbe
+    ? findClosestGridPosition(debugProbe.positionX, debugProbe.positionY)
+    : null;
+  const probedGridBounds = probedGridPosition
+    ? getDebugGridCellBounds(probedGridPosition.col, probedGridPosition.row, 0.1)
+    : null;
+
+  return (
+    <div data-cy="board-debug-overlay" className="pointer-events-none absolute inset-0 z-[24] overflow-hidden">
+      {BOARD_GRID_COLUMNS_PERCENT.map((positionX, columnIndex) => (
+        <div key={`debug-col-${columnIndex}`}>
+          <div
+            data-cy={`board-debug-grid-col-${columnIndex}`}
+            className="absolute inset-y-0 w-px bg-cyan-300/30"
+            style={{ left: toBoardPercent(positionX) }}
+          />
+          <div
+            className="absolute top-1 -translate-x-1/2 rounded bg-slate-950/85 px-1 py-0.5 font-mono text-[8px] text-cyan-100"
+            style={{ left: toBoardPercent(positionX) }}
+          >
+            C{columnIndex}
+          </div>
+        </div>
+      ))}
+
+      {BOARD_GRID_ROWS_PERCENT.map((positionY, rowIndex) => (
+        <div key={`debug-row-${rowIndex}`}>
+          <div
+            data-cy={`board-debug-grid-row-${rowIndex}`}
+            className="absolute inset-x-0 h-px bg-cyan-300/30"
+            style={{ top: toBoardPercent(positionY) }}
+          />
+          <div
+            className="absolute left-1 -translate-y-1/2 rounded bg-slate-950/85 px-1 py-0.5 font-mono text-[8px] text-cyan-100"
+            style={{ top: toBoardPercent(positionY) }}
+          >
+            R{rowIndex}
+          </div>
+        </div>
+      ))}
+
+      {BOARD_MOVEMENT_NODE_LIST.map((node) => {
+        const isGeneratedSquare = node.id.startsWith('square:');
+        const isHighlighted = highlightedNodeIds.has(node.id);
+
+        return (
+          <div
+            key={node.id}
+            data-cy={`board-debug-node-${sanitizeDebugNodeId(node.id)}`}
+            className="absolute -translate-x-1/2 -translate-y-1/2"
+            style={{
+              left: toBoardPercent(node.positionX),
+              top: toBoardPercent(node.positionY),
+            }}
+          >
+            <div
+              className={joinClasses(
+                'rounded-full border border-slate-950/90 shadow-[0_0_8px_rgba(0,0,0,0.45)]',
+                getBoardDebugMarkerClass(node.kind, isGeneratedSquare, isHighlighted)
+              )}
+            />
+          </div>
+        );
+      })}
+
+      {debugProbe ? (
+        <>
+          {probedGridBounds ? (
+            <div
+              data-cy="board-debug-probe-cell"
+              className="absolute rounded-[4px] border border-fuchsia-300/90 bg-fuchsia-300/10 shadow-[0_0_14px_rgba(232,121,249,0.22)]"
+              style={{
+                left: toBoardPercent(probedGridBounds.left),
+                top: toBoardPercent(probedGridBounds.top),
+                width: `${probedGridBounds.right - probedGridBounds.left}%`,
+                height: `${probedGridBounds.bottom - probedGridBounds.top}%`,
+              }}
+            />
+          ) : null}
+          <div
+            className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-fuchsia-100 bg-fuchsia-300/80 shadow-[0_0_10px_rgba(232,121,249,0.7)]"
+            style={{
+              left: toBoardPercent(debugProbe.positionX),
+              top: toBoardPercent(debugProbe.positionY),
+            }}
+          />
+        </>
+      ) : null}
+
+      <div className="absolute right-2 top-2 max-w-[48%] rounded-md border border-cyan-500/35 bg-slate-950/78 px-2 py-1.5 font-mono text-[10px] text-cyan-100 shadow-[0_0_12px_rgba(0,0,0,0.28)] backdrop-blur-[1px]">
+        <p className="uppercase tracking-[0.2em] text-cyan-300">Debug mapa</p>
+        <p className="mt-1 text-slate-300">
+          Grid {BOARD_GRID_COLUMNS_PERCENT.length}x{BOARD_GRID_ROWS_PERCENT.length} | nodos {BOARD_MOVEMENT_NODE_LIST.length}
+        </p>
+        <p className="mt-1 text-slate-200">
+          {debugProbe
+            ? `Celda ${formatGridPositionLabel(probedGridPosition) ?? 'sin celda'} | click ${debugProbe.positionX}% / ${debugProbe.positionY}%`
+            : 'Pulsa el tablero para muestrear coordenadas y validar alineación.'}
+        </p>
+        {debugProbe ? (
+          <p className="mt-1 text-slate-400">
+            Nodo cercano {formatDebugProbeNodeLabel(probedNode, debugProbe.nearestNodeId)}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
 
 function joinClasses(...classes: Array<string | undefined>) {
   return classes.filter(Boolean).join(' ');
+}
+
+function getBoardDebugMarkerClass(kind: string, isGeneratedSquare: boolean, isHighlighted: boolean) {
+  if (isHighlighted) {
+    return 'h-3.5 w-3.5 bg-fuchsia-200 ring-2 ring-fuchsia-500/70';
+  }
+
+  if (kind === 'room') {
+    return 'h-3.5 w-3.5 bg-amber-300/90';
+  }
+
+  if (kind === 'spawn') {
+    return 'h-3.5 w-3.5 bg-emerald-300/90';
+  }
+
+  return isGeneratedSquare ? 'h-2 w-2 bg-cyan-200/80' : 'h-3 w-3 bg-cyan-300/90';
+}
+
+function formatDebugProbeNodeLabel(
+  node: (typeof BOARD_MOVEMENT_NODE_LIST)[number] | null,
+  fallbackNodeId?: string | null
+) {
+  if (!node) {
+    return fallbackNodeId ?? 'sin nodo cercano';
+  }
+
+  const coordinateLabel = formatGridPositionLabel(node.gridPosition);
+  return coordinateLabel ? `${coordinateLabel} · ${node.id}` : node.id;
+}
+
+function formatGridPositionLabel(gridPosition?: { col: number; row: number }) {
+  if (!gridPosition) {
+    return null;
+  }
+
+  return `C${gridPosition.col}:R${gridPosition.row}`;
+}
+
+function findClosestGridPosition(positionX: number, positionY: number) {
+  return {
+    col: findClosestIndex(BOARD_GRID_COLUMNS_PERCENT, positionX),
+    row: findClosestIndex(BOARD_GRID_ROWS_PERCENT, positionY),
+  };
+}
+
+function findClosestIndex(values: readonly number[], target: number) {
+  return values.reduce((bestIndex, currentValue, currentIndex) => {
+    const bestDistance = Math.abs(values[bestIndex] - target);
+    const currentDistance = Math.abs(currentValue - target);
+    return currentDistance < bestDistance ? currentIndex : bestIndex;
+  }, 0);
+}
+
+function getDebugGridCellBounds(col: number, row: number, insetRatio = 0) {
+  const centerX = BOARD_GRID_COLUMNS_PERCENT[col];
+  const centerY = BOARD_GRID_ROWS_PERCENT[row];
+  const previousX = col === 0 ? centerX - (BOARD_GRID_COLUMNS_PERCENT[col + 1] - centerX) : BOARD_GRID_COLUMNS_PERCENT[col - 1];
+  const nextX = col === BOARD_GRID_COLUMNS_PERCENT.length - 1
+    ? centerX + (centerX - BOARD_GRID_COLUMNS_PERCENT[col - 1])
+    : BOARD_GRID_COLUMNS_PERCENT[col + 1];
+  const previousY = row === 0 ? centerY - (BOARD_GRID_ROWS_PERCENT[row + 1] - centerY) : BOARD_GRID_ROWS_PERCENT[row - 1];
+  const nextY = row === BOARD_GRID_ROWS_PERCENT.length - 1
+    ? centerY + (centerY - BOARD_GRID_ROWS_PERCENT[row - 1])
+    : BOARD_GRID_ROWS_PERCENT[row + 1];
+  const left = (previousX + centerX) / 2;
+  const right = (centerX + nextX) / 2;
+  const top = (previousY + centerY) / 2;
+  const bottom = (centerY + nextY) / 2;
+  const insetX = ((right - left) / 2) * insetRatio;
+  const insetY = ((bottom - top) / 2) * insetRatio;
+
+  return {
+    left: left + insetX,
+    right: right - insetX,
+    top: top + insetY,
+    bottom: bottom - insetY,
+  };
+}
+
+function sanitizeDebugNodeId(nodeId: string) {
+  return nodeId.replace(/[^a-zA-Z0-9_-]+/g, '-');
+}
+
+function scaleBoardFontSize(fontSize: string, scale: number) {
+  if (scale === 1) {
+    return fontSize;
+  }
+
+  return `calc(${fontSize} * ${scale})`;
 }
 
 function getBoardLabelStyle(slot: BoardLabelSlot) {

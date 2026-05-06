@@ -4,7 +4,9 @@ import {
   BOARD_MOVEMENT_NODES,
   findBoardMovementNodeByPosition,
   getAdjacentMoveNodes,
+  getIncrementalMoveNodes,
   getReachableMoveNodes,
+  resolveCommittedMoveTargetNode,
 } from '../src/lib/sessionMovement.js';
 
 describe('sessionMovement', () => {
@@ -32,13 +34,28 @@ describe('sessionMovement', () => {
         }),
       ])
     );
+    expect(reachableMoves).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'square:pasillo-superior-derecho::spawn-rojo:1',
+        }),
+      ])
+    );
+  });
+
+  it('solo devuelve destinos que consumen exactamente la tirada actual', () => {
+    const shortRollMoves = getReachableMoveNodes('spawn-rojo', [], 2).map((node) => node.id);
+    const longRollMoves = getReachableMoveNodes('spawn-rojo', [], 7).map((node) => node.id);
+
+    expect(longRollMoves).not.toEqual(expect.arrayContaining(shortRollMoves));
+    expect(longRollMoves).not.toContain('pasillo-superior-derecho');
   });
 
   it('solo permite entrar en la sala cuando se alcanza su casilla de puerta', () => {
-    const roomMovesFromCross = getReachableMoveNodes('pasillo-izquierdo-superior', [], 1);
-    const roomMovesFromDoor = getReachableMoveNodes('square:pasillo-izquierdo-superior::pasillo-superior-central:7', [], 1);
+    const roomMovesFromCorridor = getReachableMoveNodes('square:grid:6:3', [], 1);
+    const roomMovesFromDoor = getReachableMoveNodes('square:grid:5:3', [], 1);
 
-    expect(roomMovesFromCross).not.toEqual(
+    expect(roomMovesFromCorridor).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: 'sala-superior-izquierda',
@@ -60,9 +77,50 @@ describe('sessionMovement', () => {
 
     expect(reachableMoves).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: 'square:centro-oeste::centro-sur:6', stepsRequired: 1 }),
-        expect.objectContaining({ id: 'centro-sur', stepsRequired: 1 }),
-        expect.objectContaining({ id: 'square:centro-este::centro-sur:6', stepsRequired: 1 }),
+        expect.objectContaining({ gridPosition: { col: 8, row: 17 }, stepsRequired: 1 }),
+        expect.objectContaining({ gridPosition: { col: 13, row: 17 }, stepsRequired: 1 }),
+        expect.objectContaining({ gridPosition: { col: 14, row: 19 }, stepsRequired: 1 }),
+        expect.objectContaining({ gridPosition: { col: 7, row: 19 }, stepsRequired: 1 }),
+      ])
+    );
+  });
+
+  it('al confirmar una puerta desde el pasillo sitúa el peón dentro de la sala', () => {
+    const resolvedTargetNode = resolveCommittedMoveTargetNode(
+      BOARD_MOVEMENT_NODES['square:grid:6:3'],
+      BOARD_MOVEMENT_NODES['square:grid:5:3']
+    );
+
+    expect(resolvedTargetNode).toMatchObject({
+      id: 'sala-superior-izquierda',
+      kind: 'room',
+    });
+  });
+
+  it('permite salir de una sala hacia una puerta sin reentrar automáticamente', () => {
+    const resolvedTargetNode = resolveCommittedMoveTargetNode(
+      BOARD_MOVEMENT_NODES['sala-superior-izquierda'],
+      BOARD_MOVEMENT_NODES['square:grid:5:3']
+    );
+
+    expect(resolvedTargetNode).toMatchObject({
+      id: 'square:grid:5:3',
+      kind: 'square',
+    });
+  });
+
+  it('en modo incremental solo ofrece movimientos adyacentes con coste de un paso', () => {
+    const stepMoves = getIncrementalMoveNodes('square:pasillo-superior-derecho::spawn-rojo:1', []);
+
+    expect(stepMoves).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'spawn-rojo', stepsRequired: 1 }),
+        expect.objectContaining({ id: 'pasillo-superior-derecho', stepsRequired: 1 }),
+      ])
+    );
+    expect(stepMoves).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'pasillo-superior-central' }),
       ])
     );
   });
@@ -90,5 +148,19 @@ describe('sessionMovement', () => {
         expect(BOARD_MOVEMENT_CONNECTIONS[linkedNodeId]).toContain(nodeId);
       });
     });
+  });
+
+  it('mantiene las salas conectadas solo mediante casillas de puerta', () => {
+    Object.values(BOARD_MOVEMENT_NODES)
+      .filter((node) => node.kind === 'room')
+      .forEach((roomNode) => {
+        const linkedNodeIds = BOARD_MOVEMENT_CONNECTIONS[roomNode.id] ?? [];
+
+        expect(linkedNodeIds.length).toBeGreaterThan(0);
+
+        linkedNodeIds.forEach((linkedNodeId) => {
+          expect(BOARD_MOVEMENT_NODES[linkedNodeId]?.kind).toBe('square');
+        });
+      });
   });
 });

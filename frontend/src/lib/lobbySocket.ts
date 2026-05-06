@@ -1,6 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 import { getStoredAdminToken } from './auth';
-import type { LobbySession, LobbyTeam, SessionStatus, TeamColor } from './sessionApi';
+import type { LobbySession, LobbyTeam, SessionStatus, SessionTurn, TeamColor } from './sessionApi';
 
 export type LobbyPresenceTeam = LobbyTeam & {
   connected: boolean;
@@ -15,6 +15,7 @@ export type LobbyPresenceState = {
   durationSeconds: number;
   remainingSeconds: number;
   teams: LobbyPresenceTeam[];
+  turn: SessionTurn | null;
   updatedAt: number;
 };
 

@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 
+type DiceRollResult = {
+  valueOne: number;
+  valueTwo: number;
+  total: number;
+};
+
 interface DiceFaceProps {
   value: number;
 }
@@ -49,12 +55,12 @@ const DiceFace: React.FC<DiceFaceProps> = ({ value }) => {
 };
 
 export const DiceAnimation = ({
-  onRollComplete,
+  onRollRequest,
   disabled = false,
   dataCy,
   resetSignal = 0,
 }: {
-  onRollComplete: (val: number) => void;
+  onRollRequest: () => Promise<DiceRollResult>;
   disabled?: boolean;
   dataCy?: string;
   resetSignal?: number;
@@ -75,6 +81,7 @@ export const DiceAnimation = ({
     if (isRolling || disabled) return;
     setIsRolling(true);
     setHasRolled(true);
+    const rollPromise = onRollRequest();
     
     let iterations = 0;
     const interval = setInterval(() => {
@@ -84,12 +91,19 @@ export const DiceAnimation = ({
       
       if (iterations > 15) {
         clearInterval(interval);
-        setIsRolling(false);
-        const final1 = Math.floor(Math.random() * 6) + 1;
-        const final2 = Math.floor(Math.random() * 6) + 1;
-        setDice1(final1);
-        setDice2(final2);
-        onRollComplete(final1 + final2);
+        void rollPromise
+          .then((result) => {
+            setDice1(result.valueOne);
+            setDice2(result.valueTwo);
+          })
+          .catch(() => {
+            setDice1(1);
+            setDice2(1);
+            setHasRolled(false);
+          })
+          .finally(() => {
+            setIsRolling(false);
+          });
       }
     }, 80);
   };

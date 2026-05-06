@@ -32,6 +32,21 @@ export type SessionTeamSnapshot = {
   falseAccusation: boolean;
 };
 
+export type SessionTurnDiceSnapshot = {
+  valueOne: number;
+  valueTwo: number;
+  total: number;
+};
+
+export type SessionTurnSnapshot = {
+  currentTeamId: string;
+  currentTeamName: string;
+  currentTeamColor: ColorEquipo;
+  startedAt: string | null;
+  dice: SessionTurnDiceSnapshot | null;
+  remainingMoves: number | null;
+};
+
 export type SessionSnapshot = {
   id: string;
   accessCode: string;
@@ -41,6 +56,7 @@ export type SessionSnapshot = {
   remainingSeconds: number;
   skin: LoadedSkinConfiguration;
   teams: SessionTeamSnapshot[];
+  turn: SessionTurnSnapshot | null;
 };
 
 export async function loadSessionSnapshotByAccessCode(
@@ -85,7 +101,25 @@ async function loadSessionSnapshot(
 ): Promise<SessionSnapshot> {
   const session = await client.partida.findUnique({
     where,
-    include: {
+    select: {
+      id: true,
+      accessCode: true,
+      status: true,
+      startedAt: true,
+      durationMinutes: true,
+      skinId: true,
+      currentTurnTeamId: true,
+      currentTurnStartedAt: true,
+      activeDiceValueOne: true,
+      activeDiceValueTwo: true,
+      activeDiceRemainingMoves: true,
+      currentTurnTeam: {
+        select: {
+          id: true,
+          name: true,
+          color: true,
+        },
+      },
       teams: {
         select: {
           id: true,
@@ -121,7 +155,55 @@ async function loadSessionSnapshot(
     remainingSeconds: calculateRemainingSeconds(durationSeconds, session.startedAt),
     skin,
     teams: session.teams.map(mapTeamSnapshot).sort(sortTeamsByColor),
+    turn: buildTurnSnapshot(session),
   };
+}
+
+function buildTurnSnapshot(session: {
+  currentTurnTeamId: string | null;
+  currentTurnStartedAt: Date | null;
+  activeDiceValueOne: number | null;
+  activeDiceValueTwo: number | null;
+  activeDiceRemainingMoves: number | null;
+  currentTurnTeam: {
+    id: string;
+    name: string;
+    color: ColorEquipo;
+  } | null;
+}) {
+  if (!session.currentTurnTeamId || !session.currentTurnTeam) {
+    return null;
+  }
+
+  return {
+    currentTeamId: session.currentTurnTeam.id,
+    currentTeamName: session.currentTurnTeam.name,
+    currentTeamColor: session.currentTurnTeam.color,
+    startedAt: session.currentTurnStartedAt?.toISOString() ?? null,
+    dice:
+      typeof session.activeDiceValueOne === 'number' && typeof session.activeDiceValueTwo === 'number'
+        ? {
+            valueOne: session.activeDiceValueOne,
+            valueTwo: session.activeDiceValueTwo,
+            total: session.activeDiceValueOne + session.activeDiceValueTwo,
+          }
+        : null,
+    remainingMoves:
+      typeof session.activeDiceValueOne === 'number' && typeof session.activeDiceValueTwo === 'number'
+        ? getTurnRemainingMoves(
+            session.activeDiceValueOne + session.activeDiceValueTwo,
+            session.activeDiceRemainingMoves
+          )
+        : null,
+  } satisfies SessionTurnSnapshot;
+}
+
+function getTurnRemainingMoves(total: number, remainingMoves: number | null) {
+  if (typeof remainingMoves !== 'number' || !Number.isInteger(remainingMoves) || remainingMoves < 0) {
+    return total;
+  }
+
+  return Math.min(remainingMoves, total);
 }
 
 function normalizeDurationMinutes(durationMinutes: number | null, fallbackDuration: string) {

@@ -57,6 +57,14 @@ function buildSession(activeConfig: ReturnType<typeof buildActiveConfig>) {
     durationSeconds: 3600,
     remainingSeconds: 3300,
     skin: activeConfig,
+    turn: {
+      currentTeamId: "team-rojo",
+      currentTeamName: "Equipo Rojo",
+      currentTeamColor: "ROJO" as TeamColor,
+      startedAt: "2026-05-04T10:00:00.000Z",
+      dice: null,
+      remainingMoves: null,
+    },
     teams: [
       {
         id: "team-rojo",
@@ -78,15 +86,88 @@ function buildSession(activeConfig: ReturnType<typeof buildActiveConfig>) {
   };
 }
 
+function clickBoardPercent(dataCy: string, positionX: number, positionY: number) {
+  cy.get(`[data-cy="${dataCy}"]`).then(($surface) => {
+    const element = $surface[0];
+    const { width, height } = element.getBoundingClientRect();
+
+    cy.wrap($surface).click((width * positionX) / 100, (height * positionY) / 100, { force: true });
+  });
+}
+
 describe("movimiento de peones en terminal", () => {
-  it("muestra un mensaje cuando el destino no es válido y permite reintentar otro movimiento", () => {
+  it("activa el modo debug del tablero y registra una sonda visual sobre el mapa", () => {
     const activeConfig = buildActiveConfig();
     const initialSession = buildSession(activeConfig);
+
+    cy.intercept("GET", "**/api/game/sessions/MOVE01/teams/team-rojo/state", {
+      statusCode: 200,
+      body: {
+        item: {
+          session: initialSession,
+          team: initialSession.teams[0],
+          hand: [],
+        },
+      },
+    }).as("getTeamState");
+
+    cy.visit("/terminal", {
+      onBeforeLoad(window) {
+        window.localStorage.setItem("sessionId", initialSession.id);
+        window.localStorage.setItem("sessionCode", initialSession.accessCode);
+        window.localStorage.setItem("sessionStatus", initialSession.status);
+        window.localStorage.setItem("teamId", initialSession.teams[0].id);
+        window.localStorage.setItem("teamColor", initialSession.teams[0].color);
+        window.localStorage.setItem("teamName", initialSession.teams[0].name);
+        window.localStorage.setItem("activeConfig", JSON.stringify(activeConfig));
+        window.localStorage.setItem("centerImage", activeConfig.centerImage);
+        window.localStorage.removeItem("boardDebugMode");
+      },
+    });
+
+    cy.wait("@getTeamState");
+    cy.get('[data-cy="board-debug-overlay"]').should("not.exist");
+
+    cy.get('[data-cy="terminal-board-debug-toggle"]').click();
+    cy.get('[data-cy="board-debug-overlay"]').should("be.visible");
+    cy.get('[data-cy="board-debug-grid-col-10"]').should("be.visible");
+    cy.get('[data-cy="board-debug-grid-row-12"]').should("be.visible");
+    cy.get('[data-cy="board-debug-node-spawn-rojo"]').should("be.visible");
+
+    clickBoardPercent("terminal-board-surface", 64.97, 10.03);
+
+    cy.get('[data-cy="board-debug-probe-cell"]').should("be.visible");
+    cy.get('[data-cy="board-debug-overlay"]').contains("spawn-rojo").should("be.visible");
+  });
+
+  it("permite seleccionar un destino final alcanzable y mover el peon en un solo movimiento", () => {
+    const activeConfig = buildActiveConfig();
+    const initialSession = buildSession(activeConfig);
+    const rolledSession = {
+      ...initialSession,
+      turn: {
+        ...initialSession.turn,
+        dice: {
+          valueOne: 1,
+          valueTwo: 1,
+          total: 2,
+        },
+        remainingMoves: 2,
+      },
+    };
     const movedSession = {
       ...initialSession,
+      turn: {
+        currentTeamId: "team-azul",
+        currentTeamName: "Equipo Azul",
+        currentTeamColor: "AZUL" as TeamColor,
+        startedAt: "2026-05-04T10:00:25.000Z",
+        dice: null,
+        remainingMoves: null,
+      },
       teams: initialSession.teams.map((team) =>
         team.id === "team-rojo"
-          ? { ...team, positionX: 78.6, positionY: 17.72 }
+          ? { ...team, positionX: 64.99, positionY: 23.17 }
           : team
       ),
     };
@@ -102,13 +183,46 @@ describe("movimiento de peones en terminal", () => {
       },
     }).as("getTeamState");
 
-    cy.intercept("GET", "**/api/game/sessions/MOVE01/teams/team-rojo/moves?*", (req) => {
-      const diceRoll = Number(req.query.diceRoll ?? 7);
+    cy.intercept("GET", "**/api/game/sessions/MOVE01/teams/team-rojo/moves", {
+      statusCode: 200,
+      body: {
+        item: {
+          diceRoll: 2,
+          remainingMoves: 2,
+          currentNode: {
+            id: "spawn-rojo",
+            label: "Salida roja",
+            positionX: 64.97,
+            positionY: 10.03,
+            kind: "spawn",
+          },
+          destinationNodes: [
+            {
+              id: "pasillo-superior-derecho",
+              label: "Cruce superior derecho",
+              positionX: 64.99,
+              positionY: 23.17,
+              kind: "square",
+              gridPosition: { col: 15, row: 4 },
+            },
+          ],
+        },
+      },
+    }).as("getTeamMoves");
+
+    cy.intercept("POST", "**/api/game/sessions/MOVE01/teams/team-rojo/roll", (req) => {
       req.reply({
         statusCode: 200,
         body: {
           item: {
-            diceRoll,
+            session: rolledSession,
+            dice: {
+              valueOne: 1,
+              valueTwo: 1,
+              total: 2,
+            },
+            diceRoll: 2,
+            remainingMoves: 2,
             currentNode: {
               id: "spawn-rojo",
               label: "Salida roja",
@@ -118,31 +232,19 @@ describe("movimiento de peones en terminal", () => {
             },
             destinationNodes: [
               {
-                id: "sala-superior-izquierda",
-                label: "Sala superior izquierda",
-                positionX: 21.66,
-                positionY: 15.17,
-                kind: "room",
-              },
-              {
                 id: "pasillo-superior-derecho",
                 label: "Cruce superior derecho",
-                positionX: 64.97,
-                positionY: 18.4,
+                positionX: 64.99,
+                positionY: 23.17,
                 kind: "square",
-              },
-              {
-                id: "sala-superior-derecha",
-                label: "Sala superior derecha",
-                positionX: 78.6,
-                positionY: 17.72,
-                kind: "room",
+                gridPosition: { col: 15, row: 4 },
               },
             ],
+            turnAdvanced: false,
           },
         },
       });
-    }).as("getTeamMoves");
+    }).as("rollTeamDice");
 
     cy.visit("/terminal", {
       onBeforeLoad(window) {
@@ -158,55 +260,48 @@ describe("movimiento de peones en terminal", () => {
     });
 
     cy.wait("@getTeamState");
-    cy.contains("button", "ESPERA").click();
-    cy.contains("Tira los dados y luego pulsa directamente una casilla o una sala del tablero. La terminal te pedirá confirmar el movimiento.").should("be.visible");
+    cy.get('[data-cy="terminal-turn-indicator"]').should("contain.text", "MI TURNO");
+    cy.get('[data-cy="board-space-1"]').should("not.exist");
+    cy.get('[data-cy="board-pawn-rojo"]').should("exist");
+    cy.get('[data-cy="board-pawn-azul"]').should("not.exist");
+    cy.contains("Pulsa Tirar dados para registrar la tirada del turno actual y desbloquear los destinos válidos en el tablero.").should("be.visible");
 
     cy.get('[data-cy="terminal-dice-roll"]').click({ force: true });
+    cy.wait("@rollTeamDice");
     cy.wait("@getTeamMoves");
 
     cy.get('[data-cy="terminal-destination-select"]').should("not.exist");
-    cy.contains("Posición: Salida roja").should("be.visible");
-    cy.get('[data-cy="terminal-board-node-sala-superior-izquierda"]').click({ force: true });
+    cy.contains("Alcance de tirada: 2").should("be.visible");
+
+    clickBoardPercent("terminal-board-surface", 64.99, 23.17);
     cy.get('[data-cy="terminal-move-confirm-dialog"]').should("be.visible");
-    cy.contains("Vas a entrar en Sala superior izquierda.").should("be.visible");
+    cy.contains("Vas a mover el peón hasta").should("be.visible");
 
     cy.intercept("POST", "**/api/game/sessions/MOVE01/teams/team-rojo/move", (req) => {
-      expect(req.body).to.have.property("targetNodeId", "sala-superior-izquierda");
-      expect(req.body).to.have.property("diceRoll");
-
-      req.reply({
-        statusCode: 409,
-        body: {
-          error: "El movimiento hacia Sala superior izquierda no es válido para la tirada actual. Prueba con otra casilla o sala.",
-        },
-      });
-    }).as("moveTeamInvalid");
-
-    cy.get('[data-cy="terminal-move-confirm"]').click({ force: true });
-    cy.wait("@moveTeamInvalid");
-    cy.contains("El movimiento hacia Sala superior izquierda no es válido para la tirada actual. Prueba con otra casilla o sala.").should("be.visible");
-
-    cy.get('[data-cy="terminal-board-node-sala-superior-derecha"]').click({ force: true });
-    cy.get('[data-cy="terminal-move-confirm-dialog"]').should("be.visible");
-    cy.contains("El movimiento hacia Sala superior izquierda no es válido para la tirada actual. Prueba con otra casilla o sala.").should("not.exist");
-
-    cy.intercept("POST", "**/api/game/sessions/MOVE01/teams/team-rojo/move", (req) => {
-      expect(req.body).to.have.property("targetNodeId", "sala-superior-derecha");
-      expect(req.body).to.have.property("diceRoll");
+      expect(req.body).to.have.property("targetNodeId", "pasillo-superior-derecho");
 
       req.reply({
         statusCode: 200,
         body: {
           item: {
             session: movedSession,
-            diceRoll: req.body.diceRoll,
-            currentNode: {
-              id: "sala-superior-derecha",
-              label: "Sala superior derecha",
-              positionX: 78.6,
-              positionY: 17.72,
-              kind: "room",
+            dice: {
+              valueOne: 1,
+              valueTwo: 1,
+              total: 2,
             },
+            diceRoll: 2,
+            remainingMoves: null,
+            currentNode: {
+              id: "pasillo-superior-derecho",
+              label: "Cruce superior derecho",
+              positionX: 64.99,
+              positionY: 23.17,
+              kind: "square",
+              gridPosition: { col: 15, row: 4 },
+            },
+            destinationNodes: [],
+            turnAdvanced: true,
           },
         },
       });
@@ -215,10 +310,10 @@ describe("movimiento de peones en terminal", () => {
     cy.get('[data-cy="terminal-move-confirm"]').click({ force: true });
     cy.wait("@moveTeamValid");
 
-    cy.contains("Posición: Sala superior derecha").should("be.visible");
+    cy.get('[data-cy="terminal-turn-indicator"]').should("contain.text", "ESPERA");
     cy.get('[data-cy="board-pawn-rojo"]')
       .should("have.attr", "style")
-      .and("include", "top: 17.72%")
-      .and("include", "left: 78.6%");
+      .and("include", "top: 23.17%")
+      .and("include", "left: 64.99%");
   });
 });

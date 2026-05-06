@@ -19,6 +19,13 @@ import {
   type LobbyPresenceState,
 } from "../../src/lib/lobbySocket";
 import {
+  buildBoardDebugProbe,
+  getStoredBoardDebugMode,
+  setStoredBoardDebugMode,
+  type BoardDebugProbe,
+} from "../../src/lib/boardDebug";
+import { findNearestBoardMovementNode } from "../../src/lib/boardMovement";
+import {
   getStoredSessionCode,
   getStoredSessionDurationSeconds,
   getStoredSessionId,
@@ -43,6 +50,8 @@ export function BoardView() {
   const [events, setEvents] = useState<LobbyEventMessage[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<BoardConnectionStatus>("idle");
   const [boardError, setBoardError] = useState<string | null>(null);
+  const [isBoardDebugEnabled, setIsBoardDebugEnabled] = useState(() => getStoredBoardDebugMode());
+  const [boardDebugProbe, setBoardDebugProbe] = useState<BoardDebugProbe | null>(null);
   const [monitoringNow, setMonitoringNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -175,6 +184,7 @@ export function BoardView() {
   }, [navigate]);
 
   const monitoredTeams = presenceState?.teams ?? [];
+  const currentTurn = presenceState?.turn ?? null;
   const connectedCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "connected").length;
   const inactiveCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "inactive").length;
   const disconnectedCount = monitoredTeams.filter((team) => getTeamMonitoringStatus(team, monitoringNow) === "disconnected").length;
@@ -214,6 +224,7 @@ export function BoardView() {
         ];
 
   const boardSpaces = mapBoardSpaces(boardConfig);
+  const boardCenterImage = getRenderableBoardCenterImage(boardConfig?.centerImage);
   const boardPawns = monitoredTeams.map((team) => ({
     id: team.id,
     color: team.color,
@@ -226,6 +237,29 @@ export function BoardView() {
         ? 0.7
         : 0.35,
   }));
+
+  const handleBoardDebugToggle = () => {
+    setIsBoardDebugEnabled((currentValue) => {
+      const nextValue = !currentValue;
+      setStoredBoardDebugMode(nextValue);
+      if (!nextValue) {
+        setBoardDebugProbe(null);
+      }
+      return nextValue;
+    });
+  };
+
+  const handleBoardDebugSurfaceClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const boardBounds = event.currentTarget.getBoundingClientRect();
+    if (boardBounds.width === 0 || boardBounds.height === 0) {
+      return;
+    }
+
+    const positionX = ((event.clientX - boardBounds.left) / boardBounds.width) * 100;
+    const positionY = ((event.clientY - boardBounds.top) / boardBounds.height) * 100;
+    const matchedNode = findNearestBoardMovementNode(positionX, positionY);
+    setBoardDebugProbe(buildBoardDebugProbe(positionX, positionY, matchedNode));
+  };
 
   return (
     <div className="flex w-full h-screen bg-[#020617] text-cyan-400 font-mono overflow-hidden">
@@ -253,6 +287,20 @@ export function BoardView() {
             <span className={`text-xl font-bold font-mono tracking-widest ${timeRemaining < 300 ? "text-red-400 animate-pulse" : "text-cyan-400"}`}>
               {formatTime(timeRemaining)}
             </span>
+          </div>
+          <div className="col-span-2 flex items-center justify-between gap-3 rounded-lg border border-cyan-800/40 bg-cyan-950/10 px-4 py-3">
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] text-slate-500 uppercase tracking-widest">Turno actual</span>
+              <span className="text-sm font-bold text-cyan-100">
+                {currentTurn?.currentTeamName ?? "Pendiente de sincronizar"}
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">Dados</span>
+              <span className="text-lg font-black text-emerald-300">
+                {currentTurn?.dice ? `${currentTurn.dice.valueOne} + ${currentTurn.dice.valueTwo} = ${currentTurn.dice.total}` : "Sin tirar"}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -340,11 +388,33 @@ export function BoardView() {
         <div className="relative z-10 w-full max-w-5xl aspect-square bg-[#380b0b] rounded-xl shadow-[0_0_60px_-10px_rgba(0,0,0,1)] border-4 border-slate-800 p-2 flex items-center justify-center">
           <ThemedBoard
             boardAlt="Tablero de partida"
-            centerImage={boardConfig?.centerImage}
+            centerImage={boardCenterImage}
+            centerImageAlt=""
             spaces={boardSpaces}
+            showDebugOverlay={isBoardDebugEnabled}
+            debugProbe={boardDebugProbe}
+            spaceNameScale={1.6}
             teams={boardPawns}
             dataCy="host-themed-board"
-          />
+          >
+            {isBoardDebugEnabled ? (
+              <div
+                data-cy="host-board-debug-surface"
+                className="absolute inset-0 z-20 cursor-crosshair"
+                onClick={handleBoardDebugSurfaceClick}
+              />
+            ) : null}
+          </ThemedBoard>
+
+          <button
+            type="button"
+            data-cy="host-board-debug-toggle"
+            onClick={handleBoardDebugToggle}
+            className={`absolute right-4 top-4 z-30 rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] shadow-[0_0_10px_rgba(0,0,0,0.35)] ${isBoardDebugEnabled ? 'border-fuchsia-400/70 bg-fuchsia-950/75 text-fuchsia-100' : 'border-cyan-900/60 bg-slate-950/85 text-cyan-200'}`}
+            title="Activa la rejilla y los nodos del tablero para ajustar el mapa"
+          >
+            {isBoardDebugEnabled ? 'Debug on' : 'Debug off'}
+          </button>
 
           <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-cyan-800 -translate-x-4 -translate-y-4"></div>
           <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-cyan-800 translate-x-4 -translate-y-4"></div>
@@ -397,4 +467,23 @@ function formatEventTime(timestamp: number) {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+function getRenderableBoardCenterImage(centerImage: string | null | undefined) {
+  const normalizedCenterImage = centerImage?.trim();
+
+  if (!normalizedCenterImage || isCenterImageIndicator(normalizedCenterImage)) {
+    return undefined;
+  }
+
+  return normalizedCenterImage;
+}
+
+function isCenterImageIndicator(centerImage: string) {
+  return (
+    centerImage.startsWith("data:image/svg+xml") &&
+    centerImage.includes('cx="60" cy="60" r="30"') &&
+    centerImage.includes('d="M42 60h36"') &&
+    centerImage.includes('stroke-linecap="round"')
+  );
 }

@@ -15,6 +15,7 @@ import {
   loadSessionSnapshotById,
   type SessionSnapshot,
   type SessionTeamSnapshot,
+  type SessionTurnSnapshot,
 } from '../lib/sessionSnapshots.js';
 import { prisma } from '../lib/prisma.js';
 import { env } from '../config/env.js';
@@ -35,6 +36,7 @@ export type LobbyPresenceState = {
   durationSeconds: number;
   remainingSeconds: number;
   teams: LobbyPresenceTeam[];
+  turn: SessionTurnSnapshot | null;
   updatedAt: number;
 };
 
@@ -333,6 +335,7 @@ async function buildLobbyPresenceState(sessionId: string): Promise<LobbyPresence
       connected: lobbyPresenceStore.isTeamConnected(snapshot.id, team.id),
       lastSeenAt: lobbyPresenceStore.getTeamLastSeen(snapshot.id, team.id),
     })),
+    turn: snapshot.turn,
     updatedAt: Date.now(),
   };
 }

@@ -25,6 +25,7 @@ import { verifyAdminToken, type AuthTokenPayload } from '../middleware/auth.js';
 import { lobbyPresenceStore } from './lobbyPresenceStore.js';
 import { startSessionByAccessCode } from '../lib/sessionGameplay.js';
 import { findBoardMovementNodeByPosition, isSecretPassageMoveValid } from '../lib/sessionMovement.js';
+import { BOARD_MOVEMENT_NODES } from '../lib/boardGraph.js';
 
 type LobbyPresenceTeam = SessionTeamSnapshot & {
   connected: boolean;
@@ -301,11 +302,14 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
         throw new HttpError(409, 'El pasadizo solicitado no está disponible para la sala actual.');
       }
 
+      const fromRoomLabel = currentNode.label;
+      const toRoomLabel = BOARD_MOVEMENT_NODES[input.toNodeId]?.label ?? input.toNodeId;
+
       const occurredAt = Date.now();
       broadcastLobbyEvent(io, socket.data.sessionId, {
         id: randomUUID(),
         type: 'system',
-        message: `${currentTeam.name} está preparando el uso de pasadizo desde ${input.fromNodeId} hacia ${input.toNodeId}.`,
+        message: `${currentTeam.name} está preparando el uso de pasadizo desde ${fromRoomLabel} hacia ${toRoomLabel}.`,
         occurredAt,
         teamColor: currentTeam.color,
         teamId: currentTeam.id,

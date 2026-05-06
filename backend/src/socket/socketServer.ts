@@ -5,9 +5,11 @@ import { Server, type Socket } from 'socket.io';
 import {
   hostLobbySubscriptionSchema,
   startGameCommandSchema,
+  teamSecretPassageCommandSchema,
   teamLobbySubscriptionSchema,
   type HostLobbySubscriptionInput,
   type StartGameCommandInput,
+  type TeamSecretPassageCommandInput,
   type TeamLobbySubscriptionInput,
 } from '../lib/lobbySocketSchemas.js';
 import { HttpError } from '../lib/http.js';
@@ -22,6 +24,9 @@ import { env } from '../config/env.js';
 import { verifyAdminToken, type AuthTokenPayload } from '../middleware/auth.js';
 import { lobbyPresenceStore } from './lobbyPresenceStore.js';
 import { startSessionByAccessCode } from '../lib/sessionGameplay.js';
+import { findBoardMovementNodeByPosition, isSecretPassageMoveValid } from '../lib/sessionMovement.js';
+import { buildNextTurnUpdate } from '../lib/sessionTurn.js';
+import { BOARD_MOVEMENT_NODES } from '../lib/boardGraph.js';
 
 type LobbyPresenceTeam = SessionTeamSnapshot & {
   connected: boolean;
@@ -74,6 +79,24 @@ type StartGameAck =
       error: string;
     };
 
+type TeamSecretPassageAck =
+  | {
+      ok: true;
+      occurredAt: number;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+type LobbyClientToServerEvents = {
+  'lobby:host-subscribe': (payload: unknown, acknowledge?: (response: LobbySubscribeAck) => void) => void;
+  'lobby:team-subscribe': (payload: unknown, acknowledge?: (response: LobbySubscribeAck) => void) => void;
+  startGame: (payload: unknown, acknowledge?: (response: StartGameAck) => void) => void;
+  'lobby:team-heartbeat': () => void;
+  'turn:use-secret-passage': (payload: unknown, acknowledge?: (response: TeamSecretPassageAck) => void) => void;
+};
+
 type LobbySocketData = {
   sessionId?: string;
   teamId?: string;
@@ -82,7 +105,7 @@ type LobbySocketData = {
 };
 
 type LobbySocket = Socket<
-  Record<string, never>,
+  LobbyClientToServerEvents,
   {
     'lobby:presence-updated': (state: LobbyPresenceState) => void;
     'lobby:event': (event: LobbyEvent) => void;
@@ -225,6 +248,117 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
     }
   });
 
+  socket.on('turn:use-secret-passage', async (payload: unknown, acknowledge?: (response: TeamSecretPassageAck) => void) => {
+    try {
+      if (socket.data.role !== 'team' || !socket.data.sessionId || !socket.data.teamId) {
+        throw new HttpError(403, 'Solo un terminal de equipo puede usar un pasadizo.');
+      }
+
+      const input = parseTeamSecretPassageCommand(payload);
+
+      const session = await prisma.partida.findUnique({
+        where: { id: socket.data.sessionId },
+        select: {
+          id: true,
+          status: true,
+          currentTurnTeamId: true,
+          teams: {
+            where: { id: socket.data.teamId },
+            select: {
+              id: true,
+              name: true,
+              color: true,
+              positionX: true,
+              positionY: true,
+            },
+          },
+        },
+      });
+
+      if (!session) {
+        throw new HttpError(404, 'La sesión realtime indicada ya no existe.');
+      }
+
+      ensureRealtimeStateAvailable(session.status ?? EstadoPartida.LOBBY);
+
+      if (session.status !== EstadoPartida.EN_CURSO) {
+        throw new HttpError(409, 'Solo se puede usar un pasadizo cuando la partida está en curso.');
+      }
+
+      if (session.currentTurnTeamId !== socket.data.teamId) {
+        throw new HttpError(409, 'Solo el equipo con turno activo puede usar un pasadizo.');
+      }
+
+      const currentTeam = session.teams[0];
+      if (!currentTeam) {
+        throw new HttpError(404, 'El equipo indicado no pertenece a la sesión actual.');
+      }
+
+      const currentNode = findBoardMovementNodeByPosition(currentTeam.positionX, currentTeam.positionY);
+      if (!currentNode || currentNode.id !== input.fromNodeId) {
+        throw new HttpError(409, 'La sala origen no coincide con la posición actual del equipo.');
+      }
+
+      if (!isSecretPassageMoveValid(input.fromNodeId, input.toNodeId)) {
+        throw new HttpError(409, 'El pasadizo solicitado no está disponible para la sala actual.');
+      }
+
+      const fromRoomLabel = currentNode.label;
+      const toRoomNode = BOARD_MOVEMENT_NODES[input.toNodeId];
+      const toRoomLabel = toRoomNode?.label ?? input.toNodeId;
+
+      if (!toRoomNode) {
+        throw new HttpError(404, 'El nodo destino del pasadizo no existe en el tablero.');
+      }
+
+      // Mover el peón al nodo destino y avanzar el turno
+      const sessionFull = await prisma.partida.findUnique({
+        where: { id: socket.data.sessionId },
+        select: {
+          id: true,
+          currentTurnTeamId: true,
+          currentTurnStartedAt: true,
+          activeDiceValueOne: true,
+          activeDiceValueTwo: true,
+          activeDiceRemainingMoves: true,
+          teams: { select: { id: true, name: true, color: true } },
+        },
+      });
+
+      if (!sessionFull) {
+        throw new HttpError(404, 'La sesión no existe.');
+      }
+
+      await prisma.equipo.update({
+        where: { id: socket.data.teamId },
+        data: {
+          positionX: toRoomNode.positionX,
+          positionY: toRoomNode.positionY,
+        },
+      });
+
+      await prisma.partida.update({
+        where: { id: socket.data.sessionId },
+        data: buildNextTurnUpdate(sessionFull),
+      });
+
+      const occurredAt = Date.now();
+
+      await emitSessionSnapshotUpdate(socket.data.sessionId, {
+        id: randomUUID(),
+        type: 'system',
+        message: `${currentTeam.name} ha usado el pasadizo de ${fromRoomLabel} a ${toRoomLabel}.`,
+        occurredAt,
+        teamColor: currentTeam.color,
+        teamId: currentTeam.id,
+      });
+
+      acknowledge?.({ ok: true, occurredAt });
+    } catch (error) {
+      acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });
+    }
+  });
+
   socket.on('disconnect', async () => {
     if (socket.data.role !== 'team' || !socket.data.sessionId || !socket.data.teamId) {
       return;
@@ -291,6 +425,15 @@ function parseStartGameCommand(payload: unknown): StartGameCommandInput {
   const parsed = startGameCommandSchema.safeParse(payload);
   if (!parsed.success) {
     throw new HttpError(400, 'La orden de inicio de partida no es válida.', parsed.error.issues.map((issue) => issue.message));
+  }
+
+  return parsed.data;
+}
+
+function parseTeamSecretPassageCommand(payload: unknown): TeamSecretPassageCommandInput {
+  const parsed = teamSecretPassageCommandSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new HttpError(400, 'La orden de pasadizo no es válida.', parsed.error.issues.map((issue) => issue.message));
   }
 
   return parsed.data;

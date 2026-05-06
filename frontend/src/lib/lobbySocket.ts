@@ -53,6 +53,16 @@ export type StartGameAck =
       error: string;
     };
 
+export type TeamSecretPassageAck =
+  | {
+      ok: true;
+      occurredAt: number;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 type ServerToClientEvents = {
   'lobby:presence-updated': (state: LobbyPresenceState) => void;
   'lobby:event': (event: LobbyEventMessage) => void;
@@ -66,6 +76,10 @@ type ClientToServerEvents = {
     acknowledge: (response: LobbySubscribeAck) => void
   ) => void;
   'lobby:team-heartbeat': () => void;
+  'turn:use-secret-passage': (
+    payload: { fromNodeId: string; toNodeId: string },
+    acknowledge: (response: TeamSecretPassageAck) => void
+  ) => void;
   startGame: (payload: { accessCode: string }, acknowledge: (response: StartGameAck) => void) => void;
 };
 
@@ -98,6 +112,16 @@ export function emitTeamHeartbeat(socket: LobbySocketClient) {
 export function startGameFromLobby(socket: LobbySocketClient, accessCode: string) {
   return new Promise<StartGameAck>((resolve) => {
     socket.emit('startGame', { accessCode }, resolve);
+  });
+}
+
+export function emitTeamSecretPassage(
+  socket: LobbySocketClient,
+  fromNodeId: string,
+  toNodeId: string
+) {
+  return new Promise<TeamSecretPassageAck>((resolve) => {
+    socket.emit('turn:use-secret-passage', { fromNodeId, toNodeId }, resolve);
   });
 }
 

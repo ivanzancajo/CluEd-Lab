@@ -24,14 +24,17 @@ import {
 import { DiceAnimation } from "../DiceAnimation";
 import {
   createLobbySocketClient,
+  emitTeamSecretPassage,
   emitTeamHeartbeat,
   subscribeTeamToLobby,
   type GameStartedPayload,
+  type LobbySocketClient,
   type LobbyPresenceState,
 } from "../../src/lib/lobbySocket";
 import {
   findNearestBoardMovementNode,
   getRoomEntryNodeByDoorNodeId,
+  getSecretPassageDestinationNodeByRoomNodeId,
   type BoardMovementNode,
 } from "../../src/lib/boardMovement";
 import { BOARD_CENTER_IMAGE_BOUNDS, mapBoardSpaces, readStoredBoardTheme, toBoardPercent, type StoredBoardTheme } from "../../src/lib/boardTheme";
@@ -190,6 +193,7 @@ function mapHandCardToTerminalCard(card: TeamHandCard, config: GameConfig): Term
 
 export function TerminalView() {
   const navigate = useNavigate();
+  const lobbySocketRef = React.useRef<LobbySocketClient | null>(null);
   const [activeTab, setActiveTab] = useState("map");
   const [centerImage, setCenterImage] = useState("");
   const [boardTheme, setBoardTheme] = useState<StoredBoardTheme | null>(() => readStoredBoardTheme());
@@ -212,6 +216,7 @@ export function TerminalView() {
   const [diceResetSignal, setDiceResetSignal] = useState(0);
   const [isLoadingMoves, setIsLoadingMoves] = useState(false);
   const [isMovingPawn, setIsMovingPawn] = useState(false);
+  const [isEmittingSecretPassage, setIsEmittingSecretPassage] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
   
   const [categories, setCategories] = useState<{
@@ -466,6 +471,38 @@ export function TerminalView() {
     }
   };
 
+  const handleEmitSecretPassage = async () => {
+    if (!currentMoveNode || currentMoveNode.kind !== "room") {
+      return;
+    }
+
+    const destinationRoomNode = getSecretPassageDestinationNodeByRoomNodeId(currentMoveNode.id);
+    const socket = lobbySocketRef.current;
+
+    if (!destinationRoomNode || !socket) {
+      setMoveError("No se ha podido usar el pasadizo porque la conexión realtime no está disponible.");
+      return;
+    }
+
+    setIsEmittingSecretPassage(true);
+
+    try {
+      const response = await emitTeamSecretPassage(socket, currentMoveNode.id, destinationRoomNode.id);
+      if (!response.ok) {
+        setMoveError(response.error);
+        return;
+      }
+
+      setDiceResetSignal((previousValue) => previousValue + 1);
+      setCurrentMoveNode(null);
+      void refreshMoveState();
+    } catch {
+      setMoveError("No se ha podido usar el pasadizo desde este terminal.");
+    } finally {
+      setIsEmittingSecretPassage(false);
+    }
+  };
+
   const applyGameConfig = (config: GameConfig) => {
     setBoardTheme(config);
     setCatNames({
@@ -572,6 +609,7 @@ export function TerminalView() {
     }
 
     const socket = createLobbySocketClient();
+    lobbySocketRef.current = socket;
     let isSubscribed = false;
 
     const sendHeartbeat = () => {
@@ -656,6 +694,7 @@ export function TerminalView() {
 
     return () => {
       window.clearInterval(heartbeatIntervalId);
+      lobbySocketRef.current = null;
       socket.disconnect();
     };
   }, [navigate]);
@@ -683,6 +722,15 @@ export function TerminalView() {
       setDiceResetSignal((previousValue) => previousValue + 1);
     }
   }, [activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, refreshMoveState, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
+
+  // Carga la posición actual del equipo al inicio del turno (dado=null) para detectar sala esquina
+  React.useEffect(() => {
+    if (!isMyTurn || sessionStatus !== "EN_CURSO" || sessionTurn?.dice !== null) {
+      return;
+    }
+    void refreshMoveState();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMyTurn, sessionStatus, sessionTurn?.currentTeamId]);
 
   const currentTeamMeta = teamColor ? getTeamMeta(teamColor) : null;
   const sessionStatusLabel =
@@ -728,6 +776,16 @@ export function TerminalView() {
       isCurrent: true,
     }));
   const selectedDestinationNode = destinationNodes.find((node) => node.id === selectedDestinationNodeId) ?? null;
+  const secretPassageDestinationNode = currentMoveNode?.kind === "room"
+    ? getSecretPassageDestinationNodeByRoomNodeId(currentMoveNode.id)
+    : null;
+  const canEmitSecretPassageEvent =
+    sessionStatus === "EN_CURSO" &&
+    isMyTurn &&
+    sessionTurn?.dice === null &&
+    currentMoveNode?.kind === "room" &&
+    Boolean(secretPassageDestinationNode) &&
+    lobbyConnectionStatus === "connected";
   const selectedDestinationRoomNode = currentMoveNode?.kind !== "room" && selectedDestinationNode
     ? getRoomEntryNodeByDoorNodeId(selectedDestinationNode.id)
     : null;
@@ -927,9 +985,11 @@ export function TerminalView() {
                         Ahora mismo juega {currentTurnLabel}. La terminal se activará automáticamente cuando llegue tu turno.
                       </p>
                     ) : sessionTurn.dice === null ? (
-                      <p className="mt-3 text-[11px] text-slate-400">
-                        Pulsa Tirar dados para registrar la tirada del turno actual y desbloquear los destinos válidos en el tablero.
-                      </p>
+                      <div className="mt-3 space-y-3">
+                        <p className="text-[11px] text-slate-400">
+                          Pulsa Tirar dados para registrar la tirada del turno actual y desbloquear los destinos válidos en el tablero.
+                        </p>
+                      </div>
                     ) : isLoadingMoves ? (
                       <p className="mt-3 text-[11px] text-cyan-200 uppercase tracking-[0.18em]">
                         Preparando selector de destino...
@@ -950,6 +1010,20 @@ export function TerminalView() {
                         </p>
                       </div>
                     )}
+
+                    {canEmitSecretPassageEvent && secretPassageDestinationNode ? (
+                      <div className="mt-3 rounded-lg border border-amber-800/70 bg-amber-950/20 p-3">
+                        <button
+                          type="button"
+                          data-cy="terminal-secret-passage-emit"
+                          onClick={() => void handleEmitSecretPassage()}
+                          disabled={isEmittingSecretPassage}
+                          className="rounded-md border border-amber-500/70 bg-amber-500 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isEmittingSecretPassage ? "Usando..." : `Usar pasadizo → ${secretPassageDestinationNode.label}`}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ) : null}

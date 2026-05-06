@@ -16,6 +16,12 @@ export const startGameCommandSchema = z.object({
   ),
 });
 
+export const teamSecretPassageCommandSchema = z.object({
+  fromNodeId: z.string().trim().min(1, 'La sala origen del pasadizo es obligatoria.'),
+  toNodeId: z.string().trim().min(1, 'La sala destino del pasadizo es obligatoria.'),
+});
+
 export type HostLobbySubscriptionInput = z.infer<typeof hostLobbySubscriptionSchema>;
 export type TeamLobbySubscriptionInput = z.infer<typeof teamLobbySubscriptionSchema>;
 export type StartGameCommandInput = z.infer<typeof startGameCommandSchema>;
+export type TeamSecretPassageCommandInput = z.infer<typeof teamSecretPassageCommandSchema>;

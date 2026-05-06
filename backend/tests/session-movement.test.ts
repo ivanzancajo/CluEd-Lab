@@ -6,6 +6,7 @@ import {
   getAdjacentMoveNodes,
   getIncrementalMoveNodes,
   getReachableMoveNodes,
+  isSecretPassageMoveValid,
   resolveCommittedMoveTargetNode,
 } from '../src/lib/sessionMovement.js';
 
@@ -21,6 +22,13 @@ describe('sessionMovement', () => {
 
     expect(adjacentMoves).toHaveLength(1);
     expect(adjacentMoves[0]).toMatchObject({ kind: 'square' });
+  });
+
+  it('permite salir desde spawn-morado al menos a un nodo adyacente', () => {
+    const adjacentMoves = getAdjacentMoveNodes('spawn-morado');
+
+    expect(adjacentMoves).toHaveLength(1);
+    expect(adjacentMoves[0]).toMatchObject({ id: 'pasillo-izquierdo-superior' });
   });
 
   it('alcanza el cruce superior derecho con una tirada de dos casillas', () => {
@@ -83,6 +91,32 @@ describe('sessionMovement', () => {
         expect.objectContaining({ gridPosition: { col: 7, row: 19 }, stepsRequired: 1 }),
       ])
     );
+  });
+
+  it('configura pasadizos entre salas de esquina en ambos sentidos', () => {
+    expect(BOARD_MOVEMENT_CONNECTIONS['sala-superior-izquierda']).toEqual(
+      expect.arrayContaining(['sala-inferior-derecha'])
+    );
+    expect(BOARD_MOVEMENT_CONNECTIONS['sala-inferior-derecha']).toEqual(
+      expect.arrayContaining(['sala-superior-izquierda'])
+    );
+    expect(BOARD_MOVEMENT_CONNECTIONS['sala-superior-derecha']).toEqual(
+      expect.arrayContaining(['sala-inferior-izquierda'])
+    );
+    expect(BOARD_MOVEMENT_CONNECTIONS['sala-inferior-izquierda']).toEqual(
+      expect.arrayContaining(['sala-superior-derecha'])
+    );
+  });
+
+  it('valida correctamente un movimiento por pasadizo entre salas opuestas', () => {
+    expect(isSecretPassageMoveValid('sala-superior-izquierda', 'sala-inferior-derecha')).toBe(true);
+    expect(isSecretPassageMoveValid('sala-superior-derecha', 'sala-inferior-izquierda')).toBe(true);
+  });
+
+  it('rechaza movimientos que no correspondan a un pasadizo válido', () => {
+    expect(isSecretPassageMoveValid('sala-superior-izquierda', 'sala-superior-derecha')).toBe(false);
+    expect(isSecretPassageMoveValid('square:grid:5:3', 'sala-inferior-derecha')).toBe(false);
+    expect(isSecretPassageMoveValid('sala-superior-izquierda', 'square:grid:18:18')).toBe(false);
   });
 
   it('al confirmar una puerta desde el pasillo sitúa el peón dentro de la sala', () => {
@@ -150,7 +184,7 @@ describe('sessionMovement', () => {
     });
   });
 
-  it('mantiene las salas conectadas solo mediante casillas de puerta', () => {
+  it('mantiene las salas conectadas solo mediante puertas y pasadizos de esquina', () => {
     Object.values(BOARD_MOVEMENT_NODES)
       .filter((node) => node.kind === 'room')
       .forEach((roomNode) => {
@@ -159,7 +193,8 @@ describe('sessionMovement', () => {
         expect(linkedNodeIds.length).toBeGreaterThan(0);
 
         linkedNodeIds.forEach((linkedNodeId) => {
-          expect(BOARD_MOVEMENT_NODES[linkedNodeId]?.kind).toBe('square');
+          const linkedNodeKind = BOARD_MOVEMENT_NODES[linkedNodeId]?.kind;
+          expect(linkedNodeKind === 'square' || linkedNodeKind === 'room').toBe(true);
         });
       });
   });

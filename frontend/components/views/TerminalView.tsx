@@ -32,6 +32,7 @@ import {
 import {
   findNearestBoardMovementNode,
   getRoomEntryNodeByDoorNodeId,
+  getSecretPassageDestinationNodeByRoomNodeId,
   type BoardMovementNode,
 } from "../../src/lib/boardMovement";
 import { BOARD_CENTER_IMAGE_BOUNDS, mapBoardSpaces, readStoredBoardTheme, toBoardPercent, type StoredBoardTheme } from "../../src/lib/boardTheme";
@@ -728,6 +729,16 @@ export function TerminalView() {
       isCurrent: true,
     }));
   const selectedDestinationNode = destinationNodes.find((node) => node.id === selectedDestinationNodeId) ?? null;
+  const secretPassageDestinationNode = currentMoveNode?.kind === "room"
+    ? getSecretPassageDestinationNodeByRoomNodeId(currentMoveNode.id)
+    : null;
+  const canEmitSecretPassageEvent =
+    sessionStatus === "EN_CURSO" &&
+    isMyTurn &&
+    sessionTurn?.dice === null &&
+    currentMoveNode?.kind === "room" &&
+    Boolean(secretPassageDestinationNode) &&
+    lobbyConnectionStatus === "connected";
   const selectedDestinationRoomNode = currentMoveNode?.kind !== "room" && selectedDestinationNode
     ? getRoomEntryNodeByDoorNodeId(selectedDestinationNode.id)
     : null;
@@ -927,9 +938,18 @@ export function TerminalView() {
                         Ahora mismo juega {currentTurnLabel}. La terminal se activará automáticamente cuando llegue tu turno.
                       </p>
                     ) : sessionTurn.dice === null ? (
-                      <p className="mt-3 text-[11px] text-slate-400">
-                        Pulsa Tirar dados para registrar la tirada del turno actual y desbloquear los destinos válidos en el tablero.
-                      </p>
+                      <div className="mt-3 space-y-3">
+                        <p className="text-[11px] text-slate-400">
+                          Pulsa Tirar dados para registrar la tirada del turno actual y desbloquear los destinos válidos en el tablero.
+                        </p>
+                        {canEmitSecretPassageEvent && secretPassageDestinationNode ? (
+                          <div className="rounded-lg border border-amber-800/70 bg-amber-950/20 p-3">
+                            <p className="text-[11px] text-amber-100">
+                              Estás en una sala con pasadizo: puedes emitir el uso hacia {secretPassageDestinationNode.label}.
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
                     ) : isLoadingMoves ? (
                       <p className="mt-3 text-[11px] text-cyan-200 uppercase tracking-[0.18em]">
                         Preparando selector de destino...

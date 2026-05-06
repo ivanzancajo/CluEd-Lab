@@ -337,6 +337,13 @@ const ROOM_ENTRY_DOOR_GRID_COORDINATES: Record<string, readonly BoardGridCoordin
   'sala-inferior-derecha': [{ col: 18, row: 18 }],
 } as const;
 
+const ROOM_SECRET_PASSAGE_DESTINATIONS: Record<string, string> = {
+  'sala-superior-izquierda': 'sala-inferior-derecha',
+  'sala-inferior-derecha': 'sala-superior-izquierda',
+  'sala-superior-derecha': 'sala-inferior-izquierda',
+  'sala-inferior-izquierda': 'sala-superior-derecha',
+} as const;
+
 const ROOM_NODE_ID_BY_DOOR_GRID_KEY: Record<string, string> = Object.fromEntries(
   Object.entries(ROOM_ENTRY_DOOR_GRID_COORDINATES).flatMap(([roomNodeId, coordinates]) =>
     coordinates.map((coordinate) => [buildGridCellKey(coordinate), roomNodeId])
@@ -510,6 +517,16 @@ export function getRoomEntryNodeByDoorNodeId(nodeId: string) {
   return roomNodeId ? BOARD_MOVEMENT_NODES[roomNodeId] ?? null : null;
 }
 
+export function getSecretPassageDestinationNodeByRoomNodeId(nodeId: string) {
+  const node = BOARD_MOVEMENT_NODES[nodeId];
+  if (!node || node.kind !== 'room') {
+    return null;
+  }
+
+  const destinationRoomNodeId = ROOM_SECRET_PASSAGE_DESTINATIONS[node.id];
+  return destinationRoomNodeId ? BOARD_MOVEMENT_NODES[destinationRoomNodeId] ?? null : null;
+}
+
 export function findNearestBoardMovementNode(positionX: number, positionY: number) {
   let matchedNode: BoardMovementNode | null = null;
   let matchedDistance = Number.POSITIVE_INFINITY;
@@ -600,9 +617,11 @@ function buildExpandedMovementGraph() {
   connectOrthogonalGridSquares(connections, preferredSquareNodeIdByGridKey);
   const roomDoorConnections = materializeRoomDoorConnections(preferredSquareNodeIdByGridKey);
   connectRoomDoorSquares(nodes, connections, roomDoorConnections);
+  connectRoomSecretPassages(nodes, connections);
   pruneExcludedSquareNodes(nodes, connections);
 
   validateRoomDoorTopology(nodes, connections, roomDoorConnections);
+  validateRoomSecretPassageTopology(nodes, connections);
 
   return {
     nodes,
@@ -717,6 +736,22 @@ function connectRoomDoorSquares(
 
       connectMovementNodes(connections, roomNodeId, doorNodeId);
     });
+  });
+}
+
+function connectRoomSecretPassages(
+  nodes: Record<string, BoardMovementNode>,
+  connections: Record<string, string[]>
+) {
+  Object.entries(ROOM_SECRET_PASSAGE_DESTINATIONS).forEach(([fromRoomNodeId, toRoomNodeId]) => {
+    const fromRoomNode = nodes[fromRoomNodeId];
+    const toRoomNode = nodes[toRoomNodeId];
+
+    if (!fromRoomNode || !toRoomNode || fromRoomNode.kind !== 'room' || toRoomNode.kind !== 'room') {
+      return;
+    }
+
+    connectMovementNodes(connections, fromRoomNodeId, toRoomNodeId);
   });
 }
 
@@ -959,15 +994,21 @@ function validateRoomDoorTopology(
     }
 
     const expectedDoorSet = new Set(doorNodeIds);
+    const expectedSecretPassageNodeId = ROOM_SECRET_PASSAGE_DESTINATIONS[roomNodeId];
+    const expectedLinkedNodeIds = new Set(doorNodeIds);
+    if (expectedSecretPassageNodeId) {
+      expectedLinkedNodeIds.add(expectedSecretPassageNodeId);
+    }
+
     const linkedNodeIds = [...new Set(connections[roomNodeId] ?? [])];
 
-    if (linkedNodeIds.length !== expectedDoorSet.size) {
+    if (linkedNodeIds.length !== expectedLinkedNodeIds.size) {
       throw new Error(`Configuración de movimiento inválida: ${roomNodeId} no coincide con sus puertas definidas.`);
     }
 
     linkedNodeIds.forEach((linkedNodeId) => {
-      if (!expectedDoorSet.has(linkedNodeId)) {
-        throw new Error(`Configuración de movimiento inválida: ${roomNodeId} conecta con ${linkedNodeId}, que no es puerta.`);
+      if (!expectedLinkedNodeIds.has(linkedNodeId)) {
+        throw new Error(`Configuración de movimiento inválida: ${roomNodeId} conecta con ${linkedNodeId}, que no es enlace permitido.`);
       }
     });
 
@@ -980,5 +1021,31 @@ function validateRoomDoorTopology(
         throw new Error(`Configuración de movimiento inválida: ${doorNodeId} no conecta de vuelta con ${roomNodeId}.`);
       }
     });
+  });
+}
+
+function validateRoomSecretPassageTopology(
+  nodes: Record<string, BoardMovementNode>,
+  connections: Record<string, string[]>
+) {
+  Object.entries(ROOM_SECRET_PASSAGE_DESTINATIONS).forEach(([fromRoomNodeId, toRoomNodeId]) => {
+    const fromRoomNode = nodes[fromRoomNodeId];
+    const toRoomNode = nodes[toRoomNodeId];
+
+    if (!fromRoomNode || fromRoomNode.kind !== 'room') {
+      throw new Error(`Configuración de pasadizo inválida: ${fromRoomNodeId} no es una sala válida.`);
+    }
+
+    if (!toRoomNode || toRoomNode.kind !== 'room') {
+      throw new Error(`Configuración de pasadizo inválida: ${toRoomNodeId} no es una sala válida.`);
+    }
+
+    if (ROOM_SECRET_PASSAGE_DESTINATIONS[toRoomNodeId] !== fromRoomNodeId) {
+      throw new Error(`Configuración de pasadizo inválida: ${fromRoomNodeId} y ${toRoomNodeId} no están definidos en ambos sentidos.`);
+    }
+
+    if (!(connections[fromRoomNodeId] ?? []).includes(toRoomNodeId)) {
+      throw new Error(`Configuración de pasadizo inválida: ${fromRoomNodeId} no conecta con ${toRoomNodeId}.`);
+    }
   });
 }

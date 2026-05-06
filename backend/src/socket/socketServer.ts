@@ -25,6 +25,7 @@ import { verifyAdminToken, type AuthTokenPayload } from '../middleware/auth.js';
 import { lobbyPresenceStore } from './lobbyPresenceStore.js';
 import { startSessionByAccessCode } from '../lib/sessionGameplay.js';
 import { findBoardMovementNodeByPosition, isSecretPassageMoveValid } from '../lib/sessionMovement.js';
+import { buildNextTurnUpdate } from '../lib/sessionTurn.js';
 import { BOARD_MOVEMENT_NODES } from '../lib/boardGraph.js';
 
 type LobbyPresenceTeam = SessionTeamSnapshot & {
@@ -303,13 +304,50 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
       }
 
       const fromRoomLabel = currentNode.label;
-      const toRoomLabel = BOARD_MOVEMENT_NODES[input.toNodeId]?.label ?? input.toNodeId;
+      const toRoomNode = BOARD_MOVEMENT_NODES[input.toNodeId];
+      const toRoomLabel = toRoomNode?.label ?? input.toNodeId;
+
+      if (!toRoomNode) {
+        throw new HttpError(404, 'El nodo destino del pasadizo no existe en el tablero.');
+      }
+
+      // Mover el peón al nodo destino y avanzar el turno
+      const sessionFull = await prisma.partida.findUnique({
+        where: { id: socket.data.sessionId },
+        select: {
+          id: true,
+          currentTurnTeamId: true,
+          currentTurnStartedAt: true,
+          activeDiceValueOne: true,
+          activeDiceValueTwo: true,
+          activeDiceRemainingMoves: true,
+          teams: { select: { id: true, name: true, color: true } },
+        },
+      });
+
+      if (!sessionFull) {
+        throw new HttpError(404, 'La sesión no existe.');
+      }
+
+      await prisma.equipo.update({
+        where: { id: socket.data.teamId },
+        data: {
+          positionX: toRoomNode.positionX,
+          positionY: toRoomNode.positionY,
+        },
+      });
+
+      await prisma.partida.update({
+        where: { id: socket.data.sessionId },
+        data: buildNextTurnUpdate(sessionFull),
+      });
 
       const occurredAt = Date.now();
-      broadcastLobbyEvent(io, socket.data.sessionId, {
+
+      await emitSessionSnapshotUpdate(socket.data.sessionId, {
         id: randomUUID(),
         type: 'system',
-        message: `${currentTeam.name} está preparando el uso de pasadizo desde ${fromRoomLabel} hacia ${toRoomLabel}.`,
+        message: `${currentTeam.name} ha usado el pasadizo de ${fromRoomLabel} a ${toRoomLabel}.`,
         occurredAt,
         teamColor: currentTeam.color,
         teamId: currentTeam.id,

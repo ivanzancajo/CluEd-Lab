@@ -480,7 +480,7 @@ export function TerminalView() {
     const socket = lobbySocketRef.current;
 
     if (!destinationRoomNode || !socket) {
-      setMoveError("No se ha podido emitir el evento de pasadizo porque la conexión realtime no está disponible.");
+      setMoveError("No se ha podido usar el pasadizo porque la conexión realtime no está disponible.");
       return;
     }
 
@@ -493,9 +493,11 @@ export function TerminalView() {
         return;
       }
 
-      setMoveError(`Pasadizo emitido: ${currentMoveNode.label} -> ${destinationRoomNode.label}.`);
+      setDiceResetSignal((previousValue) => previousValue + 1);
+      setCurrentMoveNode(null);
+      void refreshMoveState();
     } catch {
-      setMoveError("No se ha podido emitir el evento de pasadizo desde este terminal.");
+      setMoveError("No se ha podido usar el pasadizo desde este terminal.");
     } finally {
       setIsEmittingSecretPassage(false);
     }
@@ -720,6 +722,15 @@ export function TerminalView() {
       setDiceResetSignal((previousValue) => previousValue + 1);
     }
   }, [activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, refreshMoveState, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
+
+  // Carga la posición actual del equipo al inicio del turno (dado=null) para detectar sala esquina
+  React.useEffect(() => {
+    if (!isMyTurn || sessionStatus !== "EN_CURSO" || sessionTurn?.dice !== null) {
+      return;
+    }
+    void refreshMoveState();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMyTurn, sessionStatus, sessionTurn?.currentTeamId]);
 
   const currentTeamMeta = teamColor ? getTeamMeta(teamColor) : null;
   const sessionStatusLabel =
@@ -978,22 +989,6 @@ export function TerminalView() {
                         <p className="text-[11px] text-slate-400">
                           Pulsa Tirar dados para registrar la tirada del turno actual y desbloquear los destinos válidos en el tablero.
                         </p>
-                        {canEmitSecretPassageEvent && secretPassageDestinationNode ? (
-                          <div className="rounded-lg border border-amber-800/70 bg-amber-950/20 p-3">
-                            <p className="text-[11px] text-amber-100">
-                              Estás en una sala con pasadizo: puedes emitir el uso hacia {secretPassageDestinationNode.label}.
-                            </p>
-                            <button
-                              type="button"
-                              data-cy="terminal-secret-passage-emit"
-                              onClick={() => void handleEmitSecretPassage()}
-                              disabled={isEmittingSecretPassage}
-                              className="mt-3 rounded-md border border-amber-500/70 bg-amber-500 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {isEmittingSecretPassage ? "Emitiendo..." : "Emitir pasadizo"}
-                            </button>
-                          </div>
-                        ) : null}
                       </div>
                     ) : isLoadingMoves ? (
                       <p className="mt-3 text-[11px] text-cyan-200 uppercase tracking-[0.18em]">
@@ -1015,6 +1010,20 @@ export function TerminalView() {
                         </p>
                       </div>
                     )}
+
+                    {canEmitSecretPassageEvent && secretPassageDestinationNode ? (
+                      <div className="mt-3 rounded-lg border border-amber-800/70 bg-amber-950/20 p-3">
+                        <button
+                          type="button"
+                          data-cy="terminal-secret-passage-emit"
+                          onClick={() => void handleEmitSecretPassage()}
+                          disabled={isEmittingSecretPassage}
+                          className="rounded-md border border-amber-500/70 bg-amber-500 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isEmittingSecretPassage ? "Usando..." : `Usar pasadizo → ${secretPassageDestinationNode.label}`}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ) : null}

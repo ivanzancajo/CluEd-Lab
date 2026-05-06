@@ -28,7 +28,7 @@ export function Landing() {
     setError("");
 
     try {
-      const response = await api.post('/auth/login', { username, password });
+      const response = await api.post('/auth/login', { username: username.trim(), password });
       storeAdminToken(response.data.token);
       
       // Si el login es correcto, cerramos el modal y vamos a la pantalla solicitada

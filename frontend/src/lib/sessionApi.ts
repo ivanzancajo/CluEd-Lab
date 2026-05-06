@@ -20,18 +20,52 @@ export interface TeamMoveNode {
   positionX: number;
   positionY: number;
   kind: 'spawn' | 'square' | 'room';
+  gridPosition?: {
+    col: number;
+    row: number;
+  };
   stepsRequired?: number;
 }
 
+export interface SessionTurnDice {
+  valueOne: number;
+  valueTwo: number;
+  total: number;
+}
+
+export interface SessionTurn {
+  currentTeamId: string;
+  currentTeamName: string;
+  currentTeamColor: TeamColor;
+  startedAt: string | null;
+  dice: SessionTurnDice | null;
+  remainingMoves: number | null;
+}
+
 export interface TeamMoveState {
-  diceRoll: number;
+  diceRoll: number | null;
+  remainingMoves: number | null;
   currentNode: TeamMoveNode;
   destinationNodes: TeamMoveNode[];
 }
 
-export interface TeamMoveResult {
+export interface TeamRollResult {
+  dice: SessionTurnDice;
   diceRoll: number;
+  remainingMoves: number | null;
   currentNode: TeamMoveNode;
+  destinationNodes: TeamMoveNode[];
+  turnAdvanced: boolean;
+  session: LobbySession;
+}
+
+export interface TeamMoveResult {
+  dice: SessionTurnDice;
+  diceRoll: number;
+  remainingMoves: number | null;
+  currentNode: TeamMoveNode;
+  destinationNodes: TeamMoveNode[];
+  turnAdvanced: boolean;
   session: LobbySession;
 }
 
@@ -55,6 +89,7 @@ export interface LobbySession {
   remainingSeconds: number;
   skin: GameConfig;
   teams: LobbyTeam[];
+  turn: SessionTurn | null;
 }
 
 export interface JoinedLobbySession {
@@ -82,6 +117,10 @@ interface TeamTerminalStateResponse {
 
 interface TeamMoveStateResponse {
   item: TeamMoveState;
+}
+
+interface TeamRollResponse {
+  item: TeamRollResult;
 }
 
 interface MoveTeamResponse {
@@ -118,17 +157,19 @@ export async function getTeamTerminalState(accessCode: string, teamId: string) {
   return response.data.item;
 }
 
-export async function getTeamMoveState(accessCode: string, teamId: string, diceRoll: number) {
-  const response = await api.get<TeamMoveStateResponse>(`/game/sessions/${accessCode}/teams/${teamId}/moves`, {
-    params: { diceRoll },
-  });
+export async function getTeamMoveState(accessCode: string, teamId: string) {
+  const response = await api.get<TeamMoveStateResponse>(`/game/sessions/${accessCode}/teams/${teamId}/moves`);
   return response.data.item;
 }
 
-export async function moveTeam(accessCode: string, teamId: string, targetNodeId: string, diceRoll: number) {
+export async function rollTeamDice(accessCode: string, teamId: string) {
+  const response = await api.post<TeamRollResponse>(`/game/sessions/${accessCode}/teams/${teamId}/roll`);
+  return response.data.item;
+}
+
+export async function moveTeam(accessCode: string, teamId: string, targetNodeId: string) {
   const response = await api.post<MoveTeamResponse>(`/game/sessions/${accessCode}/teams/${teamId}/move`, {
     targetNodeId,
-    diceRoll,
   });
   return response.data.item;
 }

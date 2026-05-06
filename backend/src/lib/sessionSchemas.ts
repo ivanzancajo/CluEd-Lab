@@ -23,22 +23,10 @@ export const teamSessionStateParamsSchema = z.object({
   teamId: z.string().uuid('El identificador del equipo debe ser un UUID válido.'),
 });
 
-const diceRollSchema = z.coerce
-  .number()
-  .int('La tirada debe ser un número entero.')
-  .min(2, 'La tirada mínima es 2.')
-  .max(12, 'La tirada máxima es 12.');
-
-export const teamMovesQuerySchema = z.object({
-  diceRoll: diceRollSchema,
-});
-
 export const moveTeamSchema = z.object({
   targetNodeId: z.string().trim().min(1, 'El destino del movimiento es obligatorio.'),
-  diceRoll: diceRollSchema,
 });
 
 export type CreateSessionInput = z.infer<typeof createSessionSchema>;
 export type JoinSessionInput = z.infer<typeof joinSessionSchema>;
 export type MoveTeamInput = z.infer<typeof moveTeamSchema>;
-export type TeamMovesQueryInput = z.infer<typeof teamMovesQuerySchema>;

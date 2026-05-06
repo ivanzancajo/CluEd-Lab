@@ -16,7 +16,6 @@ import {
   moveTeamSchema,
   sessionAccessCodeParamsSchema,
   teamSessionStateParamsSchema,
-  teamMovesQuerySchema,
 } from '../lib/sessionSchemas.js';
 import {
   COLOR_LABELS,
@@ -30,6 +29,7 @@ import {
 import {
   loadTeamMoveStateByAccessCode,
   moveTeamByAccessCode,
+  rollTeamDiceByAccessCode,
 } from '../lib/sessionMovement.js';
 import { getTeamSpawnPosition } from '../lib/teamSpawnPositions.js';
 import { verifyToken } from '../middleware/auth.js';
@@ -85,14 +85,59 @@ router.get('/sessions/:accessCode/teams/:teamId/moves', async (req, res) => {
     return;
   }
 
-  const query = parseBody(teamMovesQuerySchema, req.query, res);
-  if (!query) {
+  try {
+    const moveState = await loadTeamMoveStateByAccessCode(prisma, teamParams.accessCode, teamParams.teamId);
+    res.json({ item: moveState });
+  } catch (error) {
+    respondUnexpectedError(res, error);
+  }
+});
+
+router.post('/sessions/:accessCode/teams/:teamId/roll', async (req, res) => {
+  const teamParams = parseTeamSessionStateParams(req.params, res);
+  if (!teamParams) {
     return;
   }
 
   try {
-    const moveState = await loadTeamMoveStateByAccessCode(prisma, teamParams.accessCode, teamParams.teamId, query.diceRoll);
-    res.json({ item: moveState });
+    const rollResult = await prisma.$transaction(
+      (tx) => rollTeamDiceByAccessCode(tx, teamParams.accessCode, teamParams.teamId),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+    const session = await loadSessionSnapshotByAccessCode(prisma, teamParams.accessCode);
+
+    try {
+      const nextTeamName = session.turn?.currentTeamName;
+      const autoAdvancedMessage =
+        rollResult.turnAdvanced && nextTeamName
+          ? ` ${rollResult.teamName} no tiene destinos legales disponibles. Turno para ${nextTeamName}.`
+          : rollResult.turnAdvanced
+          ? ` ${rollResult.teamName} no tiene destinos legales disponibles.`
+          : '';
+
+      await emitSessionSnapshotUpdate(rollResult.sessionId, {
+        id: randomUUID(),
+        type: 'system',
+        message: `${rollResult.teamName} ha lanzado ${rollResult.dice.total}.${autoAdvancedMessage}`.trim(),
+        occurredAt: Date.now(),
+        teamColor: rollResult.teamColor,
+        teamId: rollResult.teamId,
+      });
+    } catch {
+      // La tirada ya quedó persistida; un fallo de broadcast no debe revertirla.
+    }
+
+    res.json({
+      item: {
+        session,
+        dice: rollResult.dice,
+        diceRoll: rollResult.dice.total,
+        remainingMoves: rollResult.remainingMoves,
+        currentNode: rollResult.currentNode,
+        destinationNodes: rollResult.destinationNodes,
+        turnAdvanced: rollResult.turnAdvanced,
+      },
+    });
   } catch (error) {
     respondUnexpectedError(res, error);
   }
@@ -111,16 +156,19 @@ router.post('/sessions/:accessCode/teams/:teamId/move', async (req, res) => {
 
   try {
     const moveResult = await prisma.$transaction(
-      (tx) => moveTeamByAccessCode(tx, teamParams.accessCode, teamParams.teamId, payload.targetNodeId, payload.diceRoll),
+      (tx) => moveTeamByAccessCode(tx, teamParams.accessCode, teamParams.teamId, payload.targetNodeId),
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
     );
     const session = await loadSessionSnapshotByAccessCode(prisma, teamParams.accessCode);
 
     try {
+      const nextTeamName = session.turn?.currentTeamName;
       await emitSessionSnapshotUpdate(moveResult.sessionId, {
         id: randomUUID(),
         type: 'system',
-        message: `${moveResult.teamName} se ha movido a ${moveResult.currentNode.label}.`,
+        message: `${moveResult.teamName} se ha movido a ${moveResult.currentNode.label}.${
+          nextTeamName ? ` Turno para ${nextTeamName}.` : ''
+        }`,
         occurredAt: Date.now(),
         teamColor: moveResult.teamColor,
         teamId: moveResult.teamId,
@@ -132,8 +180,12 @@ router.post('/sessions/:accessCode/teams/:teamId/move', async (req, res) => {
     res.json({
       item: {
         session,
-        diceRoll: moveResult.diceRoll,
+        dice: moveResult.dice,
+        diceRoll: moveResult.dice.total,
+        remainingMoves: moveResult.remainingMoves,
         currentNode: moveResult.currentNode,
+        destinationNodes: moveResult.destinationNodes,
+        turnAdvanced: moveResult.turnAdvanced,
       },
     });
   } catch (error) {

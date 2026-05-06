@@ -118,13 +118,20 @@ model Partida {
   durationMinutes Int     @default(60) @map("duracion_minutos")
   skinId     String?      @db.Uuid @map("id_skin")
   solutionId String?      @db.Uuid @map("id_solucion")
+  currentTurnTeamId String? @db.Uuid @map("id_equipo_turno_actual")
+  currentTurnStartedAt DateTime? @map("inicio_turno_actual") @db.Timestamp(6)
+  activeDiceValueOne Int?  @map("dado_activo_1")
+  activeDiceValueTwo Int?  @map("dado_activo_2")
+  activeDiceRemainingMoves Int? @map("pasos_mov_restantes")
 
   skin       CluedoSkin? @relation(fields: [skinId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   solution   Solucion?   @relation(fields: [solutionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  currentTurnTeam Equipo? @relation("CurrentSessionTurn", fields: [currentTurnTeamId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   teams      Equipo[]
   events     Evento[]
 
   @@unique([accessCode], map: "partida_codigo_acceso_key")
+  @@index([currentTurnTeamId], map: "partida_id_equipo_turno_actual_idx")
   @@map("partida")
 }
 
@@ -138,6 +145,7 @@ model Equipo {
   falseAccusation  Boolean?            @default(false) @map("acusacion_falsa")
 
   partida          Partida?            @relation(fields: [partidaId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  currentTurnSessions Partida[]        @relation("CurrentSessionTurn")
   cards            CartaEquipo[]
   emittedEvents    Evento[]            @relation("EventEmitter")
   receivedEvents   Evento[]            @relation("EventReceiver")

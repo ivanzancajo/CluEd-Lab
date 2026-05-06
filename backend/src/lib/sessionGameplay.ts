@@ -90,6 +90,8 @@ export async function initializeStartedSession(client: SessionGameplayClient, se
   }
 
   const setup = buildDistributedGameSetup(skin, teams.map((team) => team.id));
+  const startedAt = new Date();
+  const initialTurnTeamId = teams[0]?.id ?? null;
 
   const solution = await client.solucion.create({
     data: setup.solution,
@@ -139,7 +141,11 @@ export async function initializeStartedSession(client: SessionGameplayClient, se
     where: { id: session.id },
     data: {
       status: EstadoPartida.EN_CURSO,
-      startedAt: new Date(),
+      startedAt,
+      currentTurnTeamId: initialTurnTeamId,
+      currentTurnStartedAt: initialTurnTeamId ? startedAt : null,
+      activeDiceValueOne: null,
+      activeDiceValueTwo: null,
       solutionId: solution.id,
     },
   });

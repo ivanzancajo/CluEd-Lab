@@ -23,6 +23,17 @@ type SessionResponse = {
     accessCode: string;
     status: string;
     startedAt: string | null;
+    turn: {
+      currentTeamId: string;
+      currentTeamName: string;
+      currentTeamColor: string;
+      startedAt: string | null;
+      dice: {
+        valueOne: number;
+        valueTwo: number;
+        total: number;
+      } | null;
+    } | null;
     teams: Array<{
       id: string;
       name: string;
@@ -77,15 +88,35 @@ type TeamMoveNode = {
 
 type TeamMoveStateResponse = {
   item: {
+    diceRoll: number | null;
+    currentNode: TeamMoveNode;
+    destinationNodes: TeamMoveNode[];
+  };
+};
+
+type RollTeamResponse = {
+  item: {
+    session: SessionResponse['item'];
+    dice: {
+      valueOne: number;
+      valueTwo: number;
+      total: number;
+    };
     diceRoll: number;
     currentNode: TeamMoveNode;
     destinationNodes: TeamMoveNode[];
+    turnAdvanced: boolean;
   };
 };
 
 type MoveTeamResponse = {
   item: {
     session: SessionResponse['item'];
+    dice: {
+      valueOne: number;
+      valueTwo: number;
+      total: number;
+    };
     diceRoll: number;
     currentNode: TeamMoveNode;
   };
@@ -387,8 +418,14 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     expect(response.status).toBe(200);
     expect(body.item.status).toBe(EstadoPartida.EN_CURSO);
     expect(body.item.startedAt).toEqual(expect.any(String));
+    expect(body.item.turn).toMatchObject({
+      currentTeamId: seeded.teamIds[0],
+      currentTeamColor: ColorEquipo.ROJO,
+      dice: null,
+    });
     expect(startedSession?.status).toBe(EstadoPartida.EN_CURSO);
     expect(startedSession?.startedAt).toEqual(expect.any(Date));
+    expect(startedSession?.currentTurnTeamId).toBe(seeded.teamIds[0]);
     expect(startedSession?.solution).not.toBeNull();
 
     const solution = startedSession?.solution;
@@ -466,7 +503,7 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     expect(Math.max(...cardCounts) - Math.min(...cardCounts)).toBeLessThanOrEqual(1);
   });
 
-  it('devuelve el contexto de movimiento y los destinos seleccionables desde su posición inicial cuando la partida está en curso', async () => {
+  it('devuelve el contexto de movimiento del equipo activo cuando ya existe una tirada persistida', async () => {
     const { session } = await seedSkinAndSession('MOVE01', { status: EstadoPartida.LOBBY });
 
     const joinResponse = await request('/api/game/sessions/MOVE01/join', {
@@ -477,10 +514,16 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
 
     await prisma.partida.update({
       where: { id: session.id },
-      data: { status: EstadoPartida.EN_CURSO },
+      data: {
+        status: EstadoPartida.EN_CURSO,
+        currentTurnTeamId: joined.item.team.id,
+        currentTurnStartedAt: new Date('2026-05-05T10:00:00.000Z'),
+        activeDiceValueOne: 1,
+        activeDiceValueTwo: 1,
+      },
     });
 
-    const response = await request(`/api/game/sessions/MOVE01/teams/${joined.item.team.id}/moves?diceRoll=2`);
+    const response = await request(`/api/game/sessions/MOVE01/teams/${joined.item.team.id}/moves`);
     const body = (await response.json()) as TeamMoveStateResponse;
 
     expect(response.status).toBe(200);
@@ -490,12 +533,105 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: 'pasillo-superior-derecho',
-        }),
-        expect.objectContaining({
-          id: 'sala-superior-derecha',
+          stepsRequired: 2,
         }),
       ])
     );
+    expect(body.item.destinationNodes).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'square:pasillo-superior-derecho::spawn-rojo:1',
+        }),
+      ])
+    );
+  });
+
+  it('registra una tirada autoritativa para el equipo en turno y la deja disponible para recuperar destinos', async () => {
+    const { session } = await seedSkinAndSession('ROLL01', { status: EstadoPartida.LOBBY });
+
+    const joinRedResponse = await request('/api/game/sessions/ROLL01/join', {
+      method: 'POST',
+      body: JSON.stringify({ color: 'ROJO' }),
+    });
+    const redJoined = (await joinRedResponse.json()) as JoinResponse;
+
+    await request('/api/game/sessions/ROLL01/join', {
+      method: 'POST',
+      body: JSON.stringify({ color: 'AZUL' }),
+    });
+
+    await prisma.partida.update({
+      where: { id: session.id },
+      data: {
+        status: EstadoPartida.EN_CURSO,
+        currentTurnTeamId: redJoined.item.team.id,
+        currentTurnStartedAt: new Date('2026-05-05T10:00:00.000Z'),
+      },
+    });
+
+    const response = await request(`/api/game/sessions/ROLL01/teams/${redJoined.item.team.id}/roll`, {
+      method: 'POST',
+    });
+    const body = (await response.json()) as RollTeamResponse;
+
+    expect(response.status).toBe(200);
+    expect(body.item.diceRoll).toBeGreaterThanOrEqual(2);
+    expect(body.item.diceRoll).toBeLessThanOrEqual(12);
+    expect(body.item.turnAdvanced).toBe(false);
+    expect(body.item.session.turn).toMatchObject({
+      currentTeamId: redJoined.item.team.id,
+      dice: expect.objectContaining({
+        total: body.item.diceRoll,
+      }),
+    });
+    expect(body.item.destinationNodes.length).toBeGreaterThan(0);
+
+    const persistedSession = await prisma.partida.findUnique({
+      where: { id: session.id },
+      select: {
+        activeDiceValueOne: true,
+        activeDiceValueTwo: true,
+      },
+    });
+
+    expect(persistedSession?.activeDiceValueOne).toBe(body.item.dice.valueOne);
+    expect(persistedSession?.activeDiceValueTwo).toBe(body.item.dice.valueTwo);
+  });
+
+  it('rechaza lanzar los dados cuando el equipo no tiene el turno actual', async () => {
+    const { session } = await seedSkinAndSession('ROLL02', { status: EstadoPartida.LOBBY });
+
+    const joinRedResponse = await request('/api/game/sessions/ROLL02/join', {
+      method: 'POST',
+      body: JSON.stringify({ color: 'ROJO' }),
+    });
+    const redJoined = (await joinRedResponse.json()) as JoinResponse;
+
+    const joinBlueResponse = await request('/api/game/sessions/ROLL02/join', {
+      method: 'POST',
+      body: JSON.stringify({ color: 'AZUL' }),
+    });
+    const blueJoined = (await joinBlueResponse.json()) as JoinResponse;
+
+    await prisma.partida.update({
+      where: { id: session.id },
+      data: {
+        status: EstadoPartida.EN_CURSO,
+        currentTurnTeamId: redJoined.item.team.id,
+        currentTurnStartedAt: new Date('2026-05-05T10:00:00.000Z'),
+      },
+    });
+
+    const response = await request(`/api/game/sessions/ROLL02/teams/${blueJoined.item.team.id}/roll`, {
+      method: 'POST',
+    });
+    const body = (await response.json()) as ErrorResponse;
+
+    expect(response.status).toBe(409);
+    expect(body).toEqual({
+      error: 'Ahora mismo es el turno de Equipo Rojo.',
+      details: undefined,
+    });
   });
 
   it('rechaza mover el peón a una sala si la tirada no alcanza ninguna de sus puertas', async () => {
@@ -509,12 +645,18 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
 
     await prisma.partida.update({
       where: { id: session.id },
-      data: { status: EstadoPartida.EN_CURSO },
+      data: {
+        status: EstadoPartida.EN_CURSO,
+        currentTurnTeamId: joined.item.team.id,
+        currentTurnStartedAt: new Date('2026-05-05T10:00:00.000Z'),
+        activeDiceValueOne: 1,
+        activeDiceValueTwo: 1,
+      },
     });
 
     const response = await request(`/api/game/sessions/MOVE03/teams/${joined.item.team.id}/move`, {
       method: 'POST',
-      body: JSON.stringify({ targetNodeId: 'sala-superior-derecha', diceRoll: 2 }),
+      body: JSON.stringify({ targetNodeId: 'sala-superior-derecha' }),
     });
     const body = (await response.json()) as ErrorResponse;
 
@@ -534,14 +676,26 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     });
     const joined = (await joinResponse.json()) as JoinResponse;
 
+    const joinBlueResponse = await request('/api/game/sessions/MOVE02/join', {
+      method: 'POST',
+      body: JSON.stringify({ color: 'AZUL' }),
+    });
+    const blueJoined = (await joinBlueResponse.json()) as JoinResponse;
+
     await prisma.partida.update({
       where: { id: session.id },
-      data: { status: EstadoPartida.EN_CURSO },
+      data: {
+        status: EstadoPartida.EN_CURSO,
+        currentTurnTeamId: joined.item.team.id,
+        currentTurnStartedAt: new Date('2026-05-05T10:00:00.000Z'),
+        activeDiceValueOne: 1,
+        activeDiceValueTwo: 1,
+      },
     });
 
     const response = await request(`/api/game/sessions/MOVE02/teams/${joined.item.team.id}/move`, {
       method: 'POST',
-      body: JSON.stringify({ targetNodeId: 'pasillo-superior-derecho', diceRoll: 2 }),
+      body: JSON.stringify({ targetNodeId: 'pasillo-superior-derecho' }),
     });
     const body = (await response.json()) as MoveTeamResponse;
     const updatedTeam = await prisma.equipo.findUnique({
@@ -554,6 +708,11 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
 
     expect(response.status).toBe(200);
     expect(body.item.currentNode).toMatchObject(BOARD_MOVEMENT_NODES['pasillo-superior-derecho']);
+    expect(body.item.session.turn).toMatchObject({
+      currentTeamId: blueJoined.item.team.id,
+      currentTeamColor: ColorEquipo.AZUL,
+      dice: null,
+    });
     expect(body.item.session.teams).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -568,6 +727,37 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
       positionY: BOARD_MOVEMENT_NODES['pasillo-superior-derecho'].positionY,
     });
     expect(body.item.diceRoll).toBe(2);
+  });
+
+  it('rechaza mover el peón si el equipo todavía no ha lanzado los dados en su turno', async () => {
+    const { session } = await seedSkinAndSession('MOVE04', { status: EstadoPartida.LOBBY });
+
+    const joinResponse = await request('/api/game/sessions/MOVE04/join', {
+      method: 'POST',
+      body: JSON.stringify({ color: 'ROJO' }),
+    });
+    const joined = (await joinResponse.json()) as JoinResponse;
+
+    await prisma.partida.update({
+      where: { id: session.id },
+      data: {
+        status: EstadoPartida.EN_CURSO,
+        currentTurnTeamId: joined.item.team.id,
+        currentTurnStartedAt: new Date('2026-05-05T10:00:00.000Z'),
+      },
+    });
+
+    const response = await request(`/api/game/sessions/MOVE04/teams/${joined.item.team.id}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ targetNodeId: 'pasillo-superior-derecho' }),
+    });
+    const body = (await response.json()) as ErrorResponse;
+
+    expect(response.status).toBe(409);
+    expect(body).toEqual({
+      error: 'El equipo actual debe lanzar los dados antes de moverse.',
+      details: undefined,
+    });
   });
 
   it('rechaza solicitar la mano de un equipo antes de que la partida haya comenzado', async () => {
@@ -716,6 +906,10 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
       expect(startResponse.payload.session.status).toBe(EstadoPartida.EN_CURSO);
       expect(startResponse.payload.session.accessCode).toBe('SOCK01');
       expect(startResponse.payload.session.startedAt).toEqual(expect.any(String));
+      expect(startResponse.payload.session.turn).toMatchObject({
+        currentTeamColor: ColorEquipo.ROJO,
+        dice: null,
+      });
       expect(hostGameStarted.session.id).toBe(seeded.session.id);
       expect(teamGameStarted.session.id).toBe(seeded.session.id);
       expect(hostGameStarted.session.status).toBe(EstadoPartida.EN_CURSO);

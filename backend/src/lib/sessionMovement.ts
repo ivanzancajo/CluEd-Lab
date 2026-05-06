@@ -5,6 +5,7 @@ import {
   BOARD_MOVEMENT_CONNECTIONS,
   BOARD_MOVEMENT_NODES,
   getRoomEntryNodeByDoorNodeId,
+  getSecretPassageDestinationNodeByRoomNodeId,
   type BoardMovementNode,
 } from './boardGraph.js';
 import {
@@ -171,6 +172,17 @@ export function resolveCommittedMoveTargetNode(currentNode: BoardMovementNode, t
   }
 
   return getRoomEntryNodeByDoorNodeId(targetNode.id) ?? targetNode;
+}
+
+export function isSecretPassageMoveValid(currentNodeId: string, targetNodeId: string) {
+  const currentNode = BOARD_MOVEMENT_NODES[currentNodeId];
+  const targetNode = BOARD_MOVEMENT_NODES[targetNodeId];
+
+  if (!currentNode || !targetNode || currentNode.kind !== 'room' || targetNode.kind !== 'room') {
+    return false;
+  }
+
+  return getSecretPassageDestinationNodeByRoomNodeId(currentNodeId)?.id === targetNodeId;
 }
 
 export async function loadTeamMoveStateByAccessCode(

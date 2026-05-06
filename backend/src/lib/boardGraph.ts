@@ -244,7 +244,6 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
     grid(0, 5),
   ],
   'pasillo-superior-central->centro-norte': [grid(10, 5), grid(10, 6), grid(10, 7, 0, -1.64)],
-  'spawn-morado->pasillo-izquierdo-superior': [grid(0, 6, -2.53, -0.33)],
   'pasillo-izquierdo-superior->pasillo-izquierdo-central': [grid(0, 7), grid(0, 8), grid(0, 9), grid(0, 10)],
   'pasillo-izquierdo-central->pasillo-izquierdo-inferior': [grid(0, 13), grid(0, 14), grid(0, 15), grid(0, 16)],
   'pasillo-izquierdo-central->centro-oeste': [grid(1, 12), grid(2, 12), grid(3, 12), grid(4, 12), grid(5, 12)],
@@ -441,7 +440,7 @@ const ROOM_FOOTPRINT_GRID_KEYS = new Set(
 );
 
 const EXCLUDED_SQUARE_GRID_POINTS = [
-  ...columnRangePoints(0, [[6, 10], [13, 16]]),
+  ...columnRangePoints(0, [[7, 10], [13, 16]]),
   ...rowRangePoints(12, [[1, 4], [16, 18]]),
   ...columnRangePoints(7, [[17, 17], [20, 22]]),
   ...columnRangePoints(8, [[2, 3], [5, 6], [8, 14], [20, 22]]),

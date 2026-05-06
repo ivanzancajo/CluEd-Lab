@@ -24,6 +24,13 @@ describe('sessionMovement', () => {
     expect(adjacentMoves[0]).toMatchObject({ kind: 'square' });
   });
 
+  it('permite salir desde spawn-morado al menos a un nodo adyacente', () => {
+    const adjacentMoves = getAdjacentMoveNodes('spawn-morado');
+
+    expect(adjacentMoves).toHaveLength(1);
+    expect(adjacentMoves[0]).toMatchObject({ id: 'pasillo-izquierdo-superior' });
+  });
+
   it('alcanza el cruce superior derecho con una tirada de dos casillas', () => {
     const reachableMoves = getReachableMoveNodes('spawn-rojo', [], 2);
 

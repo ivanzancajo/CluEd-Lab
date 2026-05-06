@@ -24,9 +24,11 @@ import {
 import { DiceAnimation } from "../DiceAnimation";
 import {
   createLobbySocketClient,
+  emitTeamSecretPassage,
   emitTeamHeartbeat,
   subscribeTeamToLobby,
   type GameStartedPayload,
+  type LobbySocketClient,
   type LobbyPresenceState,
 } from "../../src/lib/lobbySocket";
 import {
@@ -191,6 +193,7 @@ function mapHandCardToTerminalCard(card: TeamHandCard, config: GameConfig): Term
 
 export function TerminalView() {
   const navigate = useNavigate();
+  const lobbySocketRef = React.useRef<LobbySocketClient | null>(null);
   const [activeTab, setActiveTab] = useState("map");
   const [centerImage, setCenterImage] = useState("");
   const [boardTheme, setBoardTheme] = useState<StoredBoardTheme | null>(() => readStoredBoardTheme());
@@ -213,6 +216,7 @@ export function TerminalView() {
   const [diceResetSignal, setDiceResetSignal] = useState(0);
   const [isLoadingMoves, setIsLoadingMoves] = useState(false);
   const [isMovingPawn, setIsMovingPawn] = useState(false);
+  const [isEmittingSecretPassage, setIsEmittingSecretPassage] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
   
   const [categories, setCategories] = useState<{
@@ -467,6 +471,36 @@ export function TerminalView() {
     }
   };
 
+  const handleEmitSecretPassage = async () => {
+    if (!currentMoveNode || currentMoveNode.kind !== "room") {
+      return;
+    }
+
+    const destinationRoomNode = getSecretPassageDestinationNodeByRoomNodeId(currentMoveNode.id);
+    const socket = lobbySocketRef.current;
+
+    if (!destinationRoomNode || !socket) {
+      setMoveError("No se ha podido emitir el evento de pasadizo porque la conexión realtime no está disponible.");
+      return;
+    }
+
+    setIsEmittingSecretPassage(true);
+
+    try {
+      const response = await emitTeamSecretPassage(socket, currentMoveNode.id, destinationRoomNode.id);
+      if (!response.ok) {
+        setMoveError(response.error);
+        return;
+      }
+
+      setMoveError(`Pasadizo emitido: ${currentMoveNode.label} -> ${destinationRoomNode.label}.`);
+    } catch {
+      setMoveError("No se ha podido emitir el evento de pasadizo desde este terminal.");
+    } finally {
+      setIsEmittingSecretPassage(false);
+    }
+  };
+
   const applyGameConfig = (config: GameConfig) => {
     setBoardTheme(config);
     setCatNames({
@@ -573,6 +607,7 @@ export function TerminalView() {
     }
 
     const socket = createLobbySocketClient();
+    lobbySocketRef.current = socket;
     let isSubscribed = false;
 
     const sendHeartbeat = () => {
@@ -657,6 +692,7 @@ export function TerminalView() {
 
     return () => {
       window.clearInterval(heartbeatIntervalId);
+      lobbySocketRef.current = null;
       socket.disconnect();
     };
   }, [navigate]);
@@ -947,6 +983,15 @@ export function TerminalView() {
                             <p className="text-[11px] text-amber-100">
                               Estás en una sala con pasadizo: puedes emitir el uso hacia {secretPassageDestinationNode.label}.
                             </p>
+                            <button
+                              type="button"
+                              data-cy="terminal-secret-passage-emit"
+                              onClick={() => void handleEmitSecretPassage()}
+                              disabled={isEmittingSecretPassage}
+                              className="mt-3 rounded-md border border-amber-500/70 bg-amber-500 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {isEmittingSecretPassage ? "Emitiendo..." : "Emitir pasadizo"}
+                            </button>
                           </div>
                         ) : null}
                       </div>

@@ -198,4 +198,52 @@ describe('sessionMovement', () => {
         });
       });
   });
+
+  it('ninguna conexión entre casillas de pasillo es diagonal', () => {
+    const diagonals: string[] = [];
+    const seen = new Set<string>();
+
+    Object.entries(BOARD_MOVEMENT_CONNECTIONS).forEach(([nodeId, neighbors]) => {
+      const a = BOARD_MOVEMENT_NODES[nodeId];
+      if (!a?.gridPosition || a.kind === 'room') return;
+
+      neighbors.forEach((nId) => {
+        const key = [nodeId, nId].sort().join('::');
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        const b = BOARD_MOVEMENT_NODES[nId];
+        if (!b?.gridPosition || b.kind === 'room') return;
+
+        const dc = Math.abs(a.gridPosition.col - b.gridPosition.col);
+        const dr = Math.abs(a.gridPosition.row - b.gridPosition.row);
+        if (dc > 0 && dr > 0) {
+          diagonals.push(`${nodeId} -> ${nId} (Δcol=${dc}, Δrow=${dr})`);
+        }
+      });
+    });
+
+    expect(diagonals).toHaveLength(0);
+  });
+
+  it('permite salir desde spawn-verde al menos a un nodo adyacente', () => {
+    const adjacentMoves = getAdjacentMoveNodes('spawn-verde');
+
+    expect(adjacentMoves).toHaveLength(1);
+    expect(adjacentMoves[0]).toMatchObject({ id: 'pasillo-inferior-izquierdo' });
+  });
+
+  it('permite salir desde spawn-blanco al menos a un nodo adyacente', () => {
+    const adjacentMoves = getAdjacentMoveNodes('spawn-blanco');
+
+    expect(adjacentMoves).toHaveLength(1);
+    expect(adjacentMoves[0]).toMatchObject({ id: 'pasillo-inferior-derecho' });
+  });
+
+  it('permite salir desde spawn-amarillo al menos a un nodo adyacente', () => {
+    const adjacentMoves = getAdjacentMoveNodes('spawn-amarillo');
+
+    expect(adjacentMoves).toHaveLength(1);
+    expect(adjacentMoves[0]).toMatchObject({ kind: 'square' });
+  });
 });

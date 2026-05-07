@@ -721,7 +721,7 @@ export function TerminalView() {
       setIsLoadingMoves(false);
       setDiceResetSignal((previousValue) => previousValue + 1);
     }
-  }, [activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, refreshMoveState, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
+  }, [activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
 
   // Carga la posición actual del equipo al inicio del turno (dado=null) para detectar sala esquina
   React.useEffect(() => {
@@ -793,7 +793,6 @@ export function TerminalView() {
   const boardDebugHighlightedNodeIds = [currentMoveNode?.id, selectedDestinationNode?.id, selectedDestinationRoomNode?.id].filter(
     (nodeId): nodeId is string => Boolean(nodeId)
   );
-  const canSelectBoardDestination = isMyTurn && sessionTurn?.dice !== null && !isLoadingMoves && destinationNodes.length > 0;
   const currentTurnLabel = sessionTurn?.currentTeamName ?? "Sin turno activo";
   const currentTurnDiceLabel = sessionTurn?.dice
     ? `${sessionTurn.dice.valueOne} + ${sessionTurn.dice.valueTwo} = ${sessionTurn.dice.total}`

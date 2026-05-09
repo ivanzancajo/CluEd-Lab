@@ -549,7 +549,11 @@ export function findNearestBoardMovementNode(
     matchedDistance = normalizedDistance;
   });
 
-  return matchedNode;
+  if (matchedNode) {
+    return matchedNode;
+  }
+
+  return null;
 }
 
 function buildExpandedMovementGraph() {

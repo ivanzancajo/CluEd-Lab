@@ -108,6 +108,8 @@ interface GameConfig {
   spaces?: RawItem[];
 }
 
+const DICE_RESULT_VISIBILITY_DELAY_MS = 1300;
+
 interface TerminalCard {
   id: string;
   kind: TeamHandCard["kind"];
@@ -301,10 +303,23 @@ export function TerminalView() {
     setSelectedDestinationNodeId("");
     setIsMoveConfirmOpen(false);
     setMoveError(null);
+    const rollStartedAt = Date.now();
+
+    const waitForDiceAnimationToFinish = async () => {
+      const elapsed = Date.now() - rollStartedAt;
+      const remaining = DICE_RESULT_VISIBILITY_DELAY_MS - elapsed;
+      if (remaining > 0) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(() => resolve(), remaining);
+        });
+      }
+    };
 
     try {
       const rollResult = await rollTeamDice(accessCode, teamId);
       const currentTeam = rollResult.session.teams.find((team) => team.id === teamId);
+
+      await waitForDiceAnimationToFinish();
 
       setCurrentMoveNode(rollResult.currentNode);
       setDestinationNodes(rollResult.destinationNodes);
@@ -324,6 +339,7 @@ export function TerminalView() {
 
       return rollResult.dice;
     } catch (error) {
+      await waitForDiceAnimationToFinish();
       setDestinationNodes([]);
       setMoveError(getSessionErrorMessage(error, "No se ha podido registrar la tirada del turno actual."));
       setDiceResetSignal((previousValue) => previousValue + 1);

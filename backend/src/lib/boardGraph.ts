@@ -75,12 +75,12 @@ const BASE_MOVEMENT_NODE_DEFINITIONS: Record<string, BaseMovementNodeDefinition>
     kind: 'square',
     gridPoint: grid(10, 7),
   },
-  'spawn-morado': { id: 'spawn-morado', label: 'Salida morada', kind: 'spawn', gridPoint: grid(0, 6, -5, -0.66) },
+  'spawn-morado': { id: 'spawn-morado', label: 'Salida morada', kind: 'spawn', gridPoint: grid(0, 5, -5, -0.66) },
   'pasillo-izquierdo-superior': {
     id: 'pasillo-izquierdo-superior',
     label: 'Cruce izquierdo superior',
     kind: 'square',
-    gridPoint: grid(0, 6),
+    gridPoint: grid(0, 5),
   },
   'sala-superior-izquierda': {
     id: 'sala-superior-izquierda',
@@ -161,7 +161,7 @@ const BASE_MOVEMENT_NODE_DEFINITIONS: Record<string, BaseMovementNodeDefinition>
     kind: 'room',
     gridPoint: grid(1, 21, 1.45, 1.35),
   },
-  'spawn-verde': { id: 'spawn-verde', label: 'Salida verde', kind: 'spawn', gridPoint: grid(8, 25, 0.41, -0.97) },
+  'spawn-verde': { id: 'spawn-verde', label: 'Salida verde', kind: 'spawn', gridPoint: grid(8, 24, 0.41, -0.97) },
   'pasillo-inferior-central': {
     id: 'pasillo-inferior-central',
     label: 'Cruce inferior central',
@@ -180,7 +180,7 @@ const BASE_MOVEMENT_NODE_DEFINITIONS: Record<string, BaseMovementNodeDefinition>
     kind: 'square',
     gridPoint: grid(13, 23),
   },
-  'spawn-blanco': { id: 'spawn-blanco', label: 'Salida blanca', kind: 'spawn', gridPoint: grid(13, 25, -0.41, -0.97) },
+  'spawn-blanco': { id: 'spawn-blanco', label: 'Salida blanca', kind: 'spawn', gridPoint: grid(13, 24, -0.41, -0.97) },
   'sala-inferior-derecha': {
     id: 'sala-inferior-derecha',
     label: 'Sala inferior derecha',
@@ -220,7 +220,7 @@ const BASE_MOVEMENT_NODES: Record<string, BaseMovementNode> = Object.fromEntries
 );
 
 const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
-  'spawn-rojo->pasillo-superior-derecho': [grid(15, 2)],
+  'spawn-rojo->pasillo-superior-derecho': [grid(15, 1), grid(15, 2), grid(15, 3)],
   'pasillo-superior-derecho->pasillo-superior-central': [grid(14, 4), grid(13, 4), grid(12, 4)],
   'pasillo-superior-derecho->pasillo-derecho-superior': [
     grid(15, 5),
@@ -241,7 +241,6 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
     grid(3, 4),
     grid(2, 4),
     grid(1, 5),
-    grid(0, 5),
   ],
   'pasillo-superior-central->centro-norte': [grid(10, 5), grid(10, 6), grid(10, 7, 0, -1.64)],
   'pasillo-izquierdo-superior->pasillo-izquierdo-central': [grid(0, 7), grid(0, 8), grid(0, 9), grid(0, 10)],
@@ -261,7 +260,7 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
     grid(13, 11),
     grid(13, 12, 0, -1.7),
   ],
-  'spawn-azul->pasillo-izquierdo-inferior': [grid(0, 18, -2.53, 0.22)],
+  'spawn-azul->pasillo-izquierdo-inferior': [],
   'pasillo-izquierdo-inferior->pasillo-inferior-izquierdo': [
     grid(1, 18),
     grid(2, 18),
@@ -464,10 +463,10 @@ const EXCLUDED_SQUARE_GRID_KEYS = new Set(
 
 const IMAGE_ALIGNED_EXTRA_GRID_POINTS = [
   ...rowRangePoints(0, [[6, 6]]),
-  ...rowRangePoints(1, [[6, 7], [14, 16]]),
-  ...rowRangePoints(2, [[6, 8], [14, 16]]),
-  ...rowRangePoints(3, [[5, 8], [14, 16]]),
-  ...rowRangePoints(4, [[0, 8], [15, 16]]),
+  ...rowRangePoints(1, [[6, 7]]),
+  ...rowRangePoints(2, [[6, 8]]),
+  ...rowRangePoints(3, [[5, 8]]),
+  ...rowRangePoints(4, [[1, 8], [15, 16]]),
   ...rowRangePoints(5, [[1, 8], [14, 16]]),
   ...rowRangePoints(6, [[5, 8], [11, 14], [15, 21]]),
   ...rowRangePoints(7, [[6, 13], [14, 22]]),
@@ -480,8 +479,8 @@ const IMAGE_ALIGNED_EXTRA_GRID_POINTS = [
   ...rowRangePoints(14, [[5, 8], [14, 15]]),
   ...rowRangePoints(15, [[4, 12], [14, 17]]),
   ...rowRangePoints(16, [[5, 21]]),
-  ...rowRangePoints(17, [[0, 8], [13, 13], [15, 22]]),
-  ...rowRangePoints(18, [[0, 6], [15, 16], [18, 18]]),
+  ...rowRangePoints(17, [[1, 8], [13, 13], [15, 22]]),
+  ...rowRangePoints(18, [[1, 6], [15, 16], [18, 18]]),
   ...rowRangePoints(19, [[6, 7], [14, 17]]),
   ...rowRangePoints(20, [[3, 7], [15, 17]]),
   ...rowRangePoints(21, [[5, 7], [15, 17]]),

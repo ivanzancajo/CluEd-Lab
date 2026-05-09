@@ -290,50 +290,97 @@ describe('sessionMovement', () => {
       });
   });
 
-    it('mantiene destinos exactamente al rango de tirada desde todos los spawns (auditoria profunda)', () => {
-      const spawnNodeIds = Object.values(BOARD_MOVEMENT_NODES)
-        .filter((node) => node.kind === 'spawn')
-        .map((node) => node.id)
-        .sort((left, right) => left.localeCompare(right, 'es'));
+  it('mantiene destinos exactamente al rango de tirada desde todos los spawns (auditoria profunda)', () => {
+    const spawnNodeIds = Object.values(BOARD_MOVEMENT_NODES)
+      .filter((node) => node.kind === 'spawn')
+      .map((node) => node.id)
+      .sort((left, right) => left.localeCompare(right, 'es'));
 
-      const buildShortestDistances = (startNodeId: string) => {
-        const distances = new Map<string, number>([[startNodeId, 0]]);
-        const queue: string[] = [startNodeId];
+    const buildShortestDistances = (startNodeId: string) => {
+      const distances = new Map<string, number>([[startNodeId, 0]]);
+      const queue: string[] = [startNodeId];
 
-        while (queue.length > 0) {
-          const currentNodeId = queue.shift();
-          if (!currentNodeId) {
-            continue;
+      while (queue.length > 0) {
+        const currentNodeId = queue.shift();
+        if (!currentNodeId) {
+          continue;
+        }
+
+        const currentDistance = distances.get(currentNodeId) ?? 0;
+        const linkedNodeIds = BOARD_MOVEMENT_CONNECTIONS[currentNodeId] ?? [];
+
+        linkedNodeIds.forEach((linkedNodeId) => {
+          if (distances.has(linkedNodeId)) {
+            return;
           }
 
-          const currentDistance = distances.get(currentNodeId) ?? 0;
-          const linkedNodeIds = BOARD_MOVEMENT_CONNECTIONS[currentNodeId] ?? [];
+          distances.set(linkedNodeId, currentDistance + 1);
+          queue.push(linkedNodeId);
+        });
+      }
 
-          linkedNodeIds.forEach((linkedNodeId) => {
-            if (distances.has(linkedNodeId)) {
-              return;
-            }
+      return distances;
+    };
 
-            distances.set(linkedNodeId, currentDistance + 1);
-            queue.push(linkedNodeId);
-          });
-        }
+    spawnNodeIds.forEach((spawnNodeId) => {
+      const shortestDistances = buildShortestDistances(spawnNodeId);
 
-        return distances;
-      };
+      for (let diceRoll = 1; diceRoll <= 8; diceRoll += 1) {
+        const reachableMoves = getReachableMoveNodes(spawnNodeId, [], diceRoll);
+        const outOfRangeMoves = reachableMoves.filter(
+          (node) => (shortestDistances.get(node.id) ?? Number.POSITIVE_INFINITY) !== diceRoll
+        );
 
-      spawnNodeIds.forEach((spawnNodeId) => {
-        const shortestDistances = buildShortestDistances(spawnNodeId);
+        expect(outOfRangeMoves).toHaveLength(0);
+      }
+    });
+  });
 
-        for (let diceRoll = 1; diceRoll <= 8; diceRoll += 1) {
-          const reachableMoves = getReachableMoveNodes(spawnNodeId, [], diceRoll);
-          const outOfRangeMoves = reachableMoves.filter(
-            (node) => (shortestDistances.get(node.id) ?? Number.POSITIVE_INFINITY) !== diceRoll
-          );
+  it('ninguna conexión entre casillas de pasillo es diagonal', () => {
+    const diagonals: string[] = [];
+    const seen = new Set<string>();
 
-          expect(outOfRangeMoves).toHaveLength(0);
+    Object.entries(BOARD_MOVEMENT_CONNECTIONS).forEach(([nodeId, neighbors]) => {
+      const a = BOARD_MOVEMENT_NODES[nodeId];
+      if (!a?.gridPosition || a.kind === 'room') return;
+
+      neighbors.forEach((nId) => {
+        const key = [nodeId, nId].sort().join('::');
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        const b = BOARD_MOVEMENT_NODES[nId];
+        if (!b?.gridPosition || b.kind === 'room') return;
+
+        const dc = Math.abs(a.gridPosition.col - b.gridPosition.col);
+        const dr = Math.abs(a.gridPosition.row - b.gridPosition.row);
+        if (dc > 0 && dr > 0) {
+          diagonals.push(`${nodeId} -> ${nId} (Δcol=${dc}, Δrow=${dr})`);
         }
       });
-
     });
+
+    expect(diagonals).toHaveLength(0);
+  });
+
+  it('permite salir desde spawn-verde al menos a un nodo adyacente', () => {
+    const adjacentMoves = getAdjacentMoveNodes('spawn-verde');
+
+    expect(adjacentMoves).toHaveLength(1);
+    expect(adjacentMoves[0]).toMatchObject({ id: 'pasillo-inferior-izquierdo' });
+  });
+
+  it('permite salir desde spawn-blanco al menos a un nodo adyacente', () => {
+    const adjacentMoves = getAdjacentMoveNodes('spawn-blanco');
+
+    expect(adjacentMoves).toHaveLength(1);
+    expect(adjacentMoves[0]).toMatchObject({ id: 'pasillo-inferior-derecho' });
+  });
+
+  it('permite salir desde spawn-amarillo al menos a un nodo adyacente', () => {
+    const adjacentMoves = getAdjacentMoveNodes('spawn-amarillo');
+
+    expect(adjacentMoves).toHaveLength(1);
+    expect(adjacentMoves[0]).toMatchObject({ kind: 'square' });
+  });
 });

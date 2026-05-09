@@ -1006,18 +1006,7 @@ export function TerminalView() {
                       <p className="mt-3 text-[11px] text-slate-400">
                         La tirada actual no deja destinos seleccionables en el tablero.
                       </p>
-                    ) : (
-                      <div className="mt-3 space-y-3">
-                        <p className="text-[11px] text-cyan-100">
-                          {currentMoveNode
-                            ? `Posición actual: ${formatMoveNodeForTerminal(currentMoveNode)}.`
-                            : "Posición actual pendiente de sincronizar."}
-                        </p>
-                        <p className="mb-2 text-[10px] uppercase tracking-[0.2em] text-slate-500">
-                          Tirada actual: {sessionTurn.dice.total}. Selecciona la casilla o sala final de destino para este turno.
-                        </p>
-                      </div>
-                    )}
+                    ) : null}
 
                     {canEmitSecretPassageEvent && secretPassageDestinationNode ? (
                       <div className="mt-3 rounded-lg border border-amber-800/70 bg-amber-950/20 p-3">

@@ -109,6 +109,7 @@ interface GameConfig {
 }
 
 const DICE_RESULT_VISIBILITY_DELAY_MS = 1300;
+const DICE_CENTER_VERTICAL_OFFSET_PERCENT = 2;
 
 interface TerminalCard {
   id: string;
@@ -745,7 +746,7 @@ export function TerminalView() {
       setIsLoadingMoves(false);
       setDiceResetSignal((previousValue) => previousValue + 1);
     }
-  }, [activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, refreshMoveState, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
+  }, [activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
 
   // Carga la posición actual del equipo al inicio del turno (dado=null) para detectar sala esquina
   React.useEffect(() => {
@@ -813,11 +814,9 @@ export function TerminalView() {
   const selectedDestinationRoomNode = currentMoveNode?.kind !== "room" && selectedDestinationNode
     ? getRoomEntryNodeByDoorNodeId(selectedDestinationNode.id)
     : null;
-  const selectedDestinationDisplayNode = selectedDestinationRoomNode ?? selectedDestinationNode;
   const boardDebugHighlightedNodeIds = [currentMoveNode?.id, selectedDestinationNode?.id, selectedDestinationRoomNode?.id].filter(
     (nodeId): nodeId is string => Boolean(nodeId)
   );
-  const canSelectBoardDestination = isMyTurn && sessionTurn?.dice !== null && !isLoadingMoves && destinationNodes.length > 0;
   const currentTurnLabel = sessionTurn?.currentTeamName ?? "Sin turno activo";
   const currentTurnDiceLabel = sessionTurn?.dice
     ? `${sessionTurn.dice.valueOne} + ${sessionTurn.dice.valueTwo} = ${sessionTurn.dice.total}`
@@ -913,7 +912,7 @@ export function TerminalView() {
                        className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
                        style={{
                          left: toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionX),
-                         top: toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionY),
+                         top: `calc(${toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionY)} - ${DICE_CENTER_VERTICAL_OFFSET_PERCENT}%)`,
                          width: `${BOARD_CENTER_IMAGE_BOUNDS.widthPercent}%`,
                          height: `${BOARD_CENTER_IMAGE_BOUNDS.heightPercent}%`,
                        }}
@@ -1048,9 +1047,7 @@ export function TerminalView() {
                       Confirmar movimiento
                     </AlertDialogTitle>
                     <AlertDialogDescription className="text-sm text-slate-300">
-                      {selectedDestinationDisplayNode
-                        ? buildMoveConfirmationCopy(currentMoveNode, selectedDestinationDisplayNode, Boolean(selectedDestinationRoomNode))
-                        : "Selecciona una casilla o sala del tablero para preparar el movimiento."}
+                      Confirma para ejecutar el movimiento seleccionado.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -1334,19 +1331,3 @@ export function TerminalView() {
   );
 }
 
-function formatMoveNodeForTerminal(node: TeamMoveNode) {
-  const gridLabel = node.gridPosition ? `C${node.gridPosition.col}:R${node.gridPosition.row}` : null;
-  return gridLabel ? `${gridLabel} · ${node.label}` : node.label;
-}
-
-function buildMoveConfirmationCopy(
-  currentNode: TeamMoveNode | null,
-  destinationNode: TeamMoveNode,
-  entersRoomFromCorridor: boolean
-) {
-  if (entersRoomFromCorridor && currentNode?.kind !== 'room') {
-    return `Vas a mover el peón hasta ${destinationNode.label}. Este movimiento consumirá toda la tirada del turno.`;
-  }
-
-  return `Vas a mover el peón hasta ${formatMoveNodeForTerminal(destinationNode)}. El backend validará si este destino es alcanzable con la tirada actual.`;
-}

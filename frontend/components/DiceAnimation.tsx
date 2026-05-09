@@ -71,10 +71,8 @@ export const DiceAnimation = ({
   const [hasRolled, setHasRolled] = useState(false);
 
   useEffect(() => {
-    setDice1(1);
-    setDice2(1);
+    // Mantener el último resultado visible entre actualizaciones de turno.
     setIsRolling(false);
-    setHasRolled(false);
   }, [resetSignal]);
 
   const startRoll = () => {

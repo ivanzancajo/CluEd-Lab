@@ -59,6 +59,16 @@ export type TeamDiceRollResult = {
 };
 
 const MOVEMENT_POSITION_TOLERANCE = 0.75;
+const SPAWN_SNAP_TOLERANCE = MOVEMENT_POSITION_TOLERANCE * 2;
+
+const TEAM_COLOR_SPAWN_NODE_ID: Record<ColorEquipo, string> = {
+  [ColorEquipo.ROJO]: 'spawn-rojo',
+  [ColorEquipo.AMARILLO]: 'spawn-amarillo',
+  [ColorEquipo.AZUL]: 'spawn-azul',
+  [ColorEquipo.VERDE]: 'spawn-verde',
+  [ColorEquipo.MORADO]: 'spawn-morado',
+  [ColorEquipo.BLANCO]: 'spawn-blanco',
+};
 
 export function getAdjacentMoveNodes(currentNodeId: string, occupiedNodeIds: Iterable<string> = []) {
   const occupiedSet = new Set(occupiedNodeIds);
@@ -157,13 +167,47 @@ export function findBoardMovementNodeByPosition(positionX: number | null, positi
     return null;
   }
 
-  return (
-    Object.values(BOARD_MOVEMENT_NODES).find(
-      (node) =>
-        Math.abs(node.positionX - positionX) <= MOVEMENT_POSITION_TOLERANCE &&
-        Math.abs(node.positionY - positionY) <= MOVEMENT_POSITION_TOLERANCE
-    ) ?? null
+  const candidates = Object.values(BOARD_MOVEMENT_NODES).filter(
+    (node) =>
+      Math.abs(node.positionX - positionX) <= MOVEMENT_POSITION_TOLERANCE &&
+      Math.abs(node.positionY - positionY) <= MOVEMENT_POSITION_TOLERANCE
   );
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const getKindPriority = (kind: BoardMovementNode['kind']) => {
+    if (kind === 'spawn') {
+      return 0;
+    }
+
+    if (kind === 'square') {
+      return 1;
+    }
+
+    return 2;
+  };
+
+  return candidates
+    .map((node) => ({
+      node,
+      distance: Math.hypot(node.positionX - positionX, node.positionY - positionY),
+      kindPriority: getKindPriority(node.kind),
+    }))
+    .sort((left, right) => {
+      const distanceDelta = left.distance - right.distance;
+      if (distanceDelta !== 0) {
+        return distanceDelta;
+      }
+
+      const kindDelta = left.kindPriority - right.kindPriority;
+      if (kindDelta !== 0) {
+        return kindDelta;
+      }
+
+      return left.node.id.localeCompare(right.node.id, 'es');
+    })[0]?.node ?? null;
 }
 
 export function resolveCommittedMoveTargetNode(currentNode: BoardMovementNode, targetNode: BoardMovementNode) {
@@ -401,6 +445,8 @@ function buildTeamMoveValidationState(
 }
 
 function resolveTeamMovementContext(session: {
+  currentTurnTeamId: string | null;
+  currentTurnStartedAt: Date | null;
   teams: Array<{
     id: string;
     name: string;
@@ -415,7 +461,7 @@ function resolveTeamMovementContext(session: {
     throw new HttpError(404, 'El equipo indicado no pertenece a la sesión seleccionada.');
   }
 
-  const currentNode = findBoardMovementNodeByPosition(team.positionX, team.positionY);
+  const currentNode = resolveTeamCurrentNode(team);
   if (!currentNode) {
     throw new HttpError(409, 'La posición actual del equipo no pertenece todavía al grafo de movimiento soportado.');
   }
@@ -423,7 +469,7 @@ function resolveTeamMovementContext(session: {
   const occupiedNodeIds = new Set(
     session.teams
       .filter((currentTeam) => currentTeam.id !== teamId)
-      .map((currentTeam) => findBoardMovementNodeByPosition(currentTeam.positionX, currentTeam.positionY)?.id)
+      .map((currentTeam) => resolveTeamCurrentNode(currentTeam)?.id)
       .filter((nodeId): nodeId is string => Boolean(nodeId))
   );
 
@@ -432,4 +478,28 @@ function resolveTeamMovementContext(session: {
     currentNode,
     occupiedNodeIds,
   };
+}
+
+function resolveTeamCurrentNode(team: {
+  color: ColorEquipo;
+  positionX: number | null;
+  positionY: number | null;
+}) {
+  const resolvedNode = findBoardMovementNodeByPosition(team.positionX, team.positionY);
+  if (typeof team.positionX !== 'number' || typeof team.positionY !== 'number') {
+    return resolvedNode;
+  }
+
+  const spawnNodeId = TEAM_COLOR_SPAWN_NODE_ID[team.color];
+  const spawnNode = BOARD_MOVEMENT_NODES[spawnNodeId];
+  if (!spawnNode) {
+    return resolvedNode;
+  }
+
+  const distanceToSpawn = Math.hypot(team.positionX - spawnNode.positionX, team.positionY - spawnNode.positionY);
+  if (distanceToSpawn <= SPAWN_SNAP_TOLERANCE) {
+    return spawnNode;
+  }
+
+  return resolvedNode;
 }

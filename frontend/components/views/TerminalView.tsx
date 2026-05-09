@@ -108,6 +108,9 @@ interface GameConfig {
   spaces?: RawItem[];
 }
 
+const DICE_RESULT_VISIBILITY_DELAY_MS = 1300;
+const DICE_CENTER_VERTICAL_OFFSET_PERCENT = 2;
+
 interface TerminalCard {
   id: string;
   kind: TeamHandCard["kind"];
@@ -301,10 +304,23 @@ export function TerminalView() {
     setSelectedDestinationNodeId("");
     setIsMoveConfirmOpen(false);
     setMoveError(null);
+    const rollStartedAt = Date.now();
+
+    const waitForDiceAnimationToFinish = async () => {
+      const elapsed = Date.now() - rollStartedAt;
+      const remaining = DICE_RESULT_VISIBILITY_DELAY_MS - elapsed;
+      if (remaining > 0) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(() => resolve(), remaining);
+        });
+      }
+    };
 
     try {
       const rollResult = await rollTeamDice(accessCode, teamId);
       const currentTeam = rollResult.session.teams.find((team) => team.id === teamId);
+
+      await waitForDiceAnimationToFinish();
 
       setCurrentMoveNode(rollResult.currentNode);
       setDestinationNodes(rollResult.destinationNodes);
@@ -324,6 +340,7 @@ export function TerminalView() {
 
       return rollResult.dice;
     } catch (error) {
+      await waitForDiceAnimationToFinish();
       setDestinationNodes([]);
       setMoveError(getSessionErrorMessage(error, "No se ha podido registrar la tirada del turno actual."));
       setDiceResetSignal((previousValue) => previousValue + 1);
@@ -335,23 +352,6 @@ export function TerminalView() {
     setSelectedDestinationNodeId(destinationNodeId);
     setMoveError(null);
     setIsMoveConfirmOpen(true);
-  };
-
-  const findDestinationNodeForBoardSelection = (boardNode: BoardMovementNode) => {
-    const exactDestination = destinationNodes.find((destinationNode) => destinationNode.id === boardNode.id);
-    if (exactDestination) {
-      return exactDestination;
-    }
-
-    if (!boardNode.gridPosition) {
-      return null;
-    }
-
-    return destinationNodes.find(
-      (destinationNode) =>
-        destinationNode.gridPosition?.col === boardNode.gridPosition?.col &&
-        destinationNode.gridPosition?.row === boardNode.gridPosition?.row
-    ) ?? null;
   };
 
   const handleBoardNodePress = (boardNode: BoardMovementNode) => {
@@ -382,7 +382,7 @@ export function TerminalView() {
       return;
     }
 
-    const selectedDestination = findDestinationNodeForBoardSelection(boardNode);
+    const selectedDestination = destinationNodes.find((destinationNode) => destinationNode.id === boardNode.id) ?? null;
     if (!selectedDestination) {
       setMoveError("La casilla o sala seleccionada no es alcanzable con la tirada actual.");
       return;
@@ -400,9 +400,34 @@ export function TerminalView() {
     const positionX = ((event.clientX - boardBounds.left) / boardBounds.width) * 100;
     const positionY = ((event.clientY - boardBounds.top) / boardBounds.height) * 100;
     const matchedNode = findNearestBoardMovementNode(positionX, positionY);
+    const matchedDestinationNode = destinationNodes.length > 0
+      ? findNearestBoardMovementNode(
+          positionX,
+          positionY,
+          destinationNodes.map((destinationNode) => destinationNode.id)
+        )
+      : null;
 
     if (isBoardDebugEnabled) {
       setBoardDebugProbe(buildBoardDebugProbe(positionX, positionY, matchedNode));
+    }
+
+    if (
+      sessionStatus === "EN_CURSO" &&
+      isMyTurn &&
+      sessionTurn?.dice !== null &&
+      !isLoadingMoves &&
+      destinationNodes.length > 0
+    ) {
+      if (!matchedDestinationNode) {
+        setIsMoveConfirmOpen(false);
+        setSelectedDestinationNodeId("");
+        setMoveError("La casilla o sala seleccionada no es alcanzable con la tirada actual.");
+        return;
+      }
+
+      handleBoardNodePress(matchedDestinationNode);
+      return;
     }
 
     if (!matchedNode) {
@@ -789,7 +814,6 @@ export function TerminalView() {
   const selectedDestinationRoomNode = currentMoveNode?.kind !== "room" && selectedDestinationNode
     ? getRoomEntryNodeByDoorNodeId(selectedDestinationNode.id)
     : null;
-  const selectedDestinationDisplayNode = selectedDestinationRoomNode ?? selectedDestinationNode;
   const boardDebugHighlightedNodeIds = [currentMoveNode?.id, selectedDestinationNode?.id, selectedDestinationRoomNode?.id].filter(
     (nodeId): nodeId is string => Boolean(nodeId)
   );
@@ -888,7 +912,7 @@ export function TerminalView() {
                        className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
                        style={{
                          left: toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionX),
-                         top: toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionY),
+                         top: `calc(${toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionY)} - ${DICE_CENTER_VERTICAL_OFFSET_PERCENT}%)`,
                          width: `${BOARD_CENTER_IMAGE_BOUNDS.widthPercent}%`,
                          height: `${BOARD_CENTER_IMAGE_BOUNDS.heightPercent}%`,
                        }}
@@ -997,18 +1021,7 @@ export function TerminalView() {
                       <p className="mt-3 text-[11px] text-slate-400">
                         La tirada actual no deja destinos seleccionables en el tablero.
                       </p>
-                    ) : (
-                      <div className="mt-3 space-y-3">
-                        <p className="text-[11px] text-cyan-100">
-                          {currentMoveNode
-                            ? `Posición actual: ${formatMoveNodeForTerminal(currentMoveNode)}.`
-                            : "Posición actual pendiente de sincronizar."}
-                        </p>
-                        <p className="mb-2 text-[10px] uppercase tracking-[0.2em] text-slate-500">
-                          Tirada actual: {sessionTurn.dice.total}. Selecciona la casilla o sala final de destino para este turno.
-                        </p>
-                      </div>
-                    )}
+                    ) : null}
 
                     {canEmitSecretPassageEvent && secretPassageDestinationNode ? (
                       <div className="mt-3 rounded-lg border border-amber-800/70 bg-amber-950/20 p-3">
@@ -1034,9 +1047,7 @@ export function TerminalView() {
                       Confirmar movimiento
                     </AlertDialogTitle>
                     <AlertDialogDescription className="text-sm text-slate-300">
-                      {selectedDestinationDisplayNode
-                        ? buildMoveConfirmationCopy(currentMoveNode, selectedDestinationDisplayNode, Boolean(selectedDestinationRoomNode))
-                        : "Selecciona una casilla o sala del tablero para preparar el movimiento."}
+                      Confirma para ejecutar el movimiento seleccionado.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -1320,19 +1331,3 @@ export function TerminalView() {
   );
 }
 
-function formatMoveNodeForTerminal(node: TeamMoveNode) {
-  const gridLabel = node.gridPosition ? `C${node.gridPosition.col}:R${node.gridPosition.row}` : null;
-  return gridLabel ? `${gridLabel} · ${node.label}` : node.label;
-}
-
-function buildMoveConfirmationCopy(
-  currentNode: TeamMoveNode | null,
-  destinationNode: TeamMoveNode,
-  entersRoomFromCorridor: boolean
-) {
-  if (entersRoomFromCorridor && currentNode?.kind !== 'room') {
-    return `Vas a mover el peón hasta ${destinationNode.label}. Este movimiento consumirá toda la tirada del turno.`;
-  }
-
-  return `Vas a mover el peón hasta ${formatMoveNodeForTerminal(destinationNode)}. El backend validará si este destino es alcanzable con la tirada actual.`;
-}

@@ -36,6 +36,7 @@ import { verifyToken } from '../middleware/auth.js';
 import { emitGameStarted, emitSessionSnapshotUpdate } from '../socket/socketServer.js';
 
 const router = Router();
+const DICE_ROLL_EVENT_BROADCAST_DELAY_MS = 1400;
 
 router.post('/sessions', verifyToken, async (req, res) => {
   const payload = parseBody(createSessionSchema, req.body, res);
@@ -106,26 +107,27 @@ router.post('/sessions/:accessCode/teams/:teamId/roll', async (req, res) => {
     );
     const session = await loadSessionSnapshotByAccessCode(prisma, teamParams.accessCode);
 
-    try {
-      const nextTeamName = session.turn?.currentTeamName;
-      const autoAdvancedMessage =
-        rollResult.turnAdvanced && nextTeamName
-          ? ` ${rollResult.teamName} no tiene destinos legales disponibles. Turno para ${nextTeamName}.`
-          : rollResult.turnAdvanced
-          ? ` ${rollResult.teamName} no tiene destinos legales disponibles.`
-          : '';
+    const nextTeamName = session.turn?.currentTeamName;
+    const autoAdvancedMessage =
+      rollResult.turnAdvanced && nextTeamName
+        ? ` ${rollResult.teamName} no tiene destinos legales disponibles. Turno para ${nextTeamName}.`
+        : rollResult.turnAdvanced
+        ? ` ${rollResult.teamName} no tiene destinos legales disponibles.`
+        : '';
+    const rollEventMessage = `${rollResult.teamName} ha lanzado ${rollResult.dice.total}.${autoAdvancedMessage}`.trim();
 
-      await emitSessionSnapshotUpdate(rollResult.sessionId, {
+    setTimeout(() => {
+      void emitSessionSnapshotUpdate(rollResult.sessionId, {
         id: randomUUID(),
         type: 'system',
-        message: `${rollResult.teamName} ha lanzado ${rollResult.dice.total}.${autoAdvancedMessage}`.trim(),
+        message: rollEventMessage,
         occurredAt: Date.now(),
         teamColor: rollResult.teamColor,
         teamId: rollResult.teamId,
+      }).catch(() => {
+        // La tirada ya quedó persistida; un fallo de broadcast no debe revertirla.
       });
-    } catch {
-      // La tirada ya quedó persistida; un fallo de broadcast no debe revertirla.
-    }
+    }, DICE_ROLL_EVENT_BROADCAST_DELAY_MS);
 
     res.json({
       item: {

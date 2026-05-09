@@ -240,6 +240,7 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
     grid(4, 4),
     grid(3, 4),
     grid(2, 4),
+    grid(1, 4),
     grid(1, 5),
   ],
   'pasillo-superior-central->centro-norte': [grid(10, 5), grid(10, 6), grid(10, 7, 0, -1.64)],
@@ -265,8 +266,10 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
     grid(1, 18),
     grid(2, 18),
     grid(3, 18),
+    grid(4, 18),
     grid(4, 19),
     grid(5, 19),
+    grid(5, 20),
     grid(6, 20),
     grid(6, 21),
     grid(7, 21),
@@ -275,8 +278,8 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
   ],
   'pasillo-inferior-izquierdo->pasillo-inferior-central': [grid(9, 23)],
   'pasillo-inferior-izquierdo->centro-sur': [grid(8, 22), grid(8, 21), grid(8, 20), grid(9, 19), grid(9, 18), grid(10, 18)],
-  'centro-oeste->centro-sur': [grid(7, 13), grid(7, 14), grid(7, 15), grid(8, 16), grid(9, 16), grid(9, 17)],
-  'centro-este->centro-sur': [grid(13, 13), grid(13, 14), grid(13, 15), grid(12, 16), grid(11, 16), grid(11, 17)],
+  'centro-oeste->centro-sur': [grid(7, 13), grid(7, 14), grid(7, 15), grid(7, 16), grid(8, 16), grid(9, 16), grid(9, 17)],
+  'centro-este->centro-sur': [grid(13, 13), grid(13, 14), grid(13, 15), grid(13, 16), grid(12, 16), grid(11, 16), grid(11, 17)],
   'pasillo-inferior-central->pasillo-inferior-derecho': [grid(11, 23)],
   'pasillo-inferior-central->centro-sur': [grid(10, 22), grid(10, 21), grid(10, 20), grid(10, 19)],
   'pasillo-inferior-derecho->pasillo-derecho-central': [
@@ -298,6 +301,7 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
   ],
   'pasillo-derecho-central->pasillo-derecho-superior': [grid(20, 11), grid(20, 10), grid(20, 9)],
   'centro-este->pasillo-derecho-central': [grid(14, 12), grid(15, 12), grid(16, 12), grid(17, 12), grid(18, 12)],
+  'spawn-amarillo->pasillo-derecho-superior': [grid(22, 6), grid(21, 6)],
 };
 
 const BASE_MOVEMENT_CONNECTIONS: Record<string, readonly string[]> = {

@@ -9,7 +9,7 @@ import { io as createSocketClient, type Socket } from 'socket.io-client';
 import { registerSocketServer, type GameStartedPayload, type LobbyPresenceState } from '../src/socket/socketServer.js';
 import sessionRoutes from '../src/routes/sessionRoutes.js';
 import { getTeamSpawnPosition } from '../src/lib/teamSpawnPositions.js';
-import { BOARD_MOVEMENT_NODES } from '../src/lib/sessionMovement.js';
+import { BOARD_MOVEMENT_CONNECTIONS, BOARD_MOVEMENT_NODES } from '../src/lib/sessionMovement.js';
 import { getTestDatabaseUrl } from './helpers/testDatabase';
 
 type ErrorResponse = {
@@ -532,7 +532,7 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     expect(body.item.destinationNodes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'pasillo-superior-derecho',
+          id: 'square:pasillo-superior-derecho::spawn-rojo:2',
           stepsRequired: 2,
         }),
       ])
@@ -540,7 +540,7 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     expect(body.item.destinationNodes).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'square:pasillo-superior-derecho::spawn-rojo:1',
+          id: 'pasillo-superior-derecho',
         }),
       ])
     );
@@ -596,6 +596,89 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
 
     expect(persistedSession?.activeDiceValueOne).toBe(body.item.dice.valueOne);
     expect(persistedSession?.activeDiceValueTwo).toBe(body.item.dice.valueTwo);
+  });
+
+  it('mantiene destinos a distancia exacta de tirada desde spawn para ROJO y AZUL via API', async () => {
+    const { session } = await seedSkinAndSession('MOVE05', { status: EstadoPartida.LOBBY });
+
+    const joinRedResponse = await request('/api/game/sessions/MOVE05/join', {
+      method: 'POST',
+      body: JSON.stringify({ color: 'ROJO' }),
+    });
+    const redJoined = (await joinRedResponse.json()) as JoinResponse;
+
+    const joinBlueResponse = await request('/api/game/sessions/MOVE05/join', {
+      method: 'POST',
+      body: JSON.stringify({ color: 'AZUL' }),
+    });
+    const blueJoined = (await joinBlueResponse.json()) as JoinResponse;
+
+    const forcedDiceValueOne = 1;
+    const forcedDiceValueTwo = 1;
+    const forcedDiceRoll = forcedDiceValueOne + forcedDiceValueTwo;
+
+    await prisma.partida.update({
+      where: { id: session.id },
+      data: {
+        status: EstadoPartida.EN_CURSO,
+        currentTurnTeamId: redJoined.item.team.id,
+        currentTurnStartedAt: new Date('2026-05-05T10:00:00.000Z'),
+        activeDiceValueOne: forcedDiceValueOne,
+        activeDiceValueTwo: forcedDiceValueTwo,
+      },
+    });
+
+    const redMovesResponse = await request(`/api/game/sessions/MOVE05/teams/${redJoined.item.team.id}/moves`);
+    const redMovesBody = (await redMovesResponse.json()) as TeamMoveStateResponse;
+
+    expect(redMovesResponse.status).toBe(200);
+    expect(redMovesBody.item.currentNode.id).toBe('spawn-rojo');
+    expect(redMovesBody.item.diceRoll).toBe(forcedDiceRoll);
+    expect(redMovesBody.item.destinationNodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'square:pasillo-superior-derecho::spawn-rojo:2',
+          stepsRequired: forcedDiceRoll,
+        }),
+      ])
+    );
+
+    const redDistances = buildShortestDistances('spawn-rojo');
+    const redOutOfRangeMoves = redMovesBody.item.destinationNodes.filter(
+      (node) => (redDistances.get(node.id) ?? Number.POSITIVE_INFINITY) !== forcedDiceRoll
+    );
+    expect(redOutOfRangeMoves).toHaveLength(0);
+
+    await prisma.partida.update({
+      where: { id: session.id },
+      data: {
+        currentTurnTeamId: blueJoined.item.team.id,
+        currentTurnStartedAt: new Date('2026-05-05T10:05:00.000Z'),
+        activeDiceValueOne: forcedDiceValueOne,
+        activeDiceValueTwo: forcedDiceValueTwo,
+      },
+    });
+
+    const blueMovesResponse = await request(`/api/game/sessions/MOVE05/teams/${blueJoined.item.team.id}/moves`);
+    const blueMovesBody = (await blueMovesResponse.json()) as TeamMoveStateResponse;
+
+    expect(blueMovesResponse.status).toBe(200);
+    expect(blueMovesBody.item.currentNode.id).toBe('spawn-azul');
+    expect(blueMovesBody.item.diceRoll).toBe(forcedDiceRoll);
+    expect(blueMovesBody.item.destinationNodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'square:pasillo-inferior-izquierdo::pasillo-izquierdo-inferior:1',
+          stepsRequired: forcedDiceRoll,
+        }),
+      ])
+    );
+
+    const blueDistances = buildShortestDistances('spawn-azul');
+    const blueOutOfRangeMoves = blueMovesBody.item.destinationNodes.filter(
+      (node) => (blueDistances.get(node.id) ?? Number.POSITIVE_INFINITY) !== forcedDiceRoll
+    );
+    expect(blueOutOfRangeMoves).toHaveLength(0);
   });
 
   it('rechaza lanzar los dados cuando el equipo no tiene el turno actual', async () => {
@@ -693,9 +776,11 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
       },
     });
 
+    const targetNodeId = 'square:pasillo-superior-derecho::spawn-rojo:2';
+
     const response = await request(`/api/game/sessions/MOVE02/teams/${joined.item.team.id}/move`, {
       method: 'POST',
-      body: JSON.stringify({ targetNodeId: 'pasillo-superior-derecho' }),
+      body: JSON.stringify({ targetNodeId }),
     });
     const body = (await response.json()) as MoveTeamResponse;
     const updatedTeam = await prisma.equipo.findUnique({
@@ -707,7 +792,7 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(body.item.currentNode).toMatchObject(BOARD_MOVEMENT_NODES['pasillo-superior-derecho']);
+    expect(body.item.currentNode).toMatchObject(BOARD_MOVEMENT_NODES[targetNodeId]);
     expect(body.item.session.turn).toMatchObject({
       currentTeamId: blueJoined.item.team.id,
       currentTeamColor: ColorEquipo.AZUL,
@@ -717,14 +802,14 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: joined.item.team.id,
-          positionX: BOARD_MOVEMENT_NODES['pasillo-superior-derecho'].positionX,
-          positionY: BOARD_MOVEMENT_NODES['pasillo-superior-derecho'].positionY,
+          positionX: BOARD_MOVEMENT_NODES[targetNodeId].positionX,
+          positionY: BOARD_MOVEMENT_NODES[targetNodeId].positionY,
         }),
       ])
     );
     expect(updatedTeam).toMatchObject({
-      positionX: BOARD_MOVEMENT_NODES['pasillo-superior-derecho'].positionX,
-      positionY: BOARD_MOVEMENT_NODES['pasillo-superior-derecho'].positionY,
+      positionX: BOARD_MOVEMENT_NODES[targetNodeId].positionX,
+      positionY: BOARD_MOVEMENT_NODES[targetNodeId].positionY,
     });
     expect(body.item.diceRoll).toBe(2);
   });
@@ -1090,6 +1175,32 @@ async function getTeamCardDistributions(teamIds: string[]) {
 
 function getDistributionSpread(values: number[]) {
   return Math.max(...values) - Math.min(...values);
+}
+
+function buildShortestDistances(startNodeId: string) {
+  const distances = new Map<string, number>([[startNodeId, 0]]);
+  const queue: string[] = [startNodeId];
+
+  while (queue.length > 0) {
+    const currentNodeId = queue.shift();
+    if (!currentNodeId) {
+      continue;
+    }
+
+    const currentDistance = distances.get(currentNodeId) ?? 0;
+    const linkedNodeIds = BOARD_MOVEMENT_CONNECTIONS[currentNodeId] ?? [];
+
+    linkedNodeIds.forEach((linkedNodeId) => {
+      if (distances.has(linkedNodeId)) {
+        return;
+      }
+
+      distances.set(linkedNodeId, currentDistance + 1);
+      queue.push(linkedNodeId);
+    });
+  }
+
+  return distances;
 }
 
 async function connectSocketClient(socketUrl: string, token?: string) {

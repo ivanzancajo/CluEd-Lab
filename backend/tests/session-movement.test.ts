@@ -10,12 +10,34 @@ import {
   resolveCommittedMoveTargetNode,
 } from '../src/lib/sessionMovement.js';
 import { findNearestBoardMovementNode } from '../src/lib/boardGraph.js';
+import { TEAM_SPAWN_POSITIONS } from '../src/lib/teamSpawnPositions.js';
 
 describe('sessionMovement', () => {
   it('resuelve el nodo de salida rojo dentro de la tolerancia configurada', () => {
     const node = findBoardMovementNodeByPosition(65.3, 10.4);
 
     expect(node).toMatchObject(BOARD_MOVEMENT_NODES['spawn-rojo']);
+  });
+
+  it('resuelve posiciones persistidas de ROJO y AZUL exactamente en sus nodos spawn', () => {
+    const redPosition = TEAM_SPAWN_POSITIONS.ROJO;
+    const bluePosition = TEAM_SPAWN_POSITIONS.AZUL;
+
+    const redNode = findBoardMovementNodeByPosition(redPosition.positionX, redPosition.positionY);
+    const blueNode = findBoardMovementNodeByPosition(bluePosition.positionX, bluePosition.positionY);
+
+    expect(redNode?.id).toBe('spawn-rojo');
+    expect(blueNode?.id).toBe('spawn-azul');
+  });
+
+  it('prioriza el spawn correcto por color cuando la posicion queda cerca del spawn', () => {
+    const blueSpawn = BOARD_MOVEMENT_NODES['spawn-azul'];
+    const blueDriftedNode = findBoardMovementNodeByPosition(
+      (blueSpawn?.positionX ?? 0) + 0.2,
+      (blueSpawn?.positionY ?? 0) - 0.15
+    );
+
+    expect(blueDriftedNode?.id).toBe('spawn-azul');
   });
 
   it('prioriza solo los destinos candidatos al resolver el nodo clicado', () => {
@@ -34,6 +56,26 @@ describe('sessionMovement', () => {
     expect(adjacentMoves[0]).toMatchObject({ kind: 'square' });
   });
 
+  it('alcanza la primera casilla intermedia desde spawn-rojo con tirada 1', () => {
+    const reachableMoves = getReachableMoveNodes('spawn-rojo', [], 1);
+
+    expect(reachableMoves).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'square:pasillo-superior-derecho::spawn-rojo:1',
+          stepsRequired: 1,
+        }),
+      ])
+    );
+  });
+
+  it('mantiene el primer paso desde spawn-rojo en la casilla intermedia esperada', () => {
+    const adjacentMoves = getAdjacentMoveNodes('spawn-rojo');
+
+    expect(adjacentMoves).toHaveLength(1);
+    expect(adjacentMoves[0]?.id).toBe('square:pasillo-superior-derecho::spawn-rojo:1');
+  });
+
   it('permite salir desde spawn-morado al menos a un nodo adyacente', () => {
     const adjacentMoves = getAdjacentMoveNodes('spawn-morado');
 
@@ -41,22 +83,61 @@ describe('sessionMovement', () => {
     expect(adjacentMoves[0]).toMatchObject({ id: 'pasillo-izquierdo-superior' });
   });
 
-  it('alcanza el cruce superior derecho con una tirada de dos casillas', () => {
+  it('mantiene un primer paso único y esperado desde cada spawn', () => {
+    const expectedFirstMoveBySpawnNodeId: Record<string, string> = {
+      'spawn-rojo': 'square:pasillo-superior-derecho::spawn-rojo:1',
+      'spawn-morado': 'pasillo-izquierdo-superior',
+      'spawn-azul': 'pasillo-izquierdo-inferior',
+      'spawn-verde': 'pasillo-inferior-izquierdo',
+      'spawn-blanco': 'pasillo-inferior-derecho',
+      'spawn-amarillo': 'pasillo-derecho-superior',
+    };
+
+    Object.entries(expectedFirstMoveBySpawnNodeId).forEach(([spawnNodeId, expectedMoveNodeId]) => {
+      const adjacentMoves = getAdjacentMoveNodes(spawnNodeId);
+
+      expect(adjacentMoves).toHaveLength(1);
+      expect(adjacentMoves[0]?.id).toBe(expectedMoveNodeId);
+    });
+  });
+
+  it('elimina cualquier casilla square en C0:R6', () => {
+    const squareNodesInC0R6 = Object.values(BOARD_MOVEMENT_NODES).filter(
+      (node) => node.kind === 'square' && node.gridPosition?.col === 0 && node.gridPosition?.row === 6
+    );
+
+    expect(squareNodesInC0R6).toHaveLength(0);
+    expect(BOARD_MOVEMENT_NODES['square:pasillo-izquierdo-superior::spawn-morado:1']).toBeUndefined();
+  });
+
+  it('no alcanza el cruce superior derecho con una tirada de dos casillas', () => {
     const reachableMoves = getReachableMoveNodes('spawn-rojo', [], 2);
 
-    expect(reachableMoves).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: 'pasillo-superior-derecho',
-          stepsRequired: 2,
-        }),
-      ])
-    );
     expect(reachableMoves).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'square:pasillo-superior-derecho::spawn-rojo:1',
+          id: 'pasillo-superior-derecho',
         }),
+      ])
+    );
+  });
+
+  it('alcanza el cruce izquierdo inferior desde spawn-azul con una tirada de tres casillas', () => {
+    const oneStepMoves = getReachableMoveNodes('spawn-azul', [], 1);
+    const twoStepMoves = getReachableMoveNodes('spawn-azul', [], 2);
+
+    expect(oneStepMoves).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'pasillo-izquierdo-inferior',
+          stepsRequired: 1,
+        }),
+      ])
+    );
+
+    expect(twoStepMoves).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'pasillo-izquierdo-inferior' }),
       ])
     );
   });
@@ -154,12 +235,12 @@ describe('sessionMovement', () => {
   });
 
   it('en modo incremental solo ofrece movimientos adyacentes con coste de un paso', () => {
-    const stepMoves = getIncrementalMoveNodes('square:pasillo-superior-derecho::spawn-rojo:1', []);
+    const stepMoves = getIncrementalMoveNodes('pasillo-superior-derecho', []);
 
     expect(stepMoves).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: 'spawn-rojo', stepsRequired: 1 }),
-        expect.objectContaining({ id: 'pasillo-superior-derecho', stepsRequired: 1 }),
+        expect.objectContaining({ id: 'square:pasillo-superior-derecho::spawn-rojo:3', stepsRequired: 1 }),
+        expect.objectContaining({ id: 'square:pasillo-derecho-superior::pasillo-superior-derecho:1', stepsRequired: 1 }),
       ])
     );
     expect(stepMoves).not.toEqual(
@@ -208,4 +289,51 @@ describe('sessionMovement', () => {
         });
       });
   });
+
+    it('mantiene destinos exactamente al rango de tirada desde todos los spawns (auditoria profunda)', () => {
+      const spawnNodeIds = Object.values(BOARD_MOVEMENT_NODES)
+        .filter((node) => node.kind === 'spawn')
+        .map((node) => node.id)
+        .sort((left, right) => left.localeCompare(right, 'es'));
+
+      const buildShortestDistances = (startNodeId: string) => {
+        const distances = new Map<string, number>([[startNodeId, 0]]);
+        const queue: string[] = [startNodeId];
+
+        while (queue.length > 0) {
+          const currentNodeId = queue.shift();
+          if (!currentNodeId) {
+            continue;
+          }
+
+          const currentDistance = distances.get(currentNodeId) ?? 0;
+          const linkedNodeIds = BOARD_MOVEMENT_CONNECTIONS[currentNodeId] ?? [];
+
+          linkedNodeIds.forEach((linkedNodeId) => {
+            if (distances.has(linkedNodeId)) {
+              return;
+            }
+
+            distances.set(linkedNodeId, currentDistance + 1);
+            queue.push(linkedNodeId);
+          });
+        }
+
+        return distances;
+      };
+
+      spawnNodeIds.forEach((spawnNodeId) => {
+        const shortestDistances = buildShortestDistances(spawnNodeId);
+
+        for (let diceRoll = 1; diceRoll <= 8; diceRoll += 1) {
+          const reachableMoves = getReachableMoveNodes(spawnNodeId, [], diceRoll);
+          const outOfRangeMoves = reachableMoves.filter(
+            (node) => (shortestDistances.get(node.id) ?? Number.POSITIVE_INFINITY) !== diceRoll
+          );
+
+          expect(outOfRangeMoves).toHaveLength(0);
+        }
+      });
+
+    });
 });

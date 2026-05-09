@@ -9,12 +9,22 @@ import {
   isSecretPassageMoveValid,
   resolveCommittedMoveTargetNode,
 } from '../src/lib/sessionMovement.js';
+import { findNearestBoardMovementNode } from '../src/lib/boardGraph.js';
 
 describe('sessionMovement', () => {
   it('resuelve el nodo de salida rojo dentro de la tolerancia configurada', () => {
     const node = findBoardMovementNodeByPosition(65.3, 10.4);
 
     expect(node).toMatchObject(BOARD_MOVEMENT_NODES['spawn-rojo']);
+  });
+
+  it('prioriza solo los destinos candidatos al resolver el nodo clicado', () => {
+    const candidateNodeId = 'centro-norte';
+    const candidateNode = BOARD_MOVEMENT_NODES[candidateNodeId];
+
+    const node = findNearestBoardMovementNode(candidateNode.positionX, candidateNode.positionY, [candidateNodeId]);
+
+    expect(node?.id).toBe(candidateNodeId);
   });
 
   it('expande por casillas el primer tramo desde la salida roja', () => {

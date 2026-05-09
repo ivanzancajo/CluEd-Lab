@@ -526,11 +526,20 @@ export function getSecretPassageDestinationNodeByRoomNodeId(nodeId: string) {
   return destinationRoomNodeId ? BOARD_MOVEMENT_NODES[destinationRoomNodeId] ?? null : null;
 }
 
-export function findNearestBoardMovementNode(positionX: number, positionY: number) {
+export function findNearestBoardMovementNode(
+  positionX: number,
+  positionY: number,
+  candidateNodeIds?: Iterable<string>
+) {
+  const allowedNodeIds = candidateNodeIds ? new Set(candidateNodeIds) : null;
   let matchedNode: BoardMovementNode | null = null;
   let matchedDistance = Number.POSITIVE_INFINITY;
 
   BOARD_MOVEMENT_NODE_LIST.forEach((node) => {
+    if (allowedNodeIds && !allowedNodeIds.has(node.id)) {
+      return;
+    }
+
     const normalizedDistance = getNormalizedNodePickDistance(node, positionX, positionY);
     if (normalizedDistance === null || normalizedDistance >= matchedDistance) {
       return;

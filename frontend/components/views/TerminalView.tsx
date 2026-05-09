@@ -337,23 +337,6 @@ export function TerminalView() {
     setIsMoveConfirmOpen(true);
   };
 
-  const findDestinationNodeForBoardSelection = (boardNode: BoardMovementNode) => {
-    const exactDestination = destinationNodes.find((destinationNode) => destinationNode.id === boardNode.id);
-    if (exactDestination) {
-      return exactDestination;
-    }
-
-    if (!boardNode.gridPosition) {
-      return null;
-    }
-
-    return destinationNodes.find(
-      (destinationNode) =>
-        destinationNode.gridPosition?.col === boardNode.gridPosition?.col &&
-        destinationNode.gridPosition?.row === boardNode.gridPosition?.row
-    ) ?? null;
-  };
-
   const handleBoardNodePress = (boardNode: BoardMovementNode) => {
     setIsMoveConfirmOpen(false);
     setSelectedDestinationNodeId("");
@@ -382,7 +365,7 @@ export function TerminalView() {
       return;
     }
 
-    const selectedDestination = findDestinationNodeForBoardSelection(boardNode);
+    const selectedDestination = destinationNodes.find((destinationNode) => destinationNode.id === boardNode.id) ?? null;
     if (!selectedDestination) {
       setMoveError("La casilla o sala seleccionada no es alcanzable con la tirada actual.");
       return;
@@ -400,9 +383,34 @@ export function TerminalView() {
     const positionX = ((event.clientX - boardBounds.left) / boardBounds.width) * 100;
     const positionY = ((event.clientY - boardBounds.top) / boardBounds.height) * 100;
     const matchedNode = findNearestBoardMovementNode(positionX, positionY);
+    const matchedDestinationNode = destinationNodes.length > 0
+      ? findNearestBoardMovementNode(
+          positionX,
+          positionY,
+          destinationNodes.map((destinationNode) => destinationNode.id)
+        )
+      : null;
 
     if (isBoardDebugEnabled) {
       setBoardDebugProbe(buildBoardDebugProbe(positionX, positionY, matchedNode));
+    }
+
+    if (
+      sessionStatus === "EN_CURSO" &&
+      isMyTurn &&
+      sessionTurn?.dice !== null &&
+      !isLoadingMoves &&
+      destinationNodes.length > 0
+    ) {
+      if (!matchedDestinationNode) {
+        setIsMoveConfirmOpen(false);
+        setSelectedDestinationNodeId("");
+        setMoveError("La casilla o sala seleccionada no es alcanzable con la tirada actual.");
+        return;
+      }
+
+      handleBoardNodePress(matchedDestinationNode);
+      return;
     }
 
     if (!matchedNode) {

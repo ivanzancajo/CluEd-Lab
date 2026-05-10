@@ -220,7 +220,24 @@ export function resolveCommittedMoveTargetNode(currentNode: BoardMovementNode, t
     return targetNode;
   }
 
-  return getRoomEntryNodeByDoorNodeId(targetNode.id) ?? targetNode;
+  const mappedRoomEntryNode = getRoomEntryNodeByDoorNodeId(targetNode.id);
+  if (mappedRoomEntryNode) {
+    return mappedRoomEntryNode;
+  }
+
+  // Fallback defensivo: si el nodo objetivo es una casilla conectada a una sala,
+  // se interpreta como puerta y se confirma el movimiento dentro de dicha sala.
+  if (targetNode.kind === 'square') {
+    const connectedRoomNode = (BOARD_MOVEMENT_CONNECTIONS[targetNode.id] ?? [])
+      .map((nodeId) => BOARD_MOVEMENT_NODES[nodeId])
+      .find((node): node is BoardMovementNode => Boolean(node && node.kind === 'room'));
+
+    if (connectedRoomNode) {
+      return connectedRoomNode;
+    }
+  }
+
+  return targetNode;
 }
 
 export function isSecretPassageMoveValid(currentNodeId: string, targetNodeId: string) {

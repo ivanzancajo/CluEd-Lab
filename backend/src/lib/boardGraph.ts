@@ -242,7 +242,6 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
     grid(2, 4),
     grid(1, 4),
     grid(0, 4),
-    grid(1, 5),
   ],
   'pasillo-superior-central->centro-norte': [grid(10, 5), grid(10, 6), grid(10, 7, 0, -1.64)],
   'pasillo-izquierdo-superior->pasillo-izquierdo-central': [grid(0, 7), grid(0, 8), grid(0, 9), grid(0, 10)],
@@ -260,7 +259,6 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
     grid(12, 9),
     grid(13, 10),
     grid(13, 11),
-    grid(13, 12, 0, -1.7),
   ],
   'spawn-azul->pasillo-izquierdo-inferior': [],
   'pasillo-izquierdo-inferior->pasillo-inferior-izquierdo': [

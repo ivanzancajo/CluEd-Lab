@@ -9,7 +9,7 @@ import {
   isSecretPassageMoveValid,
   resolveCommittedMoveTargetNode,
 } from '../src/lib/sessionMovement.js';
-import { findNearestBoardMovementNode } from '../src/lib/boardGraph.js';
+import { findNearestBoardMovementNode, type BoardMovementNode } from '../src/lib/boardGraph.js';
 import { TEAM_SPAWN_POSITIONS } from '../src/lib/teamSpawnPositions.js';
 
 describe('sessionMovement', () => {
@@ -90,7 +90,9 @@ describe('sessionMovement', () => {
       'spawn-azul': 'pasillo-izquierdo-inferior',
       'spawn-verde': 'pasillo-inferior-izquierdo',
       'spawn-blanco': 'pasillo-inferior-derecho',
-      'spawn-amarillo': 'pasillo-derecho-superior',
+      // El edge se procesa desde pasillo-derecho-superior→spawn-amarillo (orden de iteración),
+      // por lo que el índice :2 queda adyacente al spawn (grid(22,6)) y :1 a pasillo-derecho-superior.
+      'spawn-amarillo': 'square:pasillo-derecho-superior::spawn-amarillo:2',
     };
 
     Object.entries(expectedFirstMoveBySpawnNodeId).forEach(([spawnNodeId, expectedMoveNodeId]) => {
@@ -154,19 +156,26 @@ describe('sessionMovement', () => {
     const roomMovesFromCorridor = getReachableMoveNodes('square:grid:6:3', [], 1);
     const roomMovesFromDoor = getReachableMoveNodes('square:grid:5:3', [], 1);
 
+    // Ni desde el pasillo ni desde la puerta la sala aparece como destino directo:
+    // las salas se excluyen de getReachableMoveNodes (la entrada se resuelve vía resolveCommittedMoveTargetNode).
     expect(roomMovesFromCorridor).not.toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          id: 'sala-superior-izquierda',
-        }),
+        expect.objectContaining({ id: 'sala-superior-izquierda' }),
       ])
     );
-    expect(roomMovesFromDoor).toEqual(
+    expect(roomMovesFromDoor).not.toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          id: 'sala-superior-izquierda',
-          stepsRequired: 1,
-        }),
+        expect.objectContaining({ id: 'sala-superior-izquierda' }),
+      ])
+    );
+
+    // La puerta sí está en las conexiones directas de la sala para que resolveCommittedMoveTargetNode funcione.
+    expect(BOARD_MOVEMENT_CONNECTIONS['square:grid:5:3']).toContain('sala-superior-izquierda');
+
+    // Desde el pasillo adyacente, la puerta es alcanzable en 1 paso.
+    expect(roomMovesFromCorridor).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'square:grid:5:3', stepsRequired: 1 }),
       ])
     );
   });
@@ -277,6 +286,26 @@ describe('sessionMovement', () => {
       id: 'square:grid:5:3',
       kind: 'square',
     });
+  });
+
+  it('al confirmar cualquiera de las puertas de sala-media-derecha, el peón entra en la sala', () => {
+    const roomNode = BOARD_MOVEMENT_NODES['sala-media-derecha'];
+    const firstDoorNode = BOARD_MOVEMENT_NODES['square:grid:16:9'];
+    const secondDoorNode = BOARD_MOVEMENT_NODES['square:centro-este::pasillo-derecho-central:2'];
+    const fromFirstDoorCorridorNode = BOARD_MOVEMENT_NODES['square:grid:16:8'];
+    const fromSecondDoorCorridorNode = BOARD_MOVEMENT_NODES['square:centro-este::pasillo-derecho-central:1'];
+
+    expect(roomNode).toBeDefined();
+    expect(firstDoorNode).toBeDefined();
+    expect(secondDoorNode).toBeDefined();
+    expect(fromFirstDoorCorridorNode).toBeDefined();
+    expect(fromSecondDoorCorridorNode).toBeDefined();
+
+    const resolvedFromFirstDoor = resolveCommittedMoveTargetNode(fromFirstDoorCorridorNode, firstDoorNode);
+    const resolvedFromSecondDoor = resolveCommittedMoveTargetNode(fromSecondDoorCorridorNode, secondDoorNode);
+
+    expect(resolvedFromFirstDoor).toMatchObject({ id: 'sala-media-derecha', kind: 'room' });
+    expect(resolvedFromSecondDoor).toMatchObject({ id: 'sala-media-derecha', kind: 'room' });
   });
 
   it('en todas las salas, con tirada 1 solo permite caer en puertas (o usar pasadizo secreto)', () => {
@@ -448,5 +477,291 @@ describe('sessionMovement', () => {
 
     expect(adjacentMoves).toHaveLength(1);
     expect(adjacentMoves[0]).toMatchObject({ kind: 'square' });
+  });
+
+  it('desde centro-este solo existen tres salidas adyacentes válidas (norte, sur y este)', () => {
+    const adjacentMoves = getAdjacentMoveNodes('centro-este');
+
+    expect(adjacentMoves).toHaveLength(3);
+    expect(adjacentMoves).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'square:centro-este::centro-norte:4' }),
+        expect.objectContaining({ id: 'square:centro-este::centro-sur:1' }),
+        expect.objectContaining({ id: 'square:centro-este::pasillo-derecho-central:1' }),
+      ])
+    );
+  });
+
+  it('desde centro-este no ofrece dos casillas distintas de primer paso hacia el norte', () => {
+    const adjacentMoves = getAdjacentMoveNodes('centro-este');
+    const northboundFirstSteps = adjacentMoves.filter(
+      (node) => node.gridPosition?.col === 13 && (node.gridPosition?.row ?? 99) < 12
+    );
+
+    expect(northboundFirstSteps).toHaveLength(1);
+  });
+
+  // ─── Tests exhaustivos de cobertura de movimiento ───────────────────────────
+
+  it('tirada 0 no produce ningún destino desde ningún nodo representativo', () => {
+    const nodeIds = ['spawn-rojo', 'pasillo-superior-derecho', 'sala-superior-izquierda', 'centro-norte', 'spawn-azul'];
+
+    nodeIds.forEach((nodeId) => {
+      expect(getReachableMoveNodes(nodeId, [], 0)).toHaveLength(0);
+    });
+  });
+
+  it('todos los spawns tienen exactamente un nodo adyacente hacia el tablero', () => {
+    const spawnNodes = Object.values(BOARD_MOVEMENT_NODES).filter((node) => node.kind === 'spawn');
+
+    spawnNodes.forEach((spawnNode) => {
+      const adjacentMoves = getAdjacentMoveNodes(spawnNode.id);
+      expect(adjacentMoves).toHaveLength(1);
+    });
+  });
+
+  it('el grafo es completamente conexo desde cualquier spawn', () => {
+    const spawnNodes = Object.values(BOARD_MOVEMENT_NODES).filter((node) => node.kind === 'spawn');
+
+    spawnNodes.forEach((spawnNode) => {
+      const visited = new Set<string>([spawnNode.id]);
+      const queue: string[] = [spawnNode.id];
+
+      while (queue.length > 0) {
+        const currentId = queue.shift();
+        if (!currentId) {
+          continue;
+        }
+
+        for (const neighborId of BOARD_MOVEMENT_CONNECTIONS[currentId] ?? []) {
+          if (!visited.has(neighborId)) {
+            visited.add(neighborId);
+            queue.push(neighborId);
+          }
+        }
+      }
+
+      const unreachableNodes = Object.keys(BOARD_MOVEMENT_NODES).filter((nodeId) => !visited.has(nodeId));
+      expect(unreachableNodes).toHaveLength(0);
+    });
+  });
+
+  it('cada sala tiene el número esperado de puertas', () => {
+    const expectedDoorCounts: Record<string, number> = {
+      'sala-superior-izquierda': 1,
+      'sala-superior-centro': 2,
+      'sala-superior-derecha': 1,
+      'sala-media-izquierda': 2,
+      'sala-media-izquierda-inferior': 2,
+      'sala-media-derecha': 2,
+      'sala-inferior-izquierda': 1,
+      'sala-inferior-centro': 4,
+      'sala-inferior-derecha': 1,
+    };
+
+    Object.entries(expectedDoorCounts).forEach(([roomNodeId, expectedCount]) => {
+      const doorNodeIds = (BOARD_MOVEMENT_CONNECTIONS[roomNodeId] ?? []).filter(
+        (nodeId) => BOARD_MOVEMENT_NODES[nodeId]?.kind === 'square'
+      );
+
+      expect(doorNodeIds).toHaveLength(expectedCount);
+    });
+  });
+
+  it('las puertas de todas las salas son alcanzables en 1 paso desde su nodo exterior inmediato', () => {
+    const roomNodes = Object.values(BOARD_MOVEMENT_NODES).filter((node) => node.kind === 'room');
+
+    roomNodes.forEach((roomNode) => {
+      const doorNodeIds = (BOARD_MOVEMENT_CONNECTIONS[roomNode.id] ?? []).filter(
+        (nodeId) => BOARD_MOVEMENT_NODES[nodeId]?.kind === 'square'
+      );
+
+      doorNodeIds.forEach((doorNodeId) => {
+        const exteriorNeighborIds = (BOARD_MOVEMENT_CONNECTIONS[doorNodeId] ?? []).filter(
+          (nodeId) => nodeId !== roomNode.id && BOARD_MOVEMENT_NODES[nodeId]?.kind === 'square'
+        );
+
+        exteriorNeighborIds.forEach((exteriorId) => {
+          const reachableFromExterior = getReachableMoveNodes(exteriorId, [], 1);
+          const canReachDoor = reachableFromExterior.some((node) => node.id === doorNodeId);
+          expect(canReachDoor).toBe(true);
+        });
+      });
+    });
+  });
+
+  it('resolveCommittedMoveTargetNode sitúa el peón en la sala al confirmar cualquier puerta', () => {
+    const roomNodes = Object.values(BOARD_MOVEMENT_NODES).filter((node) => node.kind === 'room');
+
+    roomNodes.forEach((roomNode) => {
+      const doorNodeIds = (BOARD_MOVEMENT_CONNECTIONS[roomNode.id] ?? []).filter(
+        (nodeId) => BOARD_MOVEMENT_NODES[nodeId]?.kind === 'square'
+      );
+
+      doorNodeIds.forEach((doorNodeId) => {
+        const doorNode = BOARD_MOVEMENT_NODES[doorNodeId];
+        if (!doorNode) {
+          return;
+        }
+
+        const corridorNodeId = (BOARD_MOVEMENT_CONNECTIONS[doorNodeId] ?? []).find(
+          (nodeId) => nodeId !== roomNode.id && BOARD_MOVEMENT_NODES[nodeId]?.kind === 'square'
+        );
+
+        if (!corridorNodeId) {
+          return;
+        }
+
+        const corridorNode = BOARD_MOVEMENT_NODES[corridorNodeId];
+        if (!corridorNode) {
+          return;
+        }
+
+        const resolvedNode = resolveCommittedMoveTargetNode(corridorNode, doorNode);
+
+        expect(resolvedNode).toMatchObject({ id: roomNode.id, kind: 'room' });
+      });
+    });
+  });
+
+  it('nodo ocupado no aparece en destinos y la ruta queda bloqueada si no hay alternativa', () => {
+    const [firstSquare] = getAdjacentMoveNodes('spawn-rojo');
+    expect(firstSquare).toBeDefined();
+
+    // Con el único paso bloqueado, tirada 1 devuelve lista vacía.
+    const movesBlocked = getReachableMoveNodes('spawn-rojo', [firstSquare!.id], 1);
+    expect(movesBlocked).toHaveLength(0);
+
+    // El nodo bloqueado nunca aparece como destino en ninguna tirada.
+    for (let roll = 1; roll <= 6; roll += 1) {
+      const moves = getReachableMoveNodes('spawn-rojo', [firstSquare!.id], roll);
+      moves.forEach((node) => {
+        expect(node.id).not.toBe(firstSquare!.id);
+      });
+    }
+  });
+
+  it('solo las salas de esquina exponen el pasadizo secreto como movimiento adyacente incremental', () => {
+    const cornerRoomIds = new Set(['sala-superior-izquierda', 'sala-inferior-derecha', 'sala-superior-derecha', 'sala-inferior-izquierda']);
+    const allRoomNodes = Object.values(BOARD_MOVEMENT_NODES).filter((node) => node.kind === 'room');
+
+    allRoomNodes.forEach((roomNode) => {
+      // getIncrementalMoveNodes devuelve todos los adyacentes (incluyendo salas por pasadizo).
+      const incrementalMoves = getIncrementalMoveNodes(roomNode.id, []);
+      const hasSecretPassage = incrementalMoves.some((node) => node.kind === 'room');
+
+      if (cornerRoomIds.has(roomNode.id)) {
+        expect(hasSecretPassage).toBe(true);
+      } else {
+        expect(hasSecretPassage).toBe(false);
+      }
+    });
+  });
+
+  it('modo incremental desde sala solo expone puertas o pasadizo secreto como primer paso', () => {
+    const roomNodes = Object.values(BOARD_MOVEMENT_NODES).filter((node) => node.kind === 'room');
+
+    roomNodes.forEach((roomNode) => {
+      const doorNodeIds = new Set(
+        (BOARD_MOVEMENT_CONNECTIONS[roomNode.id] ?? []).filter(
+          (nodeId) => BOARD_MOVEMENT_NODES[nodeId]?.kind === 'square'
+        )
+      );
+
+      const incrementalMoves = getIncrementalMoveNodes(roomNode.id, []);
+
+      incrementalMoves.forEach((moveNode) => {
+        if (moveNode.kind === 'room') {
+          // Pasadizo secreto permitido.
+          return;
+        }
+
+        expect(doorNodeIds.has(moveNode.id)).toBe(true);
+      });
+    });
+  });
+
+  it('ningún nodo del grafo está huérfano (sin conexiones)', () => {
+    Object.entries(BOARD_MOVEMENT_NODES).forEach(([nodeId]) => {
+      const connections = BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? [];
+      expect(connections.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('todos los nodos son del tipo correcto (spawn, square o room)', () => {
+    const validKinds = new Set(['spawn', 'square', 'room']);
+
+    Object.values(BOARD_MOVEMENT_NODES).forEach((node) => {
+      expect(validKinds.has(node.kind)).toBe(true);
+    });
+  });
+
+  it('tirada exacta para pasar por pasadizo secreto es siempre 1', () => {
+    const cornerRoomIds = ['sala-superior-izquierda', 'sala-inferior-derecha', 'sala-superior-derecha', 'sala-inferior-izquierda'];
+
+    cornerRoomIds.forEach((roomId) => {
+      const movesRoll1 = getReachableMoveNodes(roomId, [], 1);
+      const secretRooms = movesRoll1.filter((node) => node.kind === 'room');
+
+      secretRooms.forEach((secretRoom) => {
+        expect(secretRoom.stepsRequired).toBe(1);
+        expect(isSecretPassageMoveValid(roomId, secretRoom.id)).toBe(true);
+      });
+    });
+  });
+
+  it('los nodos intermedios de cada arista están en grid positions ortogonales consecutivas', () => {
+    const edgeSquares: Record<string, BoardMovementNode[]> = {};
+
+    Object.entries(BOARD_MOVEMENT_NODES).forEach(([nodeId, node]) => {
+      if (node.kind !== 'square' || !nodeId.startsWith('square:') || nodeId.startsWith('square:grid:')) {
+        return;
+      }
+
+      // Extrae el edge base: "square:A::B:N" → clave "A::B"
+      const match = nodeId.match(/^square:(.+):(\d+)$/);
+      if (!match) {
+        return;
+      }
+
+      const edgeKey = match[1]!;
+      edgeSquares[edgeKey] = edgeSquares[edgeKey] ?? [];
+      edgeSquares[edgeKey].push(node);
+    });
+
+    Object.entries(edgeSquares).forEach(([edgeKey, squares]) => {
+      // Ordena por stepIndex para comprobar consecutividad
+      const sorted = squares
+        .filter((node) => Boolean(node.gridPosition))
+        .sort((a, b) => {
+          const idxA = Number.parseInt(a.id.split(':').at(-1) ?? '0', 10);
+          const idxB = Number.parseInt(b.id.split(':').at(-1) ?? '0', 10);
+          return idxA - idxB;
+        });
+
+      for (let i = 1; i < sorted.length; i += 1) {
+        const prev = sorted[i - 1]!;
+        const curr = sorted[i]!;
+
+        if (!prev.gridPosition || !curr.gridPosition) {
+          continue;
+        }
+
+        const dc = Math.abs(prev.gridPosition.col - curr.gridPosition.col);
+        const dr = Math.abs(prev.gridPosition.row - curr.gridPosition.row);
+
+        expect({ edgeKey, dc, dr }).toMatchObject({
+          edgeKey,
+          dc: expect.any(Number),
+          dr: expect.any(Number),
+        });
+
+        // Ni diagonal ni salto de más de 1 celda en cada eje
+        expect(dc + dr).toBeGreaterThan(0);
+        expect(dc).toBeLessThanOrEqual(1);
+        expect(dr).toBeLessThanOrEqual(1);
+        expect(dc * dr).toBe(0); // no diagonal
+      }
+    });
   });
 });

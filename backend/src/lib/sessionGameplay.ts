@@ -5,6 +5,7 @@ import { prisma } from './prisma.js';
 import { loadSkinConfiguration, type LoadedSkinConfiguration } from './skinConfigs.js';
 import {
   COLOR_SORT_ORDER,
+  loadSessionSnapshotById,
   loadSessionSnapshotByAccessCode,
   type SessionSnapshot,
   type SessionTeamSnapshot,
@@ -173,6 +174,14 @@ export async function startSessionByAccessCode(client: SessionGameplayClient, ac
   return loadSessionSnapshotByAccessCode(client, accessCode);
 }
 
+export async function pauseSession(client: SessionGameplayClient, sessionId: string) {
+  return transitionSessionStatus(client, sessionId, EstadoPartida.EN_CURSO, EstadoPartida.PAUSADA, 'pausarla');
+}
+
+export async function resumeSession(client: SessionGameplayClient, sessionId: string) {
+  return transitionSessionStatus(client, sessionId, EstadoPartida.PAUSADA, EstadoPartida.EN_CURSO, 'reanudarla');
+}
+
 export async function loadTeamTerminalStateByAccessCode(
   client: TeamTerminalStateClient,
   accessCode: string,
@@ -228,6 +237,39 @@ export async function loadTeamTerminalStateByAccessCode(
       })
       .sort(sortHandCards),
   };
+}
+
+async function transitionSessionStatus(
+  client: SessionGameplayClient,
+  sessionId: string,
+  currentStatus: EstadoPartida,
+  nextStatus: EstadoPartida,
+  transitionLabel: string
+) {
+  const session = await client.partida.findUnique({
+    where: { id: sessionId },
+    select: {
+      id: true,
+      status: true,
+    },
+  });
+
+  if (!session) {
+    throw new HttpError(404, 'La sesión solicitada no existe.');
+  }
+
+  if ((session.status ?? EstadoPartida.LOBBY) !== currentStatus) {
+    throw new HttpError(409, `La sesión no está en un estado válido para ${transitionLabel}.`);
+  }
+
+  await client.partida.update({
+    where: { id: sessionId },
+    data: {
+      status: nextStatus,
+    },
+  });
+
+  return loadSessionSnapshotById(client, sessionId);
 }
 
 function buildDistributedGameSetup(skin: LoadedSkinConfiguration, teamIds: string[]): DistributedGameSetup {

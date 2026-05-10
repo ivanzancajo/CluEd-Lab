@@ -5,6 +5,7 @@ import { prisma } from './prisma.js';
 import { loadSkinConfiguration, type LoadedSkinConfiguration } from './skinConfigs.js';
 import {
   COLOR_SORT_ORDER,
+  loadSessionSnapshotById,
   loadSessionSnapshotByAccessCode,
   type SessionSnapshot,
   type SessionTeamSnapshot,
@@ -142,6 +143,7 @@ export async function initializeStartedSession(client: SessionGameplayClient, se
     data: {
       status: EstadoPartida.EN_CURSO,
       startedAt,
+      pausedAt: null,
       currentTurnTeamId: initialTurnTeamId,
       currentTurnStartedAt: initialTurnTeamId ? startedAt : null,
       activeDiceValueOne: null,
@@ -171,6 +173,81 @@ export async function startSessionByAccessCode(client: SessionGameplayClient, ac
   await initializeStartedSession(client, currentSession.id);
 
   return loadSessionSnapshotByAccessCode(client, accessCode);
+}
+
+export async function pauseSession(client: SessionGameplayClient, sessionId: string) {
+  const session = await client.partida.findUnique({
+    where: { id: sessionId },
+    select: {
+      id: true,
+      status: true,
+      startedAt: true,
+    },
+  });
+
+  if (!session) {
+    throw new HttpError(404, 'La sesión solicitada no existe.');
+  }
+
+  if ((session.status ?? EstadoPartida.LOBBY) !== EstadoPartida.EN_CURSO) {
+    throw new HttpError(409, 'La sesión no está en un estado válido para pausarla.');
+  }
+
+  if (!session.startedAt) {
+    throw new HttpError(409, 'La sesión no tiene una hora de inicio válida para pausar el cronómetro.');
+  }
+
+  await client.partida.update({
+    where: { id: sessionId },
+    data: {
+      status: EstadoPartida.PAUSADA,
+      pausedAt: new Date(),
+    },
+  });
+
+  return loadSessionSnapshotById(client, sessionId);
+}
+
+export async function resumeSession(client: SessionGameplayClient, sessionId: string) {
+  const session = await client.partida.findUnique({
+    where: { id: sessionId },
+    select: {
+      id: true,
+      status: true,
+      startedAt: true,
+      pausedAt: true,
+      currentTurnStartedAt: true,
+    },
+  });
+
+  if (!session) {
+    throw new HttpError(404, 'La sesión solicitada no existe.');
+  }
+
+  if ((session.status ?? EstadoPartida.LOBBY) !== EstadoPartida.PAUSADA) {
+    throw new HttpError(409, 'La sesión no está en un estado válido para reanudarla.');
+  }
+
+  if (!session.startedAt || !session.pausedAt) {
+    throw new HttpError(409, 'La sesión no tiene una marca de pausa válida para reanudar el cronómetro.');
+  }
+
+  const resumedAt = new Date();
+  const pauseDurationMs = Math.max(0, resumedAt.getTime() - session.pausedAt.getTime());
+
+  await client.partida.update({
+    where: { id: sessionId },
+    data: {
+      status: EstadoPartida.EN_CURSO,
+      pausedAt: null,
+      startedAt: shiftDateByMilliseconds(session.startedAt, pauseDurationMs),
+      currentTurnStartedAt: session.currentTurnStartedAt
+        ? shiftDateByMilliseconds(session.currentTurnStartedAt, pauseDurationMs)
+        : null,
+    },
+  });
+
+  return loadSessionSnapshotById(client, sessionId);
 }
 
 export async function loadTeamTerminalStateByAccessCode(
@@ -228,6 +305,10 @@ export async function loadTeamTerminalStateByAccessCode(
       })
       .sort(sortHandCards),
   };
+}
+
+function shiftDateByMilliseconds(sourceDate: Date, deltaMs: number) {
+  return new Date(sourceDate.getTime() + deltaMs);
 }
 
 function buildDistributedGameSetup(skin: LoadedSkinConfiguration, teamIds: string[]): DistributedGameSetup {

@@ -106,6 +106,7 @@ async function loadSessionSnapshot(
       accessCode: true,
       status: true,
       startedAt: true,
+      pausedAt: true,
       durationMinutes: true,
       skinId: true,
       currentTurnTeamId: true,
@@ -152,7 +153,12 @@ async function loadSessionSnapshot(
     status: session.status ?? EstadoPartida.LOBBY,
     startedAt,
     durationSeconds,
-    remainingSeconds: calculateRemainingSeconds(durationSeconds, session.startedAt),
+    remainingSeconds: calculateRemainingSeconds(
+      durationSeconds,
+      session.status ?? EstadoPartida.LOBBY,
+      session.startedAt,
+      session.pausedAt
+    ),
     skin,
     teams: session.teams.map(mapTeamSnapshot).sort(sortTeamsByColor),
     turn: buildTurnSnapshot(session),
@@ -215,9 +221,19 @@ function normalizeDurationMinutes(durationMinutes: number | null, fallbackDurati
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
 }
 
-function calculateRemainingSeconds(durationSeconds: number, startedAt: Date | null) {
+function calculateRemainingSeconds(
+  durationSeconds: number,
+  status: EstadoPartida,
+  startedAt: Date | null,
+  pausedAt: Date | null
+) {
   if (!startedAt) {
     return durationSeconds;
+  }
+
+  if (status === EstadoPartida.PAUSADA && pausedAt) {
+    const elapsedSecondsWhenPaused = Math.max(0, Math.floor((pausedAt.getTime() - startedAt.getTime()) / 1000));
+    return Math.max(0, durationSeconds - elapsedSecondsWhenPaused);
   }
 
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAt.getTime()) / 1000));

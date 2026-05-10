@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import {
@@ -14,7 +14,10 @@ import {
 } from "lucide-react";
 import {
   createLobbySocketClient,
+  pauseGameFromBoard,
+  resumeGameFromBoard,
   subscribeHostToLobby,
+  type LobbySocketClient,
   type LobbyEventMessage,
   type LobbyPresenceState,
 } from "../../src/lib/lobbySocket";
@@ -43,6 +46,7 @@ type TeamSlotStatus = "free" | "connected" | "inactive" | "disconnected";
 
 export function BoardView() {
   const navigate = useNavigate();
+  const socketRef = useRef<LobbySocketClient | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [sessionCode, setSessionCode] = useState("");
   const [boardConfig, setBoardConfig] = useState(() => readStoredActiveBoardConfig());
@@ -50,6 +54,7 @@ export function BoardView() {
   const [events, setEvents] = useState<LobbyEventMessage[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<BoardConnectionStatus>("idle");
   const [boardError, setBoardError] = useState<string | null>(null);
+  const [isChangingGameStatus, setIsChangingGameStatus] = useState(false);
   const [isBoardDebugEnabled, setIsBoardDebugEnabled] = useState(() => getStoredBoardDebugMode());
   const [boardDebugProbe, setBoardDebugProbe] = useState<BoardDebugProbe | null>(null);
   const [monitoringNow, setMonitoringNow] = useState(() => Date.now());
@@ -77,6 +82,11 @@ export function BoardView() {
       return;
     }
 
+    if (presenceState.status === "PAUSADA") {
+      setTimeRemaining(presenceState.remainingSeconds);
+      return;
+    }
+
     const updateTimeRemaining = () => {
       setTimeRemaining(calculateRemainingSeconds(presenceState.startedAt, presenceState.durationSeconds));
     };
@@ -89,6 +99,7 @@ export function BoardView() {
   useEffect(() => {
     let active = true;
     const socket = createLobbySocketClient({ admin: true });
+    socketRef.current = socket;
 
     const applyPresenceState = (state: LobbyPresenceState) => {
       if (!active) {
@@ -128,6 +139,37 @@ export function BoardView() {
           }
 
           setEvents((currentEvents) => [event, ...currentEvents].slice(0, 10));
+        });
+        socket.on("game:status-changed", (payload) => {
+          if (!active) {
+            return;
+          }
+
+          const updatedSession = payload.session;
+          setPresenceState((currentState) => {
+            if (!currentState || currentState.sessionId !== updatedSession.id) {
+              return currentState;
+            }
+
+            return {
+              ...currentState,
+              status: updatedSession.status,
+              startedAt: updatedSession.startedAt,
+              durationSeconds: updatedSession.durationSeconds,
+              remainingSeconds: updatedSession.remainingSeconds,
+              turn: updatedSession.turn,
+              teams: updatedSession.teams.map((team) => {
+                const previousTeam = currentState.teams.find((currentTeam) => currentTeam.id === team.id);
+
+                return {
+                  ...team,
+                  connected: previousTeam?.connected ?? false,
+                  lastSeenAt: previousTeam?.lastSeenAt ?? null,
+                };
+              }),
+              updatedAt: payload.occurredAt,
+            };
+          });
         });
         socket.on("disconnect", () => {
           if (!active) {
@@ -179,6 +221,9 @@ export function BoardView() {
 
     return () => {
       active = false;
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
       socket.disconnect();
     };
   }, [navigate]);
@@ -261,6 +306,53 @@ export function BoardView() {
     setBoardDebugProbe(buildBoardDebugProbe(positionX, positionY, matchedNode));
   };
 
+  const handleToggleGameStatus = async () => {
+    if (!presenceState) {
+      return;
+    }
+
+    const socket = socketRef.current;
+    if (!socket || !socket.connected) {
+      setBoardError("No hay conexión realtime para cambiar el estado de la partida.");
+      return;
+    }
+
+    if (presenceState.status !== "EN_CURSO" && presenceState.status !== "PAUSADA") {
+      setBoardError("La partida no admite pausas en su estado actual.");
+      return;
+    }
+
+    setIsChangingGameStatus(true);
+    setBoardError(null);
+
+    try {
+      const response =
+        presenceState.status === "EN_CURSO"
+          ? await pauseGameFromBoard(socket, presenceState.sessionId)
+          : await resumeGameFromBoard(socket, presenceState.sessionId);
+
+      if (!response.ok) {
+        setBoardError(response.error);
+        return;
+      }
+
+      setPresenceState((currentState) => {
+        if (!currentState || currentState.sessionId !== response.payload.session.id) {
+          return currentState;
+        }
+
+        return {
+          ...currentState,
+          status: response.payload.status,
+          turn: response.payload.session.turn,
+          updatedAt: response.payload.occurredAt,
+        };
+      });
+    } finally {
+      setIsChangingGameStatus(false);
+    }
+  };
+
   return (
     <div className="flex w-full h-screen bg-[#020617] text-cyan-400 font-mono overflow-hidden">
       <div className="w-[380px] h-full bg-slate-900/40 border-r border-cyan-800/50 shadow-[4px_0_24px_-4px_rgba(6,182,212,0.15)] flex flex-col relative z-20 backdrop-blur-md">
@@ -294,12 +386,35 @@ export function BoardView() {
               <span className="text-sm font-bold text-cyan-100">
                 {currentTurn?.currentTeamName ?? "Pendiente de sincronizar"}
               </span>
+              <span
+                className={`text-[10px] font-bold uppercase tracking-[0.2em] ${
+                  presenceState?.status === "PAUSADA" ? "text-amber-300" : "text-emerald-300"
+                }`}
+              >
+                Estado: {formatSessionStatusLabel(presenceState?.status ?? "EN_CURSO")}
+              </span>
             </div>
             <div className="text-right">
               <span className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">Dados</span>
               <span className="text-lg font-black text-emerald-300">
                 {currentTurn?.dice ? `${currentTurn.dice.valueOne} + ${currentTurn.dice.valueTwo} = ${currentTurn.dice.total}` : "Sin tirar"}
               </span>
+              <button
+                type="button"
+                onClick={() => void handleToggleGameStatus()}
+                disabled={
+                  connectionStatus !== "connected" ||
+                  isChangingGameStatus ||
+                  (presenceState?.status !== "EN_CURSO" && presenceState?.status !== "PAUSADA")
+                }
+                className="mt-2 rounded-md border border-cyan-500/70 bg-cyan-500 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isChangingGameStatus
+                  ? "Actualizando..."
+                  : presenceState?.status === "PAUSADA"
+                  ? "Reanudar"
+                  : "Pausar"}
+              </button>
             </div>
           </div>
         </div>
@@ -467,6 +582,10 @@ function formatEventTime(timestamp: number) {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+function formatSessionStatusLabel(status: string) {
+  return status.replaceAll("_", " ");
 }
 
 function getRenderableBoardCenterImage(centerImage: string | null | undefined) {

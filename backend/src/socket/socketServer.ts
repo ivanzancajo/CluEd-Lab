@@ -3,10 +3,12 @@ import type { Server as HttpServer } from 'node:http';
 import { EstadoPartida, type ColorEquipo } from '@prisma/client';
 import { Server, type Socket } from 'socket.io';
 import {
+  gameStatusCommandSchema,
   hostLobbySubscriptionSchema,
   startGameCommandSchema,
   teamSecretPassageCommandSchema,
   teamLobbySubscriptionSchema,
+  type GameStatusCommandInput,
   type HostLobbySubscriptionInput,
   type StartGameCommandInput,
   type TeamSecretPassageCommandInput,
@@ -23,7 +25,7 @@ import { prisma } from '../lib/prisma.js';
 import { env } from '../config/env.js';
 import { verifyAdminToken, type AuthTokenPayload } from '../middleware/auth.js';
 import { lobbyPresenceStore } from './lobbyPresenceStore.js';
-import { startSessionByAccessCode } from '../lib/sessionGameplay.js';
+import { pauseSession, resumeSession, startSessionByAccessCode } from '../lib/sessionGameplay.js';
 import { findBoardMovementNodeByPosition, isSecretPassageMoveValid } from '../lib/sessionMovement.js';
 import { buildNextTurnUpdate } from '../lib/sessionTurn.js';
 import { BOARD_MOVEMENT_NODES } from '../lib/boardGraph.js';
@@ -59,6 +61,12 @@ export type GameStartedPayload = {
   occurredAt: number;
 };
 
+export type GameStatusChangedPayload = {
+  session: SessionSnapshot;
+  status: EstadoPartida;
+  occurredAt: number;
+};
+
 type LobbySubscribeAck =
   | {
       ok: true;
@@ -89,10 +97,22 @@ type TeamSecretPassageAck =
       error: string;
     };
 
+type GameStatusChangeAck =
+  | {
+      ok: true;
+      payload: GameStatusChangedPayload;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 type LobbyClientToServerEvents = {
   'lobby:host-subscribe': (payload: unknown, acknowledge?: (response: LobbySubscribeAck) => void) => void;
   'lobby:team-subscribe': (payload: unknown, acknowledge?: (response: LobbySubscribeAck) => void) => void;
   startGame: (payload: unknown, acknowledge?: (response: StartGameAck) => void) => void;
+  'game:pause': (payload: unknown, acknowledge?: (response: GameStatusChangeAck) => void) => void;
+  'game:resume': (payload: unknown, acknowledge?: (response: GameStatusChangeAck) => void) => void;
   'lobby:team-heartbeat': () => void;
   'turn:use-secret-passage': (payload: unknown, acknowledge?: (response: TeamSecretPassageAck) => void) => void;
 };
@@ -110,6 +130,7 @@ type LobbySocket = Socket<
     'lobby:presence-updated': (state: LobbyPresenceState) => void;
     'lobby:event': (event: LobbyEvent) => void;
     gameStarted: (payload: GameStartedPayload) => void;
+    'game:status-changed': (payload: GameStatusChangedPayload) => void;
   },
   Record<string, never>,
   LobbySocketData
@@ -119,6 +140,7 @@ const LOBBY_ROOM_PREFIX = 'lobby:session:';
 const REALTIME_ENABLED_STATES: ReadonlySet<EstadoPartida> = new Set<EstadoPartida>([
   EstadoPartida.LOBBY,
   EstadoPartida.EN_CURSO,
+  EstadoPartida.PAUSADA,
 ]);
 
 let activeIo: Server | null = null;
@@ -228,6 +250,58 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
       broadcastGameStarted(io, session.id, gameStartedPayload);
 
       acknowledge?.({ ok: true, payload: gameStartedPayload });
+    } catch (error) {
+      acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });
+    }
+  });
+
+  socket.on('game:pause', async (payload: unknown, acknowledge?: (response: GameStatusChangeAck) => void) => {
+    try {
+      const input = parseGameStatusCommand(payload);
+      requireAdminUser(socket);
+
+      const session = await prisma.$transaction(
+        (tx) => pauseSession(tx, input.sessionId),
+        { isolationLevel: 'Serializable' }
+      );
+      const statusPayload = buildGameStatusChangedPayload(session);
+
+      broadcastLobbyUpdate(io, await buildLobbyPresenceState(session.id));
+      broadcastLobbyEvent(io, session.id, {
+        id: randomUUID(),
+        type: 'system',
+        message: 'El Game Master ha pausado la partida.',
+        occurredAt: statusPayload.occurredAt,
+      });
+      broadcastGameStatusChanged(io, session.id, statusPayload);
+
+      acknowledge?.({ ok: true, payload: statusPayload });
+    } catch (error) {
+      acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });
+    }
+  });
+
+  socket.on('game:resume', async (payload: unknown, acknowledge?: (response: GameStatusChangeAck) => void) => {
+    try {
+      const input = parseGameStatusCommand(payload);
+      requireAdminUser(socket);
+
+      const session = await prisma.$transaction(
+        (tx) => resumeSession(tx, input.sessionId),
+        { isolationLevel: 'Serializable' }
+      );
+      const statusPayload = buildGameStatusChangedPayload(session);
+
+      broadcastLobbyUpdate(io, await buildLobbyPresenceState(session.id));
+      broadcastLobbyEvent(io, session.id, {
+        id: randomUUID(),
+        type: 'system',
+        message: 'El Game Master ha reanudado la partida.',
+        occurredAt: statusPayload.occurredAt,
+      });
+      broadcastGameStatusChanged(io, session.id, statusPayload);
+
+      acknowledge?.({ ok: true, payload: statusPayload });
     } catch (error) {
       acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });
     }
@@ -430,6 +504,15 @@ function parseStartGameCommand(payload: unknown): StartGameCommandInput {
   return parsed.data;
 }
 
+function parseGameStatusCommand(payload: unknown): GameStatusCommandInput {
+  const parsed = gameStatusCommandSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new HttpError(400, 'La orden de cambio de estado no es válida.', parsed.error.issues.map((issue) => issue.message));
+  }
+
+  return parsed.data;
+}
+
 function parseTeamSecretPassageCommand(payload: unknown): TeamSecretPassageCommandInput {
   const parsed = teamSecretPassageCommandSchema.safeParse(payload);
   if (!parsed.success) {
@@ -495,6 +578,10 @@ function broadcastGameStarted(io: Server, sessionId: string, payload: GameStarte
   io.to(getLobbyRoom(sessionId)).emit('gameStarted', payload);
 }
 
+function broadcastGameStatusChanged(io: Server, sessionId: string, payload: GameStatusChangedPayload) {
+  io.to(getLobbyRoom(sessionId)).emit('game:status-changed', payload);
+}
+
 function getLobbyRoom(sessionId: string) {
   return `${LOBBY_ROOM_PREFIX}${sessionId}`;
 }
@@ -518,7 +605,7 @@ function ensureRealtimeStateAvailable(status: EstadoPartida) {
 }
 
 function buildConnectionMessage(teamName: string, status: EstadoPartida, action: 'connected' | 'disconnected') {
-  const target = status === EstadoPartida.EN_CURSO ? 'la partida' : 'el lobby';
+  const target = status === EstadoPartida.LOBBY ? 'el lobby' : 'la partida';
   const verb = action === 'connected' ? 'se ha conectado a' : 'se ha desconectado de';
   return `${teamName} ${verb} ${target}.`;
 }
@@ -526,6 +613,14 @@ function buildConnectionMessage(teamName: string, status: EstadoPartida, action:
 function buildGameStartedPayload(session: SessionSnapshot): GameStartedPayload {
   return {
     session,
+    occurredAt: Date.now(),
+  };
+}
+
+function buildGameStatusChangedPayload(session: SessionSnapshot): GameStatusChangedPayload {
+  return {
+    session,
+    status: session.status,
     occurredAt: Date.now(),
   };
 }

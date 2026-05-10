@@ -33,6 +33,12 @@ export type GameStartedPayload = {
   occurredAt: number;
 };
 
+export type GameStatusChangedPayload = {
+  session: LobbySession;
+  status: SessionStatus;
+  occurredAt: number;
+};
+
 export type LobbySubscribeAck =
   | {
       ok: true;
@@ -63,10 +69,21 @@ export type TeamSecretPassageAck =
       error: string;
     };
 
+export type GameStatusChangeAck =
+  | {
+      ok: true;
+      payload: GameStatusChangedPayload;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 type ServerToClientEvents = {
   'lobby:presence-updated': (state: LobbyPresenceState) => void;
   'lobby:event': (event: LobbyEventMessage) => void;
   gameStarted: (payload: GameStartedPayload) => void;
+  'game:status-changed': (payload: GameStatusChangedPayload) => void;
 };
 
 type ClientToServerEvents = {
@@ -81,6 +98,8 @@ type ClientToServerEvents = {
     acknowledge: (response: TeamSecretPassageAck) => void
   ) => void;
   startGame: (payload: { accessCode: string }, acknowledge: (response: StartGameAck) => void) => void;
+  'game:pause': (payload: { sessionId: string }, acknowledge: (response: GameStatusChangeAck) => void) => void;
+  'game:resume': (payload: { sessionId: string }, acknowledge: (response: GameStatusChangeAck) => void) => void;
 };
 
 export type LobbySocketClient = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -112,6 +131,18 @@ export function emitTeamHeartbeat(socket: LobbySocketClient) {
 export function startGameFromLobby(socket: LobbySocketClient, accessCode: string) {
   return new Promise<StartGameAck>((resolve) => {
     socket.emit('startGame', { accessCode }, resolve);
+  });
+}
+
+export function pauseGameFromBoard(socket: LobbySocketClient, sessionId: string) {
+  return new Promise<GameStatusChangeAck>((resolve) => {
+    socket.emit('game:pause', { sessionId }, resolve);
+  });
+}
+
+export function resumeGameFromBoard(socket: LobbySocketClient, sessionId: string) {
+  return new Promise<GameStatusChangeAck>((resolve) => {
+    socket.emit('game:resume', { sessionId }, resolve);
   });
 }
 

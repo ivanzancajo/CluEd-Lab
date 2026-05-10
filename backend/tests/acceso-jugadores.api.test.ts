@@ -6,7 +6,12 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import type { SignOptions } from 'jsonwebtoken';
 import { io as createSocketClient, type Socket } from 'socket.io-client';
-import { registerSocketServer, type GameStartedPayload, type LobbyPresenceState } from '../src/socket/socketServer.js';
+import {
+  registerSocketServer,
+  type GameStartedPayload,
+  type GameStatusChangedPayload,
+  type LobbyPresenceState,
+} from '../src/socket/socketServer.js';
 import sessionRoutes from '../src/routes/sessionRoutes.js';
 import { getTeamSpawnPosition } from '../src/lib/teamSpawnPositions.js';
 import { BOARD_MOVEMENT_CONNECTIONS, BOARD_MOVEMENT_NODES } from '../src/lib/sessionMovement.js';
@@ -136,6 +141,16 @@ type StartGameSocketResponse =
   | {
       ok: true;
       payload: GameStartedPayload;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+type GameStatusSocketResponse =
+  | {
+      ok: true;
+      payload: GameStatusChangedPayload;
     }
   | {
       ok: false;
@@ -1002,6 +1017,93 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
       expect(await prisma.cartaEquipo.count()).toBe(18);
     } finally {
       hostSocket.disconnect();
+      teamSocket.disconnect();
+    }
+  });
+
+  it('emite game:status-changed al pausar y reanudar desde el Game Master', async () => {
+    const seeded = await seedPlayableSession('PAUS01', ['ROJO', 'AZUL']);
+    const hostSocket = await connectSocketClient(socketUrl, signAdminToken({ role: 'admin', username: 'admin', sub: 'socket-admin' }));
+    const teamSocket = await connectSocketClient(socketUrl);
+
+    try {
+      const hostSubscription = await emitSocketAck<LobbySubscribeResponse>(hostSocket, 'lobby:host-subscribe', {
+        sessionId: seeded.session.id,
+      });
+      const teamSubscription = await emitSocketAck<LobbySubscribeResponse>(teamSocket, 'lobby:team-subscribe', {
+        sessionId: seeded.session.id,
+        teamId: seeded.teamIds[0],
+      });
+
+      expect(hostSubscription.ok).toBe(true);
+      expect(teamSubscription.ok).toBe(true);
+
+      const startResponse = await emitSocketAck<StartGameSocketResponse>(hostSocket, 'startGame', {
+        accessCode: 'PAUS01',
+      });
+
+      expect(startResponse.ok).toBe(true);
+
+      const hostPausedPromise = waitForSocketEvent<GameStatusChangedPayload>(hostSocket, 'game:status-changed');
+      const teamPausedPromise = waitForSocketEvent<GameStatusChangedPayload>(teamSocket, 'game:status-changed');
+      const pauseResponse = await emitSocketAck<GameStatusSocketResponse>(hostSocket, 'game:pause', {
+        sessionId: seeded.session.id,
+      });
+      const [hostPaused, teamPaused] = await Promise.all([hostPausedPromise, teamPausedPromise]);
+
+      expect(pauseResponse.ok).toBe(true);
+      if (!pauseResponse.ok) {
+        return;
+      }
+
+      expect(pauseResponse.payload.status).toBe(EstadoPartida.PAUSADA);
+      expect(hostPaused.status).toBe(EstadoPartida.PAUSADA);
+      expect(teamPaused.status).toBe(EstadoPartida.PAUSADA);
+
+      const hostResumedPromise = waitForSocketEvent<GameStatusChangedPayload>(hostSocket, 'game:status-changed');
+      const teamResumedPromise = waitForSocketEvent<GameStatusChangedPayload>(teamSocket, 'game:status-changed');
+      const resumeResponse = await emitSocketAck<GameStatusSocketResponse>(hostSocket, 'game:resume', {
+        sessionId: seeded.session.id,
+      });
+      const [hostResumed, teamResumed] = await Promise.all([hostResumedPromise, teamResumedPromise]);
+
+      expect(resumeResponse.ok).toBe(true);
+      if (!resumeResponse.ok) {
+        return;
+      }
+
+      expect(resumeResponse.payload.status).toBe(EstadoPartida.EN_CURSO);
+      expect(hostResumed.status).toBe(EstadoPartida.EN_CURSO);
+      expect(teamResumed.status).toBe(EstadoPartida.EN_CURSO);
+
+      const persistedSession = await prisma.partida.findUnique({
+        where: { id: seeded.session.id },
+        select: { status: true },
+      });
+
+      expect(persistedSession?.status).toBe(EstadoPartida.EN_CURSO);
+    } finally {
+      hostSocket.disconnect();
+      teamSocket.disconnect();
+    }
+  });
+
+  it('rechaza game:pause si no hay token de administrador', async () => {
+    const seeded = await seedPlayableSession('PAUS02', ['ROJO', 'AZUL']);
+    const teamSocket = await connectSocketClient(socketUrl);
+
+    try {
+      const response = await emitSocketAck<GameStatusSocketResponse>(teamSocket, 'game:pause', {
+        sessionId: seeded.session.id,
+      });
+
+      expect(response.ok).toBe(false);
+      if (response.ok) {
+        return;
+      }
+
+      expect(response.error).toContain('autenticación de administrador');
+    } finally {
       teamSocket.disconnect();
     }
   });

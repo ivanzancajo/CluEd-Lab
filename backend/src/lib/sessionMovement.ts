@@ -13,6 +13,7 @@ import {
   ensureCurrentTurnBelongsToTeam,
   ensureTurnHasNoActiveDice,
   getActiveDice,
+  getActiveDiceRemainingMoves,
   rollTurnDice,
   type SessionTurnDice,
 } from './sessionTurn.js';
@@ -137,6 +138,10 @@ export function getReachableMoveNodes(currentNodeId: string, occupiedNodeIds: It
       }
 
       if (nextSteps === diceRoll) {
+        if (node.kind === 'room') {
+          return;
+        }
+
         reachableNodes.set(linkedNodeId, {
           ...node,
           stepsRequired: nextSteps,
@@ -240,6 +245,7 @@ export async function loadTeamMoveStateByAccessCode(
 
   const currentNode = resolveTeamMovementContext(session, teamId).currentNode;
   const activeDice = getActiveDice(session);
+  const activeDiceRemainingMoves = getActiveDiceRemainingMoves(session);
   if (!activeDice) {
     return {
       diceRoll: null,
@@ -249,11 +255,20 @@ export async function loadTeamMoveStateByAccessCode(
     };
   }
 
-  const moveState = buildTeamMoveValidationState(session, teamId, activeDice.total);
+  if (activeDiceRemainingMoves === null) {
+    return {
+      diceRoll: null,
+      remainingMoves: null,
+      currentNode,
+      destinationNodes: [],
+    };
+  }
+
+  const moveState = buildTeamMoveValidationState(session, teamId, activeDiceRemainingMoves);
 
   return {
-    diceRoll: moveState.diceRoll,
-    remainingMoves: activeDice.total,
+    diceRoll: activeDice.total,
+    remainingMoves: activeDiceRemainingMoves,
     currentNode: moveState.currentNode,
     destinationNodes: moveState.availableMoves,
   };
@@ -313,11 +328,16 @@ export async function moveTeamByAccessCode(
   ensureCurrentTurnBelongsToTeam(session, teamId);
 
   const activeDice = getActiveDice(session);
+  const activeDiceRemainingMoves = getActiveDiceRemainingMoves(session);
   if (!activeDice) {
     throw new HttpError(409, 'El equipo actual debe lanzar los dados antes de moverse.');
   }
 
-  const currentState = buildTeamMoveValidationState(session, teamId, activeDice.total);
+  if (activeDiceRemainingMoves === null || activeDiceRemainingMoves <= 0) {
+    throw new HttpError(409, 'La tirada actual no deja movimientos pendientes para este turno.');
+  }
+
+  const currentState = buildTeamMoveValidationState(session, teamId, activeDiceRemainingMoves);
   const targetNode = currentState.availableMoves.find((node) => node.id === targetNodeId);
 
   if (!targetNode) {

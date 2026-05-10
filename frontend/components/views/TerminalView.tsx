@@ -910,7 +910,9 @@ export function TerminalView() {
                  <ThemedBoard
                    centerImage={centerImage}
                    spaces={boardSpaces}
-                   showSpaceLabels={false}
+                   showSpaceLabels
+                   spaceNameScale={0.88}
+                   spaceMotifScale={0.72}
                    pawns={boardPawns}
                    showDebugOverlay={isBoardDebugEnabled}
                    debugProbe={boardDebugProbe}
@@ -1009,7 +1011,7 @@ export function TerminalView() {
                     <div className="flex items-center justify-between gap-3">
                       <h3 className="text-[10px] font-bold tracking-widest uppercase text-cyan-300">Movimiento del peón</h3>
                       <span className="text-[9px] uppercase tracking-[0.2em] text-slate-500">
-                        {currentMoveNode ? currentTurnRemainingLabel : "Esperando sincronización del peón"}
+                        {currentMoveNode ? currentTurnRemainingLabel : ""}
                       </span>
                     </div>
 
@@ -1025,12 +1027,12 @@ export function TerminalView() {
                       </p>
                     ) : !isMyTurn ? (
                       <p className="mt-3 text-[11px] text-slate-400">
-                        Ahora mismo juega {currentTurnLabel}. La terminal se activará automáticamente cuando llegue tu turno.
+                        Ahora mismo juega {currentTurnLabel}. Se habilitará el lanzamiento de dados automáticamente cuando llegue tu turno.
                       </p>
                     ) : sessionTurn.dice === null ? (
                       <div className="mt-3 space-y-3">
                         <p className="text-[11px] text-slate-400">
-                          Pulsa Tirar dados para registrar la tirada del turno actual y desbloquear los destinos válidos en el tablero.
+                          Tira los dados para poder realizar un movimiento.
                         </p>
                       </div>
                     ) : isLoadingMoves ? (

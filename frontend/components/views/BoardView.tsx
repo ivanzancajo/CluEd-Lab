@@ -508,7 +508,8 @@ export function BoardView() {
             spaces={boardSpaces}
             showDebugOverlay={isBoardDebugEnabled}
             debugProbe={boardDebugProbe}
-            spaceNameScale={1.6}
+            spaceNameScale={1.45}
+            spaceMotifScale={1.2}
             teams={boardPawns}
             dataCy="host-themed-board"
           >

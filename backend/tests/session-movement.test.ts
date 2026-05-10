@@ -171,6 +171,15 @@ describe('sessionMovement', () => {
     );
   });
 
+  it('no ofrece salas como destino directo: para entrar hay que seleccionar una puerta', () => {
+    const oneStepMoves = getReachableMoveNodes('square:grid:6:3', [], 1).map((node) => node.id);
+    const twoStepMoves = getReachableMoveNodes('square:grid:6:3', [], 2).map((node) => node.id);
+
+    expect(oneStepMoves).toContain('square:grid:5:3');
+    expect(oneStepMoves).not.toContain('sala-superior-izquierda');
+    expect(twoStepMoves).not.toContain('sala-superior-izquierda');
+  });
+
   it('permite salir de la sala inferior central por cualquiera de sus puertas', () => {
     const reachableMoves = getReachableMoveNodes('sala-inferior-centro', [], 1);
 
@@ -182,6 +191,42 @@ describe('sessionMovement', () => {
         expect.objectContaining({ gridPosition: { col: 7, row: 19 }, stepsRequired: 1 }),
       ])
     );
+  });
+
+  it('solo permite usar la casilla inmediata de salida en sala-inferior-izquierda con tirada 2', () => {
+    const shortRollMoves = getReachableMoveNodes('sala-inferior-izquierda', [], 2).map((node) => node.id);
+    const longRollMoves = getReachableMoveNodes('sala-inferior-izquierda', [], 3).map((node) => node.id);
+
+    expect(shortRollMoves).toContain('square:grid:3:19');
+    expect(shortRollMoves).not.toContain('square:grid:3:20');
+    expect(longRollMoves).not.toContain('square:grid:3:19');
+  });
+
+  it('al salir de cualquier sala, la puerta consume un paso antes de alcanzar casillas exteriores', () => {
+    const roomNodes = Object.values(BOARD_MOVEMENT_NODES).filter((node) => node.kind === 'room');
+
+    roomNodes.forEach((roomNode) => {
+      const rollOneMoveIds = getReachableMoveNodes(roomNode.id, [], 1).map((node) => node.id);
+      const rollTwoMoveIds = getReachableMoveNodes(roomNode.id, [], 2).map((node) => node.id);
+
+      const doorNodeIds = (BOARD_MOVEMENT_CONNECTIONS[roomNode.id] ?? []).filter(
+        (nodeId) => BOARD_MOVEMENT_NODES[nodeId]?.kind === 'square'
+      );
+
+      const exteriorSquareIds = new Set(
+        doorNodeIds.flatMap((doorNodeId) =>
+          (BOARD_MOVEMENT_CONNECTIONS[doorNodeId] ?? [])
+            .filter((neighborNodeId) => neighborNodeId !== roomNode.id)
+            .filter((neighborNodeId) => BOARD_MOVEMENT_NODES[neighborNodeId]?.kind === 'square')
+            .filter((neighborNodeId) => !doorNodeIds.includes(neighborNodeId))
+        )
+      );
+
+      exteriorSquareIds.forEach((exteriorSquareId) => {
+        expect(rollOneMoveIds).not.toContain(exteriorSquareId);
+        expect(rollTwoMoveIds).toContain(exteriorSquareId);
+      });
+    });
   });
 
   it('configura pasadizos entre salas de esquina en ambos sentidos', () => {
@@ -231,6 +276,27 @@ describe('sessionMovement', () => {
     expect(resolvedTargetNode).toMatchObject({
       id: 'square:grid:5:3',
       kind: 'square',
+    });
+  });
+
+  it('en todas las salas, con tirada 1 solo permite caer en puertas (o usar pasadizo secreto)', () => {
+    const roomNodes = Object.values(BOARD_MOVEMENT_NODES).filter((node) => node.kind === 'room');
+
+    roomNodes.forEach((roomNode) => {
+      const doorNodeIds = (BOARD_MOVEMENT_CONNECTIONS[roomNode.id] ?? [])
+        .filter((nodeId) => BOARD_MOVEMENT_NODES[nodeId]?.kind === 'square');
+
+      const firstStepDestinations = getReachableMoveNodes(roomNode.id, [], 1);
+
+      firstStepDestinations.forEach((destinationNode) => {
+        if (destinationNode.kind === 'room') {
+          // Permitido por pasadizo secreto entre salas de esquina.
+          return;
+        }
+
+        expect(destinationNode.kind).toBe('square');
+        expect(doorNodeIds).toContain(destinationNode.id);
+      });
     });
   });
 

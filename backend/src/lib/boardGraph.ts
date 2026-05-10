@@ -241,11 +241,12 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
     grid(3, 4),
     grid(2, 4),
     grid(1, 4),
+    grid(0, 4),
     grid(1, 5),
   ],
   'pasillo-superior-central->centro-norte': [grid(10, 5), grid(10, 6), grid(10, 7, 0, -1.64)],
   'pasillo-izquierdo-superior->pasillo-izquierdo-central': [grid(0, 7), grid(0, 8), grid(0, 9), grid(0, 10)],
-  'pasillo-izquierdo-central->pasillo-izquierdo-inferior': [grid(0, 13), grid(0, 14), grid(0, 15), grid(0, 16)],
+  'pasillo-izquierdo-central->pasillo-izquierdo-inferior': [grid(0, 13), grid(0, 14), grid(0, 15), grid(0, 16), grid(0, 17)],
   'pasillo-izquierdo-central->centro-oeste': [grid(1, 12), grid(2, 12), grid(3, 12), grid(4, 12), grid(5, 12)],
   'centro-norte->centro-oeste': [
     grid(9, 8),
@@ -416,7 +417,7 @@ const ROOM_GRID_FOOTPRINTS: RoomGridFootprintDefinition = {
         ...rowRangePoints(23, [[0, 4]]),
         ...rowRangePoints(24, [[0, 4]]),
       ],
-      [grid(3, 20)]
+      [grid(3, 20), grid(3, 19)]
     ),
   ],
   'sala-inferior-centro': [
@@ -485,7 +486,7 @@ const IMAGE_ALIGNED_EXTRA_GRID_POINTS = [
   ...rowRangePoints(16, [[5, 21]]),
   ...rowRangePoints(17, [[1, 8], [13, 13], [15, 22]]),
   ...rowRangePoints(18, [[1, 6], [15, 16], [18, 18]]),
-  ...rowRangePoints(19, [[6, 7], [14, 17]]),
+  ...rowRangePoints(19, [[3, 3], [6, 7], [14, 17]]),
   ...rowRangePoints(20, [[3, 7], [15, 17]]),
   ...rowRangePoints(21, [[5, 7], [15, 17]]),
   ...rowRangePoints(22, [[5, 7], [15, 16]]),

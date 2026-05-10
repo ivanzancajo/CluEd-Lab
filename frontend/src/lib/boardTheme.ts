@@ -47,15 +47,15 @@ export type BoardSpaceLabel = {
 export const BOARD_BASE_IMAGE_PATH = '/board-base.jpg';
 
 export const BOARD_SPACE_SLOTS: BoardLabelSlot[] = [
-  { id: 'slot-1', positionX: 21.66, positionY: 15.17, widthPercent: 14.2, nameSize: 'clamp(8px, 0.72vw, 10px)', motifSize: 'clamp(6.5px, 0.64vw, 8.5px)', horizontalAnchor: 'center', textAlign: 'center' },
-  { id: 'slot-2', positionX: 50.2, positionY: 18.72, widthPercent: 12.4, nameSize: 'clamp(7px, 0.68vw, 9px)', motifSize: 'clamp(6.5px, 0.6vw, 7.5px)', horizontalAnchor: 'center', textAlign: 'center' },
-  { id: 'slot-3', positionX: 78.6, positionY: 17.72, widthPercent: 14.6, nameSize: 'clamp(6.5px, 0.58vw, 8.5px)', motifSize: 'clamp(5.5px, 0.48vw, 6.5px)', horizontalAnchor: 'center', textAlign: 'center' },
-  { id: 'slot-4', positionX: 21.6, positionY: 37.0, widthPercent: 13.9, nameSize: 'clamp(7px, 0.62vw, 8px)', motifSize: 'clamp(5.5px, 0.54vw, 7.5px)', horizontalAnchor: 'center', textAlign: 'center' },
-  { id: 'slot-5', positionX: 20.26, positionY: 56.6, widthPercent: 14.2, nameSize: 'clamp(7px, 0.62vw, 8px)', motifSize: 'clamp(5.5px, 0.54vw, 7.5px)', horizontalAnchor: 'center', textAlign: 'center' },
-  { id: 'slot-6', positionX: 76.6, positionY: 48.68, widthPercent: 15.2, nameSize: 'clamp(7px, 0.62vw, 9px)', motifSize: 'clamp(6px, 0.5vw, 7px)', horizontalAnchor: 'center', textAlign: 'center' },
-  { id: 'slot-7', positionX: 19.83, positionY: 81.0, widthPercent: 12.9, nameSize: 'clamp(6px, 0.54vw, 8px)', motifSize: 'clamp(5.5px, 0.48vw, 6.5px)', horizontalAnchor: 'center', textAlign: 'center' },
-  { id: 'slot-8', positionX: 50.2, positionY: 77.1, widthPercent: 19.2, nameSize: 'clamp(7px, 0.68vw, 10px)', motifSize: 'clamp(6.5px, 0.6vw, 8.5px)', horizontalAnchor: 'center', textAlign: 'center' },
-  { id: 'slot-9', positionX: 79.8, positionY: 78.6, widthPercent: 13.4, nameSize: 'clamp(6px, 0.54vw, 8px)', motifSize: 'clamp(5.5px, 0.48vw, 6.5px)', horizontalAnchor: 'center', textAlign: 'center' },
+  { id: 'slot-1', positionX: 21.66, positionY: 15.17, widthPercent: 14.2, nameSize: 'clamp(9px, 1.05vw, 14px)',  motifSize: 'clamp(7px, 0.76vw, 10px)',  horizontalAnchor: 'center', textAlign: 'center' },
+  { id: 'slot-2', positionX: 50.2, positionY: 18.72, widthPercent: 12.4,  nameSize: 'clamp(9px, 1.0vw, 13px)',   motifSize: 'clamp(7px, 0.72vw, 9.5px)', horizontalAnchor: 'center', textAlign: 'center' },
+  { id: 'slot-3', positionX: 78.6, positionY: 17.72, widthPercent: 14.6,  nameSize: 'clamp(9px, 1.0vw, 13px)',   motifSize: 'clamp(7px, 0.72vw, 9.5px)', horizontalAnchor: 'center', textAlign: 'center' },
+  { id: 'slot-4', positionX: 21.6, positionY: 37.0, widthPercent: 13.9,   nameSize: 'clamp(9px, 1.0vw, 13px)',   motifSize: 'clamp(7px, 0.72vw, 9.5px)', horizontalAnchor: 'center', textAlign: 'center' },
+  { id: 'slot-5', positionX: 20.26, positionY: 56.6, widthPercent: 14.2,  nameSize: 'clamp(9px, 1.0vw, 13px)',   motifSize: 'clamp(7px, 0.72vw, 9.5px)', horizontalAnchor: 'center', textAlign: 'center' },
+  { id: 'slot-6', positionX: 76.6, positionY: 48.68, widthPercent: 15.2,  nameSize: 'clamp(9px, 1.05vw, 13.5px)', motifSize: 'clamp(7px, 0.76vw, 10px)',  horizontalAnchor: 'center', textAlign: 'center' },
+  { id: 'slot-7', positionX: 19.83, positionY: 81.0, widthPercent: 12.9,  nameSize: 'clamp(8.5px, 0.96vw, 12.5px)', motifSize: 'clamp(6.5px, 0.7vw, 9px)', horizontalAnchor: 'center', textAlign: 'center' },
+  { id: 'slot-8', positionX: 50.2, positionY: 77.1, widthPercent: 19.2,   nameSize: 'clamp(9px, 1.05vw, 14px)',  motifSize: 'clamp(7px, 0.76vw, 10px)',  horizontalAnchor: 'center', textAlign: 'center' },
+  { id: 'slot-9', positionX: 79.8, positionY: 78.6, widthPercent: 13.4,   nameSize: 'clamp(8.5px, 0.96vw, 12.5px)', motifSize: 'clamp(6.5px, 0.7vw, 9px)', horizontalAnchor: 'center', textAlign: 'center' },
 ] as const;
 
 export const BOARD_CENTER_IMAGE_BOUNDS: BoardCenterImageBounds = {

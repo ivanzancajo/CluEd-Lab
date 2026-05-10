@@ -96,22 +96,26 @@ export function ThemedBoard({
             )}
             style={getBoardLabelStyle(slot)}
           >
-            <div className="w-full text-center">
+            <div className="w-full overflow-hidden text-center">
               <p
-                className="font-black leading-[0.98] tracking-[0.01em] text-[#1b5a6d]"
+                className="font-black leading-[1.05] tracking-[0.01em] text-[#1b5a6d] [text-shadow:0_1px_2px_rgba(255,255,255,0.55)]"
                 style={{
                   fontSize: scaleBoardFontSize(slot.nameSize, spaceNameScale),
                   textAlign: slot.textAlign ?? 'center',
+                  overflowWrap: 'break-word',
                 }}
               >
                 {space.name}
               </p>
               {space.motif ? (
                 <p
-                  className="mt-1 leading-[1] text-[#6b5231]"
+                  className="leading-[1.1] font-medium text-[#6b5231] [text-shadow:0_1px_2px_rgba(255,255,255,0.45)]"
                   style={{
                     fontSize: scaleBoardFontSize(slot.motifSize, spaceMotifScale),
                     textAlign: slot.textAlign ?? 'center',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                    textOverflow: 'ellipsis',
                   }}
                 >
                   {space.motif}

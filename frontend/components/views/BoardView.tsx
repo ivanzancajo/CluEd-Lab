@@ -82,6 +82,11 @@ export function BoardView() {
       return;
     }
 
+    if (presenceState.status === "PAUSADA") {
+      setTimeRemaining(presenceState.remainingSeconds);
+      return;
+    }
+
     const updateTimeRemaining = () => {
       setTimeRemaining(calculateRemainingSeconds(presenceState.startedAt, presenceState.durationSeconds));
     };
@@ -386,7 +391,7 @@ export function BoardView() {
                   presenceState?.status === "PAUSADA" ? "text-amber-300" : "text-emerald-300"
                 }`}
               >
-                Estado: {presenceState?.status ?? "EN_CURSO"}
+                Estado: {formatSessionStatusLabel(presenceState?.status ?? "EN_CURSO")}
               </span>
             </div>
             <div className="text-right">
@@ -577,6 +582,10 @@ function formatEventTime(timestamp: number) {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+function formatSessionStatusLabel(status: string) {
+  return status.replaceAll("_", " ");
 }
 
 function getRenderableBoardCenterImage(centerImage: string | null | undefined) {

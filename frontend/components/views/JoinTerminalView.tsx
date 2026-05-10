@@ -71,7 +71,7 @@ export function JoinTerminalView() {
 
         if (!resumeTeam && session.status !== "LOBBY") {
           setJoinError("La partida ya ha comenzado y el lobby esta cerrado para nuevos equipos.");
-        } else if (resumeTeam && session.status !== "LOBBY" && session.status !== "EN_CURSO") {
+        } else if (resumeTeam && session.status !== "LOBBY" && session.status !== "EN_CURSO" && session.status !== "PAUSADA") {
           setJoinError("La sesion ya no permite reanudar este terminal.");
         }
       })
@@ -145,6 +145,13 @@ export function JoinTerminalView() {
       };
     }
 
+    if (resumeTeam && sessionSnapshot?.status === "PAUSADA") {
+      return {
+        tone: "text-cyan-200",
+        message: `Partida pausada: puedes reanudar ${resumeTeam.name}.`,
+      };
+    }
+
     if (sessionSnapshot?.status === "LOBBY") {
       return {
         tone: "text-emerald-300",
@@ -168,7 +175,7 @@ export function JoinTerminalView() {
   const canResume =
     !!resumeTeam &&
     !!sessionSnapshot &&
-    (sessionSnapshot.status === "LOBBY" || sessionSnapshot.status === "EN_CURSO") &&
+    (sessionSnapshot.status === "LOBBY" || sessionSnapshot.status === "EN_CURSO" || sessionSnapshot.status === "PAUSADA") &&
     !isLoadingSession &&
     !isJoining;
 

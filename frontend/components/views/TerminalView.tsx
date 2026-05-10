@@ -27,6 +27,7 @@ import {
   emitTeamSecretPassage,
   emitTeamHeartbeat,
   subscribeTeamToLobby,
+  type GameStatusChangedPayload,
   type GameStartedPayload,
   type LobbySocketClient,
   type LobbyPresenceState,
@@ -687,6 +688,20 @@ export function TerminalView() {
       setLobbyConnectionStatus(currentTeam.connected ? "connected" : "disconnected");
     };
 
+    const applyGameStatusChanged = (payload: GameStatusChangedPayload) => {
+      const currentTeam = payload.session.teams.find((team) => team.id === teamId) ?? null;
+
+      if (!currentTeam) {
+        setLobbyConnectionStatus("error");
+        setLobbyError("El equipo seleccionado ya no pertenece a la partida actual.");
+        return;
+      }
+
+      applyRealtimeSession(payload.session, currentTeam);
+      setLobbyConnectionStatus("connected");
+      setMoveError(payload.status === "PAUSADA" ? "La partida esta pausada por el Game Master." : null);
+    };
+
     socket.on("connect", async () => {
       setLobbyConnectionStatus("connecting");
 
@@ -705,6 +720,7 @@ export function TerminalView() {
 
     socket.on("lobby:presence-updated", applyPresenceState);
     socket.on("gameStarted", applyGameStarted);
+    socket.on("game:status-changed", applyGameStatusChanged);
     socket.on("disconnect", () => {
       isSubscribed = false;
       setLobbyConnectionStatus("disconnected");
@@ -761,6 +777,8 @@ export function TerminalView() {
   const sessionStatusLabel =
     sessionStatus === "EN_CURSO"
       ? "PARTIDA EN CURSO"
+      : sessionStatus === "PAUSADA"
+      ? "PARTIDA PAUSADA"
       : sessionStatus === "REPARTO"
       ? "REPARTO DE CARTAS"
       : "SALA DE ESPERA";
@@ -855,6 +873,8 @@ export function TerminalView() {
         <div data-cy="terminal-lobby-status-banner" className="px-4 py-2 bg-cyan-950/30 border-b border-cyan-900/50 text-[11px] text-cyan-100 uppercase tracking-[0.22em]">
           {sessionStatus === "EN_CURSO"
             ? `Turno actual: ${currentTurnLabel}. ${sessionTurn?.dice ? `Dados ${currentTurnDiceLabel}. ${currentTurnRemainingLabel}.` : "Sin tirada activa."}`
+            : sessionStatus === "PAUSADA"
+            ? "Partida pausada por el Game Master. Esperando reanudacion."
             : "Esperando a que el Game Master inicie la partida."}
         </div>
       ) : null}

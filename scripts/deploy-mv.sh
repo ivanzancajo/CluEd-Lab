@@ -19,6 +19,26 @@ fail() {
   exit 1
 }
 
+run_sudo() {
+  if [[ -t 0 ]]; then
+    sudo "$@"
+    return 0
+  fi
+
+  if sudo -n "$@"; then
+    return 0
+  fi
+
+  fail "Fallo sudo no interactivo para: sudo $*. Configura NOPASSWD para los comandos privilegiados documentados en docs/automatizacion-despliegue-mv.md."
+}
+
+ensure_sudo_session() {
+  if [[ -t 0 ]] && ! sudo -n true >/dev/null 2>&1; then
+    log 'Solicitando credenciales sudo para preparar PostgreSQL'
+    sudo -v
+  fi
+}
+
 require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Falta el comando requerido: $1"
 }
@@ -123,7 +143,7 @@ dedupe_pg_hba_rule() {
 
   temp_file="$(mktemp)"
 
-  sudo awk -v rule="$rule" '
+  run_sudo awk -v rule="$rule" '
     $0 == rule {
       if (!seen) {
         print rule;
@@ -143,11 +163,11 @@ dedupe_pg_hba_rule() {
     }
   ' "$file_path" > "$temp_file"
 
-  file_mode="$(sudo stat -c '%a' "$file_path")"
-  file_uid="$(sudo stat -c '%u' "$file_path")"
-  file_gid="$(sudo stat -c '%g' "$file_path")"
+  file_mode="$(run_sudo stat -c '%a' "$file_path")"
+  file_uid="$(run_sudo stat -c '%u' "$file_path")"
+  file_gid="$(run_sudo stat -c '%g' "$file_path")"
 
-  sudo install -m "$file_mode" -o "$file_uid" -g "$file_gid" "$temp_file" "$file_path"
+  run_sudo install -m "$file_mode" -o "$file_uid" -g "$file_gid" "$temp_file" "$file_path"
   rm -f "$temp_file"
 }
 
@@ -160,14 +180,7 @@ require_command sudo
 
 docker compose version >/dev/null 2>&1 || fail 'Docker Compose no esta disponible'
 
-if ! sudo -n true >/dev/null 2>&1; then
-  if [[ -t 0 ]]; then
-    log 'Solicitando credenciales sudo para preparar PostgreSQL'
-    sudo -v
-  else
-    fail 'La automatizacion en CI/CD requiere sudo sin password para tocar PostgreSQL y reiniciar el servicio.'
-  fi
-fi
+ensure_sudo_session
 
 if [[ -f "$DEPLOY_ENV_FILE" ]]; then
   log "Cargando entorno host-local desde $DEPLOY_ENV_FILE"
@@ -204,12 +217,12 @@ HOST_DATABASE_URL="$(rewrite_database_url_host 127.0.0.1)"
 write_backend_env
 write_compose_env
 
-PG_CONF="$(sudo -u postgres psql -tAc 'show config_file' | xargs)"
-PG_HBA="$(sudo -u postgres psql -tAc 'show hba_file' | xargs)"
+PG_CONF="$(run_sudo -u postgres psql -tAc 'show config_file' | xargs)"
+PG_HBA="$(run_sudo -u postgres psql -tAc 'show hba_file' | xargs)"
 
 log 'Ajustando PostgreSQL del host para conexiones desde Docker Compose'
-sudo sed -i "s/^#\\?listen_addresses.*/listen_addresses = '*'/" "$PG_CONF"
-sudo sed -i "s/^#\\?port.*/port = 5432/" "$PG_CONF"
+run_sudo sed -i "s/^#\\?listen_addresses.*/listen_addresses = '*'/" "$PG_CONF"
+run_sudo sed -i "s/^#\\?port.*/port = 5432/" "$PG_CONF"
 
 log 'Construyendo imagenes y materializando la red de Docker Compose'
 docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" build
@@ -219,8 +232,8 @@ SUBNET="$(docker network inspect ${COMPOSE_PROJECT_NAME}_default --format '{{(in
 HOST_RULE="host    $DB_NAME    $DB_USER    $SUBNET    scram-sha-256"
 
 dedupe_pg_hba_rule "$HOST_RULE" "$PG_HBA"
-sudo systemctl restart postgresql
-sudo grep -Fn "$HOST_RULE" "$PG_HBA"
+run_sudo systemctl restart postgresql
+run_sudo grep -Fn "$HOST_RULE" "$PG_HBA"
 
 log 'Alineando Prisma desde el host'
 pushd "$BACKEND_DIR" >/dev/null

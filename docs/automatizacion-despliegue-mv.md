@@ -55,9 +55,53 @@ BACKEND_PUBLISHED_PORT=4000
 El script admite dos modos:
 
 - ejecucion manual: si hay TTY, puede pedir la contrasena de `sudo` una sola vez
-- ejecucion desde GitHub Actions: no hay terminal interactiva, asi que la opcion recomendada es permitir `NOPASSWD` para el usuario de despliegue en esa MV o, si prefieres ir mas fino, solo para los comandos necesarios sobre `psql`, `stat`, `awk`, `install` y `systemctl restart postgresql`
+- ejecucion desde GitHub Actions: no hay terminal interactiva, asi que necesitas `NOPASSWD` para los comandos privilegiados reales que usa el script. No hace falta `NOPASSWD: ALL`.
 
-5. Ejecuta una vez el script manualmente en la MV para dejar el host alineado con la version automatizada:
+5. Si quieres dejar GitHub Actions totalmente operativo, crea un `sudoers` restringido para el usuario de despliegue.
+
+Primero comprueba las rutas reales de los binarios en esa MV:
+
+```bash
+command -v awk stat install sed systemctl grep psql
+```
+
+En Ubuntu suelen ser estas:
+
+- `/usr/bin/awk`
+- `/usr/bin/stat`
+- `/usr/bin/install`
+- `/usr/bin/sed`
+- `/usr/bin/systemctl`
+- `/usr/bin/grep`
+- `/usr/bin/psql`
+
+Despues crea el fichero de `sudoers` con `visudo`:
+
+```bash
+sudo visudo -f /etc/sudoers.d/tfg-deploy
+```
+
+Contenido recomendado para el usuario `usuario`:
+
+```sudoers
+Runas_Alias TFG_POSTGRES = postgres
+Cmnd_Alias TFG_DEPLOY_POSTGRES = /usr/bin/psql -tAc *
+Cmnd_Alias TFG_DEPLOY_ROOT = /usr/bin/awk *, /usr/bin/stat *, /usr/bin/install *, /usr/bin/sed *, /usr/bin/systemctl restart postgresql, /usr/bin/grep *
+usuario ALL=(TFG_POSTGRES) NOPASSWD: TFG_DEPLOY_POSTGRES
+usuario ALL=(root) NOPASSWD: TFG_DEPLOY_ROOT
+```
+
+Si el nombre del usuario o las rutas de los binarios cambian en tu MV, adapta ese bloque antes de guardarlo.
+
+Valida la sintaxis antes de salir o despues con:
+
+```bash
+sudo visudo -cf /etc/sudoers.d/tfg-deploy
+```
+
+Con el script actual, ese `sudoers` restringido ya es suficiente tambien para CI/CD: el chequeo no usa `sudo -n true` como condicion global, sino los comandos privilegiados reales del despliegue.
+
+6. Ejecuta una vez el script manualmente en la MV para dejar el host alineado con la version automatizada:
 
 ```bash
 cd /home/usuario/TFG

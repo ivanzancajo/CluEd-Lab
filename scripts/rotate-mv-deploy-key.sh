@@ -49,7 +49,7 @@ Descripcion:
   actualiza GitHub opcionalmente y puede relanzar el workflow antes de retirar la clave antigua.
 
 Notas:
-  - Requiere ssh, ssh-keygen, ssh-copy-id y base64.
+  - Requiere ssh, ssh-keygen y base64.
   - Si no se usa --skip-gh-update, tambien requiere gh autenticado.
   - Por defecto intenta cargar .deploy/rotate-mv-deploy-key.env desde la raiz del repositorio.
   - La retirada de la clave antigua solo se hace si indicas --retire-comment y el workflow relanzado termina bien.
@@ -133,7 +133,7 @@ PORT="${ROTATE_MV_KEY_PORT:-${MV_PORT:-20381}}"
 USER_NAME="${ROTATE_MV_KEY_USER:-${MV_USER:-}}"
 REPO_SLUG="${ROTATE_MV_KEY_REPO_SLUG:-}"
 KEY_PATH="${ROTATE_MV_KEY_KEY_PATH:-$HOME/.ssh/id_ed25519_tfg_mv_actions_rotacion}"
-COMMENT="${ROTATE_MV_KEY_COMMENT:-github-actions-tfg-mv-rotacion-$(date +%Y%m%d-%H%M%S)}"
+COMMENT="${ROTATE_MV_KEY_COMMENT:-github-actions-rotacion-tfg-mv-$(date +%Y%m%d-%H%M%S)}"
 BOOTSTRAP_IDENTITY="${ROTATE_MV_KEY_BOOTSTRAP_IDENTITY:-}"
 SECRET_NAME="${ROTATE_MV_KEY_SECRET_NAME:-MV_SSH_PRIVATE_KEY_B64}"
 WORKFLOW_NAME="${ROTATE_MV_KEY_WORKFLOW_NAME:-deploy-mv-lab.yml}"
@@ -232,7 +232,6 @@ done
 
 require_command ssh
 require_command ssh-keygen
-require_command ssh-copy-id
 require_command base64
 
 if [[ -z "$REPO_SLUG" && ( $SKIP_GH_UPDATE -eq 0 || $SKIP_WORKFLOW_RERUN -eq 0 ) ]]; then
@@ -255,19 +254,25 @@ fi
 log "Generando nueva clave en $KEY_PATH"
 ssh-keygen -t ed25519 -N "" -f "$KEY_PATH" -C "$COMMENT" >/dev/null
 
-SSH_COPY_ID_ARGS=(ssh-copy-id -i "$KEY_PATH.pub" -p "$PORT")
+SSH_CONNECT_ARGS=(ssh -p "$PORT")
 if [[ -n "$BOOTSTRAP_IDENTITY" ]]; then
-  SSH_COPY_ID_ARGS+=(-o IdentitiesOnly=yes -o IdentityFile="$BOOTSTRAP_IDENTITY")
+  SSH_CONNECT_ARGS+=(-o IdentitiesOnly=yes -o IdentityFile="$BOOTSTRAP_IDENTITY")
 fi
-SSH_COPY_ID_ARGS+=("$USER_NAME@$HOST")
+SSH_CONNECT_ARGS+=("$USER_NAME@$HOST")
 
 log 'Instalando la nueva clave publica en la MV'
-"${SSH_COPY_ID_ARGS[@]}"
+NEW_PUBLIC_KEY="$(cat "$KEY_PATH.pub")"
+"${SSH_CONNECT_ARGS[@]}" \
+  "install -m 700 -d ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && grep -qxF $(printf '%q' "$NEW_PUBLIC_KEY") ~/.ssh/authorized_keys || printf '%s\n' $(printf '%q' "$NEW_PUBLIC_KEY") >> ~/.ssh/authorized_keys"
 
 log 'Validando acceso con la nueva clave'
 ssh -i "$KEY_PATH" -o IdentitiesOnly=yes -o BatchMode=yes -p "$PORT" "$USER_NAME@$HOST" 'echo ok' >/dev/null
 
 KEY_B64="$(base64 -w0 "$KEY_PATH")"
+OLD_PUBLIC_KEY=""
+if [[ -n "$DELETE_OLD_LOCAL_KEY" && -f "$DELETE_OLD_LOCAL_KEY.pub" ]]; then
+  OLD_PUBLIC_KEY="$(cat "$DELETE_OLD_LOCAL_KEY.pub")"
+fi
 log 'Clave nueva validada; Base64 preparado'
 
 if [[ $SKIP_GH_UPDATE -eq 0 ]]; then
@@ -286,10 +291,16 @@ if [[ -n "$RETIRE_COMMENT" ]]; then
   if [[ $SKIP_WORKFLOW_RERUN -eq 1 ]]; then
     log 'No se retira la clave antigua porque se ha omitido la validacion del workflow.'
   else
-    printf -v RETIRE_MARKER_Q '%q' " $RETIRE_COMMENT"
     log "Retirando de la MV la clave antigua con comentario: $RETIRE_COMMENT"
-    ssh -i "$KEY_PATH" -o IdentitiesOnly=yes -o BatchMode=yes -p "$PORT" "$USER_NAME@$HOST" \
-      "tmp=\$(mktemp) && grep -vF -- $RETIRE_MARKER_Q ~/.ssh/authorized_keys > \$tmp && cat \$tmp > ~/.ssh/authorized_keys && rm -f \$tmp && chmod 600 ~/.ssh/authorized_keys"
+    if [[ -n "$OLD_PUBLIC_KEY" ]]; then
+      printf -v OLD_PUBLIC_KEY_Q '%q' "$OLD_PUBLIC_KEY"
+      ssh -i "$KEY_PATH" -o IdentitiesOnly=yes -o BatchMode=yes -p "$PORT" "$USER_NAME@$HOST" \
+        "tmp=\$(mktemp) && grep -vxF -- $OLD_PUBLIC_KEY_Q ~/.ssh/authorized_keys > \$tmp && cat \$tmp > ~/.ssh/authorized_keys && rm -f \$tmp && chmod 600 ~/.ssh/authorized_keys"
+    else
+      printf -v RETIRE_COMMENT_Q '%q' "$RETIRE_COMMENT"
+      ssh -i "$KEY_PATH" -o IdentitiesOnly=yes -o BatchMode=yes -p "$PORT" "$USER_NAME@$HOST" \
+        "tmp=\$(mktemp) && awk -v comment=$RETIRE_COMMENT_Q 'substr(\$0, length(\$0) - length(comment) + 1) != comment { print }' ~/.ssh/authorized_keys > \$tmp && cat \$tmp > ~/.ssh/authorized_keys && rm -f \$tmp && chmod 600 ~/.ssh/authorized_keys"
+    fi
   fi
 fi
 

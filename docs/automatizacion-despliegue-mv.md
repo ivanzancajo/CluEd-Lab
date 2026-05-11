@@ -168,7 +168,7 @@ Si usas `MV_SSH_PRIVATE_KEY_B64`, no hace falta definir `MV_SSH_PRIVATE_KEY`.
 
 Para rotar la clave SSH sin romper el workflow, haz el cambio con solape temporal: primero anade la clave nueva en la MV, luego actualiza GitHub y solo al final retira la clave antigua.
 
-La via recomendada es usar el script local [scripts/rotate-mv-deploy-key.sh](../scripts/rotate-mv-deploy-key.sh), que automatiza ese solape. Requiere ejecutarse en tu maquina local y disponer de `ssh`, `ssh-copy-id`, `base64` y, si quieres actualizar GitHub y relanzar el workflow automaticamente, tambien `gh` autenticado.
+La via recomendada es usar el script local [scripts/rotate-mv-deploy-key.sh](../scripts/rotate-mv-deploy-key.sh), que automatiza ese solape. Requiere ejecutarse en tu maquina local y disponer de `ssh`, `ssh-keygen`, `base64` y, si quieres actualizar GitHub y relanzar el workflow automaticamente, tambien `gh` autenticado.
 
 Para no tener que pasar `host`, `port`, `user` y el resto de parametros cada vez, el script intenta cargar por defecto un archivo local ignorado por Git en `.deploy/rotate-mv-deploy-key.env`.
 
@@ -219,7 +219,7 @@ Secuencia recomendada:
 1. Genera una clave nueva en tu maquina local con un comentario distinto al actual:
 
 ```bash
-ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519_tfg_mv_actions_rotacion -C "github-actions-tfg-mv-rotacion-2026-05"
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519_tfg_mv_actions_rotacion -C "github-actions-rotacion-tfg-mv-2026-05"
 ```
 
 2. Instala la nueva clave publica en la MV sin borrar todavia la anterior:

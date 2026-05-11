@@ -164,6 +164,58 @@ base64 -w0 ~/.ssh/id_ed25519_tfg_mv_actions
 
 Si usas `MV_SSH_PRIVATE_KEY_B64`, no hace falta definir `MV_SSH_PRIVATE_KEY`.
 
+## Rotacion de la clave SSH del despliegue
+
+Para rotar la clave SSH sin romper el workflow, haz el cambio con solape temporal: primero anade la clave nueva en la MV, luego actualiza GitHub y solo al final retira la clave antigua.
+
+Secuencia recomendada:
+
+1. Genera una clave nueva en tu maquina local con un comentario distinto al actual:
+
+```bash
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519_tfg_mv_actions_rotacion -C "github-actions-tfg-mv-rotacion-2026-05"
+```
+
+2. Instala la nueva clave publica en la MV sin borrar todavia la anterior:
+
+```bash
+ssh-copy-id -i ~/.ssh/id_ed25519_tfg_mv_actions_rotacion.pub -p 20381 usuario@virtual.lab.inf.uva.es
+```
+
+3. Valida desde tu maquina local que la clave nueva ya entra sin password:
+
+```bash
+ssh -i ~/.ssh/id_ed25519_tfg_mv_actions_rotacion -o IdentitiesOnly=yes -o BatchMode=yes -p 20381 usuario@virtual.lab.inf.uva.es 'echo ok'
+```
+
+4. Genera el secreto Base64 de la clave nueva:
+
+```bash
+base64 -w0 ~/.ssh/id_ed25519_tfg_mv_actions_rotacion
+```
+
+5. En GitHub, actualiza el secreto `MV_SSH_PRIVATE_KEY_B64` con ese nuevo valor. No retires todavia la clave vieja de `authorized_keys`.
+
+6. Relanza el workflow `Deploy MV laboratorio`. Si termina en verde, la clave nueva ya esta en servicio.
+
+7. Retira entonces la clave antigua de la MV. Si el comentario antiguo sigue siendo `github-actions-tfg-mv`, puedes borrarla asi:
+
+```bash
+ssh -p 20381 usuario@virtual.lab.inf.uva.es
+sed -i '/ github-actions-tfg-mv$/d' ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+8. Borra o archiva la clave privada antigua en tu maquina local. Si quieres eliminarla directamente:
+
+```bash
+rm -f ~/.ssh/id_ed25519_tfg_mv_actions ~/.ssh/id_ed25519_tfg_mv_actions.pub
+```
+
+9. Haz una ultima validacion relanzando otra vez el workflow o probando el acceso SSH manual con la clave nueva.
+
+Mientras la clave nueva no haya sido validada en GitHub Actions, no borres la anterior de `authorized_keys`.
+
 ## Uso del workflow
 
 El workflow [.github/workflows/deploy-mv-lab.yml](../.github/workflows/deploy-mv-lab.yml) se ejecuta de dos formas:

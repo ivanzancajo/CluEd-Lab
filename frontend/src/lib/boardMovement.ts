@@ -1,1 +1,1 @@
-export * from '../../../backend/src/lib/boardGraph.ts';
+export * from './boardGraph.ts';

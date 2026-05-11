@@ -27,7 +27,8 @@ WORKDIR /app
 
 COPY package*.json ./
 COPY prisma ./prisma
-RUN npm ci && npx prisma generate && npm prune --omit=dev
+COPY --from=base /app/node_modules ./node_modules
+RUN npm prune --omit=dev
 
 COPY --from=build /app/dist ./dist
 

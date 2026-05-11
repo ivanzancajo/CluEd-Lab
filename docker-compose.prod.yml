@@ -10,7 +10,10 @@ services:
     env_file:
       - ./backend/.env
     ports:
-      - "4000:4000"
+      - target: 4000
+        published: "${BACKEND_PUBLISHED_PORT:-4000}"
+        host_ip: "${BACKEND_HOST_IP:-0.0.0.0}"
+        protocol: tcp
 
   frontend:
     image: tfg-frontend:prod
@@ -23,4 +26,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "8080:80"
+      - target: 80
+        published: "${FRONTEND_PUBLISHED_PORT:-8080}"
+        host_ip: "${FRONTEND_HOST_IP:-0.0.0.0}"
+        protocol: tcp

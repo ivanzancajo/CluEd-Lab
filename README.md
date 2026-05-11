@@ -128,20 +128,37 @@ Construye y levanta el frontend compilado con nginx y el backend en modo product
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
+Los puertos publicados en produccion son configurables desde variables de Compose definidas en [docker-compose.prod.yml](docker-compose.prod.yml):
+
+- `FRONTEND_HOST_IP` y `FRONTEND_PUBLISHED_PORT` controlan donde se publica nginx.
+- `BACKEND_HOST_IP` y `BACKEND_PUBLISHED_PORT` controlan donde se publica el backend.
+
+Para la MV del laboratorio, copia [docker-compose.lab.env.example](docker-compose.lab.env.example) a `docker-compose.lab.env` y usa:
+
+```bash
+docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml up -d --build
+```
+
 Consulta [docs/despliegue-mv-pruebas.md](docs/despliegue-mv-pruebas.md) para el procedimiento completo en una MV Linux con PostgreSQL en el host.
 
 Puntos criticos del despliegue actual:
 
-- La URL publica de entrada debe ser la del frontend en `:8080`; nginx sirve la SPA y proxyea `/api` y `/socket.io` para mantener same-origin.
+- Por defecto la URL publica de entrada queda en `:8080`, pero puede adaptarse con variables de Compose; en la MV del laboratorio se publica en el puerto `80` interno para quedar accesible como `http://virtual.lab.inf.uva.es:20382`.
 - PostgreSQL queda fuera de `docker-compose.prod.yml`; si corre en la MV anfitriona, la `DATABASE_URL` del backend debe usar `host.docker.internal`.
 - `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` deben apuntar a la IP o DNS publico real de la MV, no a `localhost`.
 - Antes del primer arranque sobre una base ya existente, alinea Prisma manualmente; el backend productivo no aplica migraciones al iniciar.
 - Si la red de la MV no es alcanzable desde el cliente, usa la alternativa temporal documentada en [docs/despliegue-mv-pruebas.md](docs/despliegue-mv-pruebas.md) para exponer la app con un tunel HTTPS saliente.
 
-Servicios publicados:
+Servicios publicados por defecto:
 
 - Frontend: `http://localhost:8080`
 - Backend: `http://localhost:4000`
+
+Servicios publicados en la MV del laboratorio con `docker-compose.lab.env`:
+
+- Frontend dentro de la MV: `http://127.0.0.1:80`
+- Frontend desde fuera del laboratorio: `http://virtual.lab.inf.uva.es:20382`
+- Backend solo en la MV: `http://127.0.0.1:4000`
 
 Parar servicios:
 

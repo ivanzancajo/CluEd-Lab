@@ -98,6 +98,17 @@ Valida la sintaxis antes de salir o despues con:
 sudo visudo -cf /etc/sudoers.d/tfg-deploy
 ```
 
+Antes de probar el `NOPASSWD`, limpia cualquier credencial `sudo` cacheada en esa sesion. Si acabas de usar `visudo`, una prueba directa con `sudo -n` puede dar un falso positivo aunque el workflow siga fallando despues.
+
+```bash
+sudo -k
+sudo -n -u postgres /usr/bin/psql -tAc 'show config_file'
+sudo -n -u postgres /usr/bin/psql -tAc 'show hba_file'
+sudo -n /usr/bin/systemctl restart postgresql
+```
+
+Si cualquiera de esos comandos pide contrasena o falla con `sudo: a password is required`, el `sudoers` restringido todavia no esta aplicado correctamente para CI/CD.
+
 Con el script actual, ese `sudoers` restringido ya es suficiente tambien para CI/CD: el chequeo no usa `sudo -n true` como condicion global, sino los comandos privilegiados reales del despliegue.
 
 6. Ejecuta una vez el script manualmente en la MV para dejar el host alineado con la version automatizada:

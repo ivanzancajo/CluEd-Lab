@@ -19,6 +19,31 @@ fail() {
   exit 1
 }
 
+canonicalize_pg_hba_rule() {
+  printf '%s\n' "$1" | awk '{ $1=$1; print }'
+}
+
+wait_for_http() {
+  local url="$1"
+  local description="$2"
+  local attempts="${3:-20}"
+  local delay_seconds="${4:-1}"
+  local attempt
+
+  for ((attempt = 1; attempt <= attempts; attempt += 1)); do
+    if curl --silent --show-error --fail "$url" >/dev/null; then
+      return 0
+    fi
+
+    if (( attempt < attempts )); then
+      log "Esperando $description ($attempt/$attempts)"
+      sleep "$delay_seconds"
+    fi
+  done
+
+  fail "No fue posible validar $description en $url"
+}
+
 run_sudo() {
   if [[ -t 0 ]]; then
     sudo "$@"
@@ -140,11 +165,20 @@ dedupe_pg_hba_rule() {
   local file_mode
   local file_uid
   local file_gid
+  local canonical_rule
 
   temp_file="$(mktemp)"
+  canonical_rule="$(canonicalize_pg_hba_rule "$rule")"
 
-  run_sudo awk -v rule="$rule" '
-    $0 == rule {
+  run_sudo awk -v rule="$canonical_rule" '
+    {
+      normalized = $0
+      gsub(/[[:space:]]+/, " ", normalized)
+      sub(/^ /, "", normalized)
+      sub(/ $/, "", normalized)
+    }
+
+    normalized == rule {
       if (!seen) {
         print rule;
         seen = 1;
@@ -233,7 +267,18 @@ HOST_RULE="host    $DB_NAME    $DB_USER    $SUBNET    scram-sha-256"
 
 dedupe_pg_hba_rule "$HOST_RULE" "$PG_HBA"
 run_sudo systemctl restart postgresql
-run_sudo grep -Fn "$HOST_RULE" "$PG_HBA"
+run_sudo awk -v rule="$(canonicalize_pg_hba_rule "$HOST_RULE")" '
+  {
+    normalized = $0
+    gsub(/[[:space:]]+/, " ", normalized)
+    sub(/^ /, "", normalized)
+    sub(/ $/, "", normalized)
+  }
+
+  normalized == rule {
+    printf "%d:%s\n", NR, $0
+  }
+' "$PG_HBA"
 
 log 'Alineando Prisma desde el host'
 pushd "$BACKEND_DIR" >/dev/null
@@ -250,8 +295,8 @@ docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" up -d --re
 docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" ps
 
 log 'Validando healthcheck, proxy HTTP y Socket.IO locales'
-curl --silent --show-error --fail http://127.0.0.1:4000/health >/dev/null
-curl --silent --show-error --head --fail http://127.0.0.1/ >/dev/null
+wait_for_http http://127.0.0.1:4000/health 'healthcheck del backend'
+wait_for_http http://127.0.0.1/ 'proxy HTTP del frontend'
 
 LOGIN_STATUS="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
   -H 'Content-Type: application/json' \
@@ -260,7 +305,7 @@ LOGIN_STATUS="$(curl --silent --show-error --output /dev/null --write-out '%{htt
 
 [[ "$LOGIN_STATUS" == '401' ]] || fail "Se esperaba 401 en el login local y se obtuvo $LOGIN_STATUS"
 
-curl --silent --show-error --fail 'http://127.0.0.1/socket.io/?EIO=4&transport=polling' >/dev/null
+wait_for_http 'http://127.0.0.1/socket.io/?EIO=4&transport=polling' 'handshake de Socket.IO'
 
 log 'Despliegue completado correctamente'
 log 'Entrada publica esperada: http://virtual.lab.inf.uva.es:20382'

@@ -168,6 +168,34 @@ Si usas `MV_SSH_PRIVATE_KEY_B64`, no hace falta definir `MV_SSH_PRIVATE_KEY`.
 
 Para rotar la clave SSH sin romper el workflow, haz el cambio con solape temporal: primero anade la clave nueva en la MV, luego actualiza GitHub y solo al final retira la clave antigua.
 
+La via recomendada es usar el script local [scripts/rotate-mv-deploy-key.sh](../scripts/rotate-mv-deploy-key.sh), que automatiza ese solape. Requiere ejecutarse en tu maquina local y disponer de `ssh`, `ssh-copy-id`, `base64` y, si quieres actualizar GitHub y relanzar el workflow automaticamente, tambien `gh` autenticado.
+
+Ejemplo recomendado, asumiendo que la clave actual sigue en `~/.ssh/id_ed25519_tfg_mv_actions` y que quieres retirar la antigua cuando el workflow nuevo valide en verde:
+
+```bash
+./scripts/rotate-mv-deploy-key.sh \
+  --host virtual.lab.inf.uva.es \
+  --port 20381 \
+  --user usuario \
+  --bootstrap-identity ~/.ssh/id_ed25519_tfg_mv_actions \
+  --retire-comment github-actions-tfg-mv \
+  --delete-old-local-key ~/.ssh/id_ed25519_tfg_mv_actions
+```
+
+Si no tienes `gh` en tu maquina local, puedes seguir usando el mismo script para automatizar toda la parte SSH y que te imprima el Base64 listo para pegar en GitHub:
+
+```bash
+./scripts/rotate-mv-deploy-key.sh \
+  --host virtual.lab.inf.uva.es \
+  --port 20381 \
+  --user usuario \
+  --bootstrap-identity ~/.ssh/id_ed25519_tfg_mv_actions \
+  --skip-gh-update \
+  --skip-workflow-rerun
+```
+
+En ese modo, el script genera la nueva clave, la instala en la MV, valida acceso y muestra el valor Base64 para `MV_SSH_PRIVATE_KEY_B64`, pero no toca GitHub ni retira la clave anterior.
+
 Secuencia recomendada:
 
 1. Genera una clave nueva en tu maquina local con un comentario distinto al actual:

@@ -1,0 +1,86 @@
+name: Deploy MV laboratorio
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: Ref git a desplegar en la MV
+        required: true
+        default: develop
+  push:
+    branches:
+      - develop
+    paths:
+      - backend/**
+      - frontend/**
+      - docker-compose.prod.yml
+      - docker-compose.lab.env.example
+      - deploy/**
+      - scripts/deploy-mv.sh
+      - .github/workflows/deploy-mv-lab.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-mv-lab-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Desplegar en MV del laboratorio
+    runs-on: ubuntu-latest
+    env:
+      MV_HOST: ${{ vars.MV_HOST }}
+      MV_PORT: ${{ vars.MV_PORT }}
+      MV_USER: ${{ vars.MV_USER }}
+      MV_REPO_PATH: ${{ vars.MV_REPO_PATH }}
+      DEPLOY_REF: ${{ github.event.inputs.git_ref || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar configuracion minima
+        run: |
+          [[ -n "${MV_HOST:-}" ]] || { echo 'Falta la variable MV_HOST'; exit 1; }
+          [[ -n "${MV_USER:-}" ]] || { echo 'Falta la variable MV_USER'; exit 1; }
+          [[ -n "${MV_REPO_PATH:-}" ]] || { echo 'Falta la variable MV_REPO_PATH'; exit 1; }
+          [[ -n "${{ secrets.MV_SSH_PRIVATE_KEY }}" ]] || { echo 'Falta el secreto MV_SSH_PRIVATE_KEY'; exit 1; }
+
+      - name: Preparar clave SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' '${{ secrets.MV_SSH_PRIVATE_KEY }}' > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${MV_PORT:-22}" -H "$MV_HOST" >> ~/.ssh/known_hosts
+
+      - name: Ejecutar despliegue remoto
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -p "${MV_PORT:-22}" "${MV_USER}@${MV_HOST}" bash -s -- "$DEPLOY_REF" "$MV_REPO_PATH" <<'EOF'
+          set -euo pipefail
+
+          DEPLOY_REF="$1"
+          REPO_PATH="$2"
+
+          if [[ ! -d "$REPO_PATH/.git" ]]; then
+            echo "No existe un checkout git en $REPO_PATH. Haz el bootstrap manual una vez y vuelve a lanzar el workflow." >&2
+            exit 1
+          fi
+
+          cd "$REPO_PATH"
+          git fetch origin --prune
+
+          if git ls-remote --exit-code --heads origin "$DEPLOY_REF" >/dev/null 2>&1; then
+            if git show-ref --verify --quiet "refs/heads/$DEPLOY_REF"; then
+              git checkout "$DEPLOY_REF"
+            else
+              git checkout -b "$DEPLOY_REF" "origin/$DEPLOY_REF"
+            fi
+
+            git pull --ff-only origin "$DEPLOY_REF"
+          else
+            git checkout --detach "$DEPLOY_REF"
+          fi
+
+          bash ./scripts/deploy-mv.sh
+          EOF

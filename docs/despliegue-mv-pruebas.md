@@ -4,6 +4,8 @@ Esta guia cubre el despliegue productivo actual en una MV Linux donde el fronten
 
 Para la MV del laboratorio con acceso publico en `virtual.lab.inf.uva.es`, puerto SSH `20381` y publicacion web `20382 -> 80`, esta guia asume que el frontend se publica en el puerto `80` interno de la MV mediante variables de Compose.
 
+Si quieres dejar el despliegue reproducible para futuras actualizaciones y automatizarlo con GitHub Actions, usa [scripts/deploy-mv.sh](../scripts/deploy-mv.sh) y la guia de [docs/automatizacion-despliegue-mv.md](./automatizacion-despliegue-mv.md).
+
 Se ha validado sobre la rama `develop` del repositorio. Si tu copia local tiene cambios sin confirmar, no la uses como fuente para la MV: clona o actualiza siempre desde remoto y configura el entorno directamente en la maquina virtual.
 
 ## Arquitectura esperada
@@ -263,6 +265,27 @@ docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml ps
 ```
 
 La entrada publica para usuarios debe ser siempre `http://virtual.lab.inf.uva.es:20382`. Aunque el backend publica `4000`, en esta MV queda ligado a `127.0.0.1` y el frontend productivo sigue trabajando same-origin a traves de nginx.
+
+## Script reproducible de despliegue
+
+Una vez validado el despliegue manual inicial, puedes convertirlo en un flujo reproducible dentro de la propia MV:
+
+```bash
+cd /home/usuario/TFG
+mkdir -p .deploy
+cp deploy/mv.backend.env.example .deploy/mv.backend.env
+chmod 600 .deploy/mv.backend.env
+bash scripts/deploy-mv.sh
+```
+
+El script:
+
+- regenera `backend/.env` y `docker-compose.lab.env`
+- deduplica la regla exacta de `pg_hba.conf` para la subred de Docker Compose
+- ejecuta Prisma desde el host
+- levanta los contenedores y valida `health`, proxy HTTP y Socket.IO
+
+Para automatizarlo desde GitHub Actions por SSH, consulta [docs/automatizacion-despliegue-mv.md](./automatizacion-despliegue-mv.md).
 
 ## Alternativa si la red de la MV no es alcanzable desde el cliente
 

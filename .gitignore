@@ -19,6 +19,7 @@ build/
 .env.test.local
 .env.production.local
 docker-compose.lab.env
+.deploy/
 
 # Logs
 npm-debug.log*

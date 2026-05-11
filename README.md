@@ -141,6 +141,8 @@ docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml up -
 
 Consulta [docs/despliegue-mv-pruebas.md](docs/despliegue-mv-pruebas.md) para el procedimiento completo en una MV Linux con PostgreSQL en el host.
 
+Si quieres dejar el despliegue reproducible y automatizarlo sobre la MV del laboratorio, usa el script [scripts/deploy-mv.sh](scripts/deploy-mv.sh) junto con la guia [docs/automatizacion-despliegue-mv.md](docs/automatizacion-despliegue-mv.md).
+
 Puntos criticos del despliegue actual:
 
 - Por defecto la URL publica de entrada queda en `:8080`, pero puede adaptarse con variables de Compose; en la MV del laboratorio se publica en el puerto `80` interno para quedar accesible como `http://virtual.lab.inf.uva.es:20382`.

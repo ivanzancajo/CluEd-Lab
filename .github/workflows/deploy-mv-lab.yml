@@ -69,23 +69,41 @@ jobs:
 
       - name: Preparar clave SSH
         run: |
+          write_candidate_key() {
+            local source_kind="$1"
+
+            case "$source_kind" in
+              b64)
+                printf '%s' "$MV_SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/id_ed25519.raw 2>/dev/null || return 1
+                ;;
+              plain)
+                printf '%s' "$MV_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519.raw
+                ;;
+              *)
+                return 1
+                ;;
+            esac
+
+            tr -d '\r' < ~/.ssh/id_ed25519.raw > ~/.ssh/id_ed25519
+            chmod 600 ~/.ssh/id_ed25519
+            ssh-keygen -yf ~/.ssh/id_ed25519 >/dev/null 2>&1
+          }
+
           install -m 700 -d ~/.ssh
-          if [[ -n "${MV_SSH_PRIVATE_KEY_B64:-}" ]]; then
-            printf '%s' "$MV_SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/id_ed25519.raw || {
-              echo 'MV_SSH_PRIVATE_KEY_B64 no contiene una codificacion Base64 valida.'
-              exit 1
-            }
+
+          rm -f ~/.ssh/id_ed25519 ~/.ssh/id_ed25519.raw
+          if [[ -n "${MV_SSH_PRIVATE_KEY_B64:-}" ]] && write_candidate_key b64; then
+            echo 'Usando MV_SSH_PRIVATE_KEY_B64'
+          elif [[ -n "${MV_SSH_PRIVATE_KEY:-}" ]] && write_candidate_key plain; then
+            echo 'Usando MV_SSH_PRIVATE_KEY'
           else
-            printf '%s' "$MV_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519.raw
+            rm -f ~/.ssh/id_ed25519 ~/.ssh/id_ed25519.raw
+            echo 'No se pudo reconstruir una clave SSH valida desde MV_SSH_PRIVATE_KEY_B64 ni MV_SSH_PRIVATE_KEY.'
+            echo 'Para la web de GitHub, recrea MV_SSH_PRIVATE_KEY_B64 con: base64 -w0 ~/.ssh/id_ed25519_tfg_mv_actions'
+            exit 1
           fi
 
-          tr -d '\r' < ~/.ssh/id_ed25519.raw > ~/.ssh/id_ed25519
           rm -f ~/.ssh/id_ed25519.raw
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keygen -yf ~/.ssh/id_ed25519 >/dev/null || {
-            echo 'La clave SSH no es valida. Revisa MV_SSH_PRIVATE_KEY o MV_SSH_PRIVATE_KEY_B64.'
-            exit 1
-          }
           ssh-keyscan -p "${MV_PORT:-22}" -H "$MV_HOST" >> ~/.ssh/known_hosts
 
       - name: Ejecutar despliegue remoto

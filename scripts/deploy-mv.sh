@@ -68,6 +68,14 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Falta el comando requerido: $1"
 }
 
+resolve_command_path() {
+  local resolved_path
+
+  resolved_path="$(type -P "$1" || true)"
+  [[ -n "$resolved_path" ]] || fail "No se pudo resolver la ruta del comando requerido: $1"
+  printf '%s' "$resolved_path"
+}
+
 trim_whitespace() {
   local value="$1"
   value="${value#"${value%%[![:space:]]*}"}"
@@ -170,7 +178,7 @@ dedupe_pg_hba_rule() {
   temp_file="$(mktemp)"
   canonical_rule="$(canonicalize_pg_hba_rule "$rule")"
 
-  run_sudo awk -v rule="$canonical_rule" '
+  run_sudo "$AWK_BIN" -v rule="$canonical_rule" '
     {
       normalized = $0
       gsub(/[[:space:]]+/, " ", normalized)
@@ -197,11 +205,11 @@ dedupe_pg_hba_rule() {
     }
   ' "$file_path" > "$temp_file"
 
-  file_mode="$(run_sudo stat -c '%a' "$file_path")"
-  file_uid="$(run_sudo stat -c '%u' "$file_path")"
-  file_gid="$(run_sudo stat -c '%g' "$file_path")"
+  file_mode="$(run_sudo "$STAT_BIN" -c '%a' "$file_path")"
+  file_uid="$(run_sudo "$STAT_BIN" -c '%u' "$file_path")"
+  file_gid="$(run_sudo "$STAT_BIN" -c '%g' "$file_path")"
 
-  run_sudo install -m "$file_mode" -o "$file_uid" -g "$file_gid" "$temp_file" "$file_path"
+  run_sudo "$INSTALL_BIN" -m "$file_mode" -o "$file_uid" -g "$file_gid" "$temp_file" "$file_path"
   rm -f "$temp_file"
 }
 
@@ -211,6 +219,13 @@ require_command node
 require_command npm
 require_command psql
 require_command sudo
+
+AWK_BIN="$(resolve_command_path awk)"
+STAT_BIN="$(resolve_command_path stat)"
+INSTALL_BIN="$(resolve_command_path install)"
+SED_BIN="$(resolve_command_path sed)"
+SYSTEMCTL_BIN="$(resolve_command_path systemctl)"
+PSQL_BIN="$(resolve_command_path psql)"
 
 docker compose version >/dev/null 2>&1 || fail 'Docker Compose no esta disponible'
 
@@ -251,12 +266,12 @@ HOST_DATABASE_URL="$(rewrite_database_url_host 127.0.0.1)"
 write_backend_env
 write_compose_env
 
-PG_CONF="$(run_sudo -u postgres psql -tAc 'show config_file' | xargs)"
-PG_HBA="$(run_sudo -u postgres psql -tAc 'show hba_file' | xargs)"
+PG_CONF="$(run_sudo -u postgres "$PSQL_BIN" -tAc 'show config_file' | xargs)"
+PG_HBA="$(run_sudo -u postgres "$PSQL_BIN" -tAc 'show hba_file' | xargs)"
 
 log 'Ajustando PostgreSQL del host para conexiones desde Docker Compose'
-run_sudo sed -i "s/^#\\?listen_addresses.*/listen_addresses = '*'/" "$PG_CONF"
-run_sudo sed -i "s/^#\\?port.*/port = 5432/" "$PG_CONF"
+run_sudo "$SED_BIN" -i "s/^#\\?listen_addresses.*/listen_addresses = '*'/" "$PG_CONF"
+run_sudo "$SED_BIN" -i "s/^#\\?port.*/port = 5432/" "$PG_CONF"
 
 log 'Construyendo imagenes y materializando la red de Docker Compose'
 docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" build
@@ -266,8 +281,8 @@ SUBNET="$(docker network inspect ${COMPOSE_PROJECT_NAME}_default --format '{{(in
 HOST_RULE="host    $DB_NAME    $DB_USER    $SUBNET    scram-sha-256"
 
 dedupe_pg_hba_rule "$HOST_RULE" "$PG_HBA"
-run_sudo systemctl restart postgresql
-run_sudo awk -v rule="$(canonicalize_pg_hba_rule "$HOST_RULE")" '
+run_sudo "$SYSTEMCTL_BIN" restart postgresql
+run_sudo "$AWK_BIN" -v rule="$(canonicalize_pg_hba_rule "$HOST_RULE")" '
   {
     normalized = $0
     gsub(/[[:space:]]+/, " ", normalized)

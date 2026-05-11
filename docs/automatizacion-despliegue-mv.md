@@ -62,7 +62,7 @@ El script admite dos modos:
 Primero comprueba las rutas reales de los binarios en esa MV:
 
 ```bash
-command -v awk stat install sed systemctl grep psql
+type -P awk stat install sed systemctl psql
 ```
 
 En Ubuntu suelen ser estas:
@@ -72,7 +72,6 @@ En Ubuntu suelen ser estas:
 - `/usr/bin/install`
 - `/usr/bin/sed`
 - `/usr/bin/systemctl`
-- `/usr/bin/grep`
 - `/usr/bin/psql`
 
 Despues crea el fichero de `sudoers` con `visudo`:
@@ -91,7 +90,7 @@ usuario ALL=(TFG_POSTGRES) NOPASSWD: TFG_DEPLOY_POSTGRES
 usuario ALL=(root) NOPASSWD: TFG_DEPLOY_ROOT
 ```
 
-Si el nombre del usuario o las rutas de los binarios cambian en tu MV, adapta ese bloque antes de guardarlo.
+Si el nombre del usuario o las rutas de los binarios cambian en tu MV, adapta ese bloque antes de guardarlo. El script usa esas rutas absolutas cuando llama a `sudo`, para que el `sudoers` restringido funcione igual en la ejecucion manual y en GitHub Actions.
 
 Valida la sintaxis antes de salir o despues con:
 

@@ -36,6 +36,8 @@ jobs:
       MV_USER: ${{ vars.MV_USER }}
       MV_REPO_PATH: ${{ vars.MV_REPO_PATH }}
       DEPLOY_REF: ${{ github.event.inputs.git_ref || github.ref_name }}
+      MV_SSH_PRIVATE_KEY: ${{ secrets.MV_SSH_PRIVATE_KEY }}
+      MV_SSH_PRIVATE_KEY_B64: ${{ secrets.MV_SSH_PRIVATE_KEY_B64 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,19 +62,28 @@ jobs:
           [[ "$MV_HOST" != *[[:space:]]* ]] || { echo 'MV_HOST contiene espacios en blanco invalidos'; exit 1; }
           [[ -n "${MV_USER:-}" ]] || { echo 'Falta la variable MV_USER'; exit 1; }
           [[ -n "${MV_REPO_PATH:-}" ]] || { echo 'Falta la variable MV_REPO_PATH'; exit 1; }
-          [[ -n "${{ secrets.MV_SSH_PRIVATE_KEY }}" ]] || { echo 'Falta el secreto MV_SSH_PRIVATE_KEY'; exit 1; }
+          [[ -n "${MV_SSH_PRIVATE_KEY:-}" || -n "${MV_SSH_PRIVATE_KEY_B64:-}" ]] || {
+            echo 'Falta el secreto MV_SSH_PRIVATE_KEY o MV_SSH_PRIVATE_KEY_B64'
+            exit 1
+          }
 
       - name: Preparar clave SSH
         run: |
           install -m 700 -d ~/.ssh
-          cat > ~/.ssh/id_ed25519.raw <<'EOF'
-          ${{ secrets.MV_SSH_PRIVATE_KEY }}
-          EOF
+          if [[ -n "${MV_SSH_PRIVATE_KEY_B64:-}" ]]; then
+            printf '%s' "$MV_SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/id_ed25519.raw || {
+              echo 'MV_SSH_PRIVATE_KEY_B64 no contiene una codificacion Base64 valida.'
+              exit 1
+            }
+          else
+            printf '%s' "$MV_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519.raw
+          fi
+
           tr -d '\r' < ~/.ssh/id_ed25519.raw > ~/.ssh/id_ed25519
           rm -f ~/.ssh/id_ed25519.raw
           chmod 600 ~/.ssh/id_ed25519
           ssh-keygen -yf ~/.ssh/id_ed25519 >/dev/null || {
-            echo 'MV_SSH_PRIVATE_KEY no es una clave OpenSSH valida. Revisa que el secreto contenga la clave completa con BEGIN/END y saltos de linea reales.'
+            echo 'La clave SSH no es valida. Revisa MV_SSH_PRIVATE_KEY o MV_SSH_PRIVATE_KEY_B64.'
             exit 1
           }
           ssh-keyscan -p "${MV_PORT:-22}" -H "$MV_HOST" >> ~/.ssh/known_hosts

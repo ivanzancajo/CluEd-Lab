@@ -142,8 +142,17 @@ Configura estos valores en el repositorio:
   - `MV_REPO_PATH`: `/home/usuario/TFG`
 - Secretos:
   - `MV_SSH_PRIVATE_KEY`: clave privada SSH que corresponde a la publica instalada en la MV
+  - `MV_SSH_PRIVATE_KEY_B64`: alternativa recomendada si pegas el secreto desde la web de GitHub; contiene la misma clave privada codificada en Base64 en una sola linea
 
 La clave publica no hace falta guardarla en GitHub para que el workflow funcione. Si tu politica interna exige almacenar tambien la publica, puedes guardarla como secreto o variable documental, pero el workflow no la consume.
+
+Si configuras secretos desde la interfaz web de GitHub, es mas robusto usar `MV_SSH_PRIVATE_KEY_B64` para evitar problemas con saltos de linea. En Linux puedes obtener ese valor asi:
+
+```bash
+base64 -w0 ~/.ssh/id_ed25519_tfg_mv_actions
+```
+
+Si usas `MV_SSH_PRIVATE_KEY_B64`, no hace falta definir `MV_SSH_PRIVATE_KEY`.
 
 ## Uso del workflow
 

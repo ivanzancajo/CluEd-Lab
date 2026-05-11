@@ -65,13 +65,21 @@ jobs:
       - name: Preparar clave SSH
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' '${{ secrets.MV_SSH_PRIVATE_KEY }}' > ~/.ssh/id_ed25519
+          cat > ~/.ssh/id_ed25519.raw <<'EOF'
+          ${{ secrets.MV_SSH_PRIVATE_KEY }}
+          EOF
+          tr -d '\r' < ~/.ssh/id_ed25519.raw > ~/.ssh/id_ed25519
+          rm -f ~/.ssh/id_ed25519.raw
           chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -yf ~/.ssh/id_ed25519 >/dev/null || {
+            echo 'MV_SSH_PRIVATE_KEY no es una clave OpenSSH valida. Revisa que el secreto contenga la clave completa con BEGIN/END y saltos de linea reales.'
+            exit 1
+          }
           ssh-keyscan -p "${MV_PORT:-22}" -H "$MV_HOST" >> ~/.ssh/known_hosts
 
       - name: Ejecutar despliegue remoto
         run: |
-          ssh -i ~/.ssh/id_ed25519 -p "${MV_PORT:-22}" "${MV_USER}@${MV_HOST}" bash -s -- "$DEPLOY_REF" "$MV_REPO_PATH" <<'EOF'
+          ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -p "${MV_PORT:-22}" "${MV_USER}@${MV_HOST}" bash -s -- "$DEPLOY_REF" "$MV_REPO_PATH" <<'EOF'
           set -euo pipefail
 
           DEPLOY_REF="$1"

@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 log() {
   printf '[rotate-mv-key] %s\n' "$*"
 }
@@ -21,6 +23,8 @@ Uso:
   scripts/rotate-mv-deploy-key.sh [opciones]
 
 Opciones:
+  --config PATH                   Ruta a un archivo local de configuracion.
+  --no-config                     No carga archivo de configuracion local.
   --host HOST                     Host de la MV.
   --port PORT                     Puerto SSH de la MV. Por defecto: 20381.
   --user USER                     Usuario SSH de la MV.
@@ -47,8 +51,21 @@ Descripcion:
 Notas:
   - Requiere ssh, ssh-keygen, ssh-copy-id y base64.
   - Si no se usa --skip-gh-update, tambien requiere gh autenticado.
+  - Por defecto intenta cargar .deploy/rotate-mv-deploy-key.env desde la raiz del repositorio.
   - La retirada de la clave antigua solo se hace si indicas --retire-comment y el workflow relanzado termina bien.
 EOF
+}
+
+load_config_file() {
+  local path="$1"
+
+  [[ -f "$path" ]] || return 1
+
+  log "Cargando configuracion local desde $path"
+  set -a
+  # shellcheck disable=SC1090
+  source "$path"
+  set +a
 }
 
 derive_repo_slug() {
@@ -81,25 +98,61 @@ require_gh() {
   gh auth status >/dev/null 2>&1 || fail 'GitHub CLI no esta autenticado. Ejecuta gh auth login o usa --skip-gh-update.'
 }
 
-HOST="${MV_HOST:-}"
-PORT="${MV_PORT:-20381}"
-USER_NAME="${MV_USER:-}"
-REPO_SLUG=""
-KEY_PATH="$HOME/.ssh/id_ed25519_tfg_mv_actions_rotacion"
-COMMENT="github-actions-tfg-mv-rotacion-$(date +%Y%m%d-%H%M%S)"
-BOOTSTRAP_IDENTITY=""
-SECRET_NAME="MV_SSH_PRIVATE_KEY_B64"
-WORKFLOW_NAME="deploy-mv-lab.yml"
-WORKFLOW_REF="develop"
-WORKFLOW_INPUT_REF="develop"
-RETIRE_COMMENT=""
-DELETE_OLD_LOCAL_KEY=""
+CONFIG_FILE="${ROTATE_MV_KEY_CONFIG:-$ROOT_DIR/.deploy/rotate-mv-deploy-key.env}"
+CONFIG_FILE_EXPLICIT=0
+USE_CONFIG=1
+
+ORIGINAL_ARGS=("$@")
+ARG_INDEX=0
+while [[ $ARG_INDEX -lt ${#ORIGINAL_ARGS[@]} ]]; do
+  case "${ORIGINAL_ARGS[$ARG_INDEX]}" in
+    --config)
+      (( ARG_INDEX + 1 < ${#ORIGINAL_ARGS[@]} )) || fail 'Falta el valor de --config.'
+      CONFIG_FILE="${ORIGINAL_ARGS[$((ARG_INDEX + 1))]}"
+      CONFIG_FILE_EXPLICIT=1
+      ((ARG_INDEX += 2))
+      ;;
+    --no-config)
+      USE_CONFIG=0
+      ((ARG_INDEX += 1))
+      ;;
+    *)
+      ((ARG_INDEX += 1))
+      ;;
+  esac
+done
+
+if [[ $USE_CONFIG -eq 1 ]]; then
+  if ! load_config_file "$CONFIG_FILE" && [[ $CONFIG_FILE_EXPLICIT -eq 1 || -n "${ROTATE_MV_KEY_CONFIG:-}" ]]; then
+    fail "No existe el archivo de configuracion indicado: $CONFIG_FILE"
+  fi
+fi
+
+HOST="${ROTATE_MV_KEY_HOST:-${MV_HOST:-}}"
+PORT="${ROTATE_MV_KEY_PORT:-${MV_PORT:-20381}}"
+USER_NAME="${ROTATE_MV_KEY_USER:-${MV_USER:-}}"
+REPO_SLUG="${ROTATE_MV_KEY_REPO_SLUG:-}"
+KEY_PATH="${ROTATE_MV_KEY_KEY_PATH:-$HOME/.ssh/id_ed25519_tfg_mv_actions_rotacion}"
+COMMENT="${ROTATE_MV_KEY_COMMENT:-github-actions-tfg-mv-rotacion-$(date +%Y%m%d-%H%M%S)}"
+BOOTSTRAP_IDENTITY="${ROTATE_MV_KEY_BOOTSTRAP_IDENTITY:-}"
+SECRET_NAME="${ROTATE_MV_KEY_SECRET_NAME:-MV_SSH_PRIVATE_KEY_B64}"
+WORKFLOW_NAME="${ROTATE_MV_KEY_WORKFLOW_NAME:-deploy-mv-lab.yml}"
+WORKFLOW_REF="${ROTATE_MV_KEY_WORKFLOW_REF:-develop}"
+WORKFLOW_INPUT_REF="${ROTATE_MV_KEY_WORKFLOW_INPUT_REF:-develop}"
+RETIRE_COMMENT="${ROTATE_MV_KEY_RETIRE_COMMENT:-}"
+DELETE_OLD_LOCAL_KEY="${ROTATE_MV_KEY_DELETE_OLD_LOCAL_KEY:-}"
 SKIP_GH_UPDATE=0
 SKIP_WORKFLOW_RERUN=0
 FORCE_OVERWRITE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --config)
+      shift 2
+      ;;
+    --no-config)
+      shift
+      ;;
     --host)
       HOST="$2"
       shift 2

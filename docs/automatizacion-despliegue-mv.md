@@ -170,6 +170,24 @@ Para rotar la clave SSH sin romper el workflow, haz el cambio con solape tempora
 
 La via recomendada es usar el script local [scripts/rotate-mv-deploy-key.sh](../scripts/rotate-mv-deploy-key.sh), que automatiza ese solape. Requiere ejecutarse en tu maquina local y disponer de `ssh`, `ssh-copy-id`, `base64` y, si quieres actualizar GitHub y relanzar el workflow automaticamente, tambien `gh` autenticado.
 
+Para no tener que pasar `host`, `port`, `user` y el resto de parametros cada vez, el script intenta cargar por defecto un archivo local ignorado por Git en `.deploy/rotate-mv-deploy-key.env`.
+
+Puedes prepararlo asi:
+
+```bash
+mkdir -p .deploy
+cp deploy/rotate-mv-deploy-key.env.example .deploy/rotate-mv-deploy-key.env
+chmod 600 .deploy/rotate-mv-deploy-key.env
+```
+
+Despues ajusta ese archivo con tus rutas locales reales. A partir de ahi, el uso habitual puede quedar reducido a:
+
+```bash
+./scripts/rotate-mv-deploy-key.sh
+```
+
+Si algun dia quieres usar otro archivo de configuracion, puedes pasarlo con `--config /ruta/al/archivo.env`. Si prefieres ignorar el archivo local y usar solo argumentos por CLI, usa `--no-config`.
+
 Ejemplo recomendado, asumiendo que la clave actual sigue en `~/.ssh/id_ed25519_tfg_mv_actions` y que quieres retirar la antigua cuando el workflow nuevo valide en verde:
 
 ```bash

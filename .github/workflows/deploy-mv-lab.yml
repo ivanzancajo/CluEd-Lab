@@ -40,9 +40,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Normalizar variables de despliegue
+        run: |
+          trim() {
+            printf '%s' "$1" | sed 's/\r$//' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//'
+          }
+
+          {
+            printf 'MV_HOST=%s\n' "$(trim "${MV_HOST:-}")"
+            printf 'MV_PORT=%s\n' "$(trim "${MV_PORT:-22}")"
+            printf 'MV_USER=%s\n' "$(trim "${MV_USER:-}")"
+            printf 'MV_REPO_PATH=%s\n' "$(trim "${MV_REPO_PATH:-}")"
+            printf 'DEPLOY_REF=%s\n' "$(trim "${DEPLOY_REF:-}")"
+          } >> "$GITHUB_ENV"
+
       - name: Validar configuracion minima
         run: |
           [[ -n "${MV_HOST:-}" ]] || { echo 'Falta la variable MV_HOST'; exit 1; }
+          [[ "$MV_HOST" != *[[:space:]]* ]] || { echo 'MV_HOST contiene espacios en blanco invalidos'; exit 1; }
           [[ -n "${MV_USER:-}" ]] || { echo 'Falta la variable MV_USER'; exit 1; }
           [[ -n "${MV_REPO_PATH:-}" ]] || { echo 'Falta la variable MV_REPO_PATH'; exit 1; }
           [[ -n "${{ secrets.MV_SSH_PRIVATE_KEY }}" ]] || { echo 'Falta el secreto MV_SSH_PRIVATE_KEY'; exit 1; }

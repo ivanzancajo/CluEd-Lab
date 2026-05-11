@@ -112,6 +112,8 @@ bash scripts/deploy-mv.sh
 
 GitHub Actions solo necesita la clave privada. La clave publica debe instalarse una vez en la MV dentro de `~/.ssh/authorized_keys` del usuario de despliegue.
 
+Genera esta clave en tu maquina local, no dentro de la MV. El workflow de GitHub necesita la clave privada local para guardarla como secreto `MV_SSH_PRIVATE_KEY`.
+
 Ejemplo de generacion local:
 
 ```bash
@@ -124,6 +126,10 @@ Luego anade el contenido de la clave publica en la MV:
 cat ~/.ssh/id_ed25519.pub >> /home/usuario/.ssh/authorized_keys
 chmod 600 /home/usuario/.ssh/authorized_keys
 ```
+
+La linea que copies a `authorized_keys` debe ser la clave publica completa, incluyendo el prefijo `ssh-ed25519` y el comentario final si existe. No copies solo el bloque Base64.
+
+Si por error generaste la clave dentro de la MV, no la reutilices moviendo la privada fuera de ella. Lo correcto es generar una nueva clave en tu maquina local y anadir su publica completa a `authorized_keys`.
 
 ## Variables y secretos en GitHub
 

@@ -71,6 +71,40 @@ export interface TeamMoveResult {
 
 export type TeamElementKind = 'SUJETO' | 'OBJETO' | 'ESPACIO';
 
+export interface SuggestionElement {
+  id: string;
+  kind: TeamElementKind;
+  name: string;
+  desc: string;
+  imageUrl?: string;
+  motif?: string;
+}
+
+export interface SuggestionSummary {
+  eventId: string;
+  emitterTeamId: string;
+  emitterTeamName: string;
+  emitterTeamColor: TeamColor;
+  receiverTeamId: string | null;
+  receiverTeamName: string | null;
+  receiverTeamColor: TeamColor | null;
+  occurredAt: string;
+  subject: SuggestionElement;
+  object: SuggestionElement;
+  space: SuggestionElement;
+}
+
+export type TeamPendingSuggestionState =
+  | {
+      type: 'AWAITING_REFUTATION';
+      suggestion: SuggestionSummary;
+    }
+  | {
+      type: 'REFUTE_REQUEST';
+      suggestion: SuggestionSummary;
+      matchingCards: SuggestionElement[];
+    };
+
 export interface TeamHandCard {
   id: string;
   kind: TeamElementKind;
@@ -90,6 +124,7 @@ export interface LobbySession {
   skin: GameConfig;
   teams: LobbyTeam[];
   turn: SessionTurn | null;
+  activeSuggestion: SuggestionSummary | null;
 }
 
 export interface JoinedLobbySession {
@@ -101,6 +136,7 @@ export interface TeamTerminalState {
   session: LobbySession;
   team: LobbyTeam;
   hand: TeamHandCard[];
+  pendingSuggestion: TeamPendingSuggestionState | null;
 }
 
 interface SessionResponse {
@@ -125,6 +161,12 @@ interface TeamRollResponse {
 
 interface MoveTeamResponse {
   item: TeamMoveResult;
+}
+
+interface TeamEndTurnResponse {
+  item: {
+    session: LobbySession;
+  };
 }
 
 interface SessionErrorResponse {
@@ -171,6 +213,11 @@ export async function moveTeam(accessCode: string, teamId: string, targetNodeId:
   const response = await api.post<MoveTeamResponse>(`/game/sessions/${accessCode}/teams/${teamId}/move`, {
     targetNodeId,
   });
+  return response.data.item;
+}
+
+export async function endTeamTurn(accessCode: string, teamId: string) {
+  const response = await api.post<TeamEndTurnResponse>(`/game/sessions/${accessCode}/teams/${teamId}/end-turn`);
   return response.data.item;
 }
 

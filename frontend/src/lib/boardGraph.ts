@@ -25,6 +25,22 @@ export const BOARD_MOVEMENT_NODE_PICK_RADIUS = {
   roomHeightPercent: 9.4,
 };
 
+export const BOARD_ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER = [
+  'sala-superior-izquierda',
+  'sala-superior-centro',
+  'sala-superior-derecha',
+  'sala-media-izquierda',
+  'sala-media-izquierda-inferior',
+  'sala-media-derecha',
+  'sala-inferior-izquierda',
+  'sala-inferior-centro',
+  'sala-inferior-derecha',
+] as const;
+
+const BOARD_ROOM_SPACE_SLOT_INDEX_BY_NODE_ID = Object.fromEntries(
+  BOARD_ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER.map((roomNodeId, index) => [roomNodeId, index])
+) as Record<(typeof BOARD_ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER)[number], number>;
+
 type BoardGridPoint = {
   col: number;
   row: number;
@@ -528,6 +544,10 @@ export function getSecretPassageDestinationNodeByRoomNodeId(nodeId: string) {
   return destinationRoomNodeId ? BOARD_MOVEMENT_NODES[destinationRoomNodeId] ?? null : null;
 }
 
+export function getBoardRoomSpaceSlotIndex(nodeId: string) {
+  return BOARD_ROOM_SPACE_SLOT_INDEX_BY_NODE_ID[nodeId as keyof typeof BOARD_ROOM_SPACE_SLOT_INDEX_BY_NODE_ID] ?? null;
+}
+
 export function findNearestBoardMovementNode(
   positionX: number,
   positionY: number,
@@ -775,7 +795,7 @@ function pruneExcludedSquareNodes(
 ) {
   const removedNodeIds = new Set(
     Object.entries(nodes)
-      .filter(([_nodeId, node]) =>
+      .filter(([, node]) =>
         node.kind === 'square' &&
         node.gridPosition &&
         EXCLUDED_SQUARE_GRID_KEYS.has(buildGridCellKey(node.gridPosition))

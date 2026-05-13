@@ -17,7 +17,7 @@ function createFakeAdminToken() {
   return `${header}.${payload}.signature`;
 }
 
-function mockSuccessfulAdminAccess(targetPath: "/config" | "/host") {
+function mockSuccessfulAdminAccess() {
   const token = createFakeAdminToken();
 
   cy.intercept("POST", "**/api/auth/login", (request) => {
@@ -36,12 +36,10 @@ function mockSuccessfulAdminAccess(targetPath: "/config" | "/host") {
     },
   }).as("sessionRequest");
 
-  if (targetPath === "/config") {
-    cy.intercept("GET", "**/api/config/skins", {
-      statusCode: 200,
-      body: { items: [] },
-    }).as("listSkinsRequest");
-  }
+  cy.intercept("GET", "**/api/config/skins", {
+    statusCode: 200,
+    body: { items: [] },
+  }).as("listSkinsRequest");
 
   return token;
 }
@@ -64,7 +62,7 @@ function submitAdminCredentials() {
 
 describe("CU00 autenticacion de Game Master", () => {
   it("redirige a configuracion tras un login valido", () => {
-    const token = mockSuccessfulAdminAccess("/config");
+    const token = mockSuccessfulAdminAccess();
 
     openProtectedLogin("config");
     submitAdminCredentials();
@@ -79,13 +77,14 @@ describe("CU00 autenticacion de Game Master", () => {
   });
 
   it("redirige a crear sesion tras un login valido", () => {
-    const token = mockSuccessfulAdminAccess("/host");
+    const token = mockSuccessfulAdminAccess();
 
     openProtectedLogin("host");
     submitAdminCredentials();
 
     cy.wait("@loginRequest");
     cy.wait("@sessionRequest");
+    cy.wait("@listSkinsRequest");
     cy.url().should("include", "/host");
     cy.contains("Habilitar Partida").should("be.visible");
     cy.window().then((window) => {

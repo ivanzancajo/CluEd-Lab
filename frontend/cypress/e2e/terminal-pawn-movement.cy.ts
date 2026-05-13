@@ -261,10 +261,10 @@ describe("movimiento de peones en terminal", () => {
 
     cy.wait("@getTeamState");
     cy.get('[data-cy="terminal-turn-indicator"]').should("contain.text", "MI TURNO");
-    cy.get('[data-cy="board-space-1"]').should("not.exist");
+    cy.get('[data-cy="board-space-1"]').should("contain", "Camara Anecoica");
     cy.get('[data-cy="board-pawn-rojo"]').should("exist");
     cy.get('[data-cy="board-pawn-azul"]').should("not.exist");
-    cy.contains("Pulsa Tirar dados para registrar la tirada del turno actual y desbloquear los destinos válidos en el tablero.").should("be.visible");
+    cy.contains("Sin movimiento activo").should("be.visible");
 
     cy.get('[data-cy="terminal-dice-roll"]').click({ force: true });
     cy.wait("@rollTeamDice");
@@ -275,7 +275,7 @@ describe("movimiento de peones en terminal", () => {
 
     clickBoardPercent("terminal-board-surface", 64.99, 23.17);
     cy.get('[data-cy="terminal-move-confirm-dialog"]').should("be.visible");
-    cy.contains("Vas a mover el peón hasta").should("be.visible");
+    cy.contains("Confirma para ejecutar el movimiento seleccionado.").should("be.visible");
 
     cy.intercept("POST", "**/api/game/sessions/MOVE01/teams/team-rojo/move", (req) => {
       expect(req.body).to.have.property("targetNodeId", "pasillo-superior-derecho");

@@ -124,6 +124,7 @@ model Partida {
   activeDiceValueOne Int?  @map("dado_activo_1")
   activeDiceValueTwo Int?  @map("dado_activo_2")
   activeDiceRemainingMoves Int? @map("pasos_mov_restantes")
+  activeSuggestionEventId String? @db.Uuid @map("id_evento_sugerencia_activa")
 
   skin       CluedoSkin? @relation(fields: [skinId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   solution   Solucion?   @relation(fields: [solutionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -133,6 +134,7 @@ model Partida {
 
   @@unique([accessCode], map: "partida_codigo_acceso_key")
   @@index([currentTurnTeamId], map: "partida_id_equipo_turno_actual_idx")
+  @@index([activeSuggestionEventId], map: "partida_id_evento_sugerencia_activa_idx")
   @@map("partida")
 }
 
@@ -216,5 +218,7 @@ model Evento {
   emitter          Equipo?             @relation("EventEmitter", fields: [emitterId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   receiver         Equipo?             @relation("EventReceiver", fields: [receiverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  @@index([partidaId, eventType, occurredAt], map: "evento_partida_tipo_timestamp_idx")
+  @@index([receiverId, occurredAt], map: "evento_receptor_timestamp_idx")
   @@map("evento")
 }

@@ -24,9 +24,13 @@ import {
 import { DiceAnimation } from "../DiceAnimation";
 import {
   createLobbySocketClient,
+  emitTeamRefutation,
   emitTeamSecretPassage,
+  emitTeamSuggestion,
   emitTeamHeartbeat,
   subscribeTeamToLobby,
+  type GameRefuteRequestPayload,
+  type GameRefutationResultPayload,
   type GameStatusChangedPayload,
   type GameStartedPayload,
   type LobbySocketClient,
@@ -34,11 +38,12 @@ import {
 } from "../../src/lib/lobbySocket";
 import {
   findNearestBoardMovementNode,
+  getBoardRoomSpaceSlotIndex,
   getRoomEntryNodeByDoorNodeId,
   getSecretPassageDestinationNodeByRoomNodeId,
   type BoardMovementNode,
 } from "../../src/lib/boardMovement";
-import { BOARD_CENTER_IMAGE_BOUNDS, mapBoardSpaces, readStoredBoardTheme, toBoardPercent, type StoredBoardTheme } from "../../src/lib/boardTheme";
+import { BOARD_CENTER_IMAGE_BOUNDS, BOARD_SPACE_SLOTS, mapBoardSpaces, readStoredBoardTheme, toBoardPercent, type StoredBoardTheme } from "../../src/lib/boardTheme";
 import {
   buildBoardDebugProbe,
   getStoredBoardDebugMode,
@@ -57,6 +62,7 @@ import {
 import { TEAM_HEARTBEAT_INTERVAL_MS } from "../../src/lib/teamMonitoring";
 import { getTeamMeta } from "../../src/lib/teamMeta";
 import {
+  endTeamTurn,
   getSessionErrorMessage,
   getTeamMoveState,
   getTeamTerminalState,
@@ -64,9 +70,12 @@ import {
   rollTeamDice,
   type LobbySession,
   type SessionStatus,
+  type SuggestionSummary,
   type TeamColor,
   type TeamHandCard,
   type TeamMoveNode,
+  type TeamPendingSuggestionState,
+  type TeamTerminalState as SessionTerminalState,
 } from "../../src/lib/sessionApi";
 import { ThemedBoard } from "../game/ThemedBoard";
 import {
@@ -79,8 +88,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
+import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 
 interface ElementoItem {
+  id: string;
   name: string;
   desc: string;
   avatar: React.ReactNode;
@@ -96,6 +107,8 @@ interface RawItem {
   motif?: string;
   imageUrl?: string;
 }
+
+type DeductionMode = "hypothesis" | "final-accusation";
 
 interface GameConfig {
   id: string;
@@ -195,6 +208,41 @@ function mapHandCardToTerminalCard(card: TeamHandCard, config: GameConfig): Term
   };
 }
 
+function resolveCurrentTeamBoardNode(teams: LobbySession["teams"], teamId: string | null) {
+  if (!teamId) {
+    return null;
+  }
+
+  const currentTeam = teams.find((team) => team.id === teamId);
+  if (!currentTeam) {
+    return null;
+  }
+
+  return findNearestBoardMovementNode(currentTeam.positionX, currentTeam.positionY);
+}
+
+function mergePublicCurrentMoveNode(
+  previousNode: TeamMoveNode | null,
+  teams: BoardTeamState[],
+  teamId: string | null
+): TeamMoveNode | null {
+  const resolvedNode = resolveCurrentTeamBoardNode(teams, teamId);
+
+  if (!previousNode) {
+    return resolvedNode;
+  }
+
+  if (previousNode.kind === "room" && resolvedNode?.kind !== "room") {
+    return previousNode;
+  }
+
+  return resolvedNode;
+}
+
+function buildSuggestionSentence(suggestion: SuggestionSummary) {
+  return `${suggestion.subject.name} con ${suggestion.object.name} en ${suggestion.space.name}`;
+}
+
 export function TerminalView() {
   const navigate = useNavigate();
   const lobbySocketRef = React.useRef<LobbySocketClient | null>(null);
@@ -222,15 +270,27 @@ export function TerminalView() {
   const [isMovingPawn, setIsMovingPawn] = useState(false);
   const [isEmittingSecretPassage, setIsEmittingSecretPassage] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [activeSuggestion, setActiveSuggestion] = useState<SuggestionSummary | null>(null);
+  const [pendingSuggestion, setPendingSuggestion] = useState<TeamPendingSuggestionState | null>(null);
+  const [selectedSubjectId, setSelectedSubjectId] = useState("");
+  const [selectedObjectId, setSelectedObjectId] = useState("");
+  const [selectedRefuteCardId, setSelectedRefuteCardId] = useState("");
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
+  const [suggestionNotice, setSuggestionNotice] = useState<string | null>(null);
+  const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
+  const [isSubmittingRefutation, setIsSubmittingRefutation] = useState(false);
+  const [isEndingTurn, setIsEndingTurn] = useState(false);
+  const [refutationResult, setRefutationResult] = useState<GameRefutationResultPayload | null>(null);
+  const [deductionMode, setDeductionMode] = useState<DeductionMode>("hypothesis");
   
   const [categories, setCategories] = useState<{
     c1: ElementoItem[];
     c2: ElementoItem[];
     c3: ElementoItem[];
   }>({
-    c1: CATEGORIES.sujetos.map(s => ({ ...s, desc: "Descripción", motif: "" })),
-    c2: CATEGORIES.objetos.map(o => ({ ...o, desc: "Descripción", motif: "" })),
-    c3: CATEGORIES.espacios.map(e => ({ ...e, desc: "Descripción", motif: "" }))
+    c1: CATEGORIES.sujetos.map((s) => ({ id: s.name, ...s, desc: "Descripción", motif: "" })),
+    c2: CATEGORIES.objetos.map((o) => ({ id: o.name, ...o, desc: "Descripción", motif: "" })),
+    c3: CATEGORIES.espacios.map((e) => ({ id: e.name, ...e, desc: "Descripción", motif: "" }))
   });
   const [catNames, setCatNames] = useState({ c1: "Sujetos", c2: "Objetos", c3: "Espacios" });
 
@@ -240,18 +300,6 @@ export function TerminalView() {
 
   const [selectedCard, setSelectedCard] = useState<TerminalCard | null>(null);
   const [cardFlipped, setCardFlipped] = useState(false);
-  const [suggestMode, setSuggestMode] = useState("hipotesis");
-  
-  // Mock room for locking hypothesis
-  const currentRoomMock = "Cámara Anecoica";
-  const [selectedRoom, setSelectedRoom] = useState(currentRoomMock);
-
-  // Fetch active config and map to Terminal's internal state
-  React.useEffect(() => {
-    if (suggestMode === "hipotesis") {
-      setSelectedRoom(currentRoomMock);
-    }
-  }, [suggestMode, currentRoomMock]);
 
   const applyRealtimeSession = (session: LobbySession, currentTeam: LobbySession["teams"][number]) => {
     storeJoinedLobbySession({ session, team: currentTeam });
@@ -260,14 +308,45 @@ export function TerminalView() {
     setSessionStatus(session.status);
     setBoardTeams(session.teams);
     setSessionTurn(session.turn);
+    setActiveSuggestion(session.activeSuggestion);
+    setCurrentMoveNode((previousNode) => mergePublicCurrentMoveNode(previousNode, session.teams, currentTeam.id));
     setLobbyError(null);
   };
+
+  const applyTerminalState = (state: SessionTerminalState) => {
+    const sessionConfig = state.session.skin as unknown as GameConfig;
+
+    storeJoinedLobbySession({ session: state.session, team: state.team });
+    applyGameConfig(sessionConfig);
+    setBoardTeams(state.session.teams);
+    setTeamName(state.team.name);
+    setTeamColor(state.team.color);
+    setSessionStatus(state.session.status);
+    setSessionTurn(state.session.turn);
+    setActiveSuggestion(state.session.activeSuggestion);
+    setPendingSuggestion(state.pendingSuggestion);
+    setCurrentMoveNode((previousNode) => mergePublicCurrentMoveNode(previousNode, state.session.teams, state.team.id));
+    setTeamHand(state.hand.map((card) => mapHandCardToTerminalCard(card, sessionConfig)));
+  };
+
+  const refreshTerminalState = React.useEffectEvent(async () => {
+    const accessCode = getStoredSessionCode();
+    const teamId = getStoredTeamId();
+
+    if (!accessCode || !teamId || sessionStatus === "LOBBY") {
+      return null;
+    }
+
+    const state = await getTeamTerminalState(accessCode, teamId);
+    applyTerminalState(state);
+    return state;
+  });
 
   const refreshMoveState = React.useEffectEvent(async () => {
     const accessCode = getStoredSessionCode();
     const teamId = getStoredTeamId();
 
-    if (!accessCode || !teamId || sessionStatus !== "EN_CURSO" || !isMyTurn) {
+    if (!accessCode || !teamId || sessionStatus !== "EN_CURSO" || !isMyTurn || activeSuggestion || pendingSuggestion) {
       setDestinationNodes([]);
       setSelectedDestinationNodeId("");
       setIsMoveConfirmOpen(false);
@@ -299,6 +378,10 @@ export function TerminalView() {
 
     if (!accessCode || !teamId || sessionStatus !== "EN_CURSO" || !isMyTurn) {
       throw new Error("El turno actual no permite lanzar los dados desde este terminal.");
+    }
+
+    if (activeSuggestion || pendingSuggestion) {
+      throw new Error("Hay una sugerencia pendiente de resolver antes de volver a mover el peón.");
     }
 
     setDestinationNodes([]);
@@ -365,6 +448,11 @@ export function TerminalView() {
 
     if (!isMyTurn) {
       setMoveError("Ahora mismo no puedes mover este peón porque no es tu turno.");
+      return;
+    }
+
+    if (activeSuggestion || pendingSuggestion) {
+      setMoveError("La partida está bloqueada hasta que se resuelva la sugerencia activa.");
       return;
     }
 
@@ -498,11 +586,13 @@ export function TerminalView() {
   };
 
   const handleEmitSecretPassage = async () => {
-    if (!currentMoveNode || currentMoveNode.kind !== "room") {
+    const activeTerminalNode = currentMoveNode ?? resolveCurrentTeamBoardNode(boardTeams, storedTeamId);
+
+    if (!activeTerminalNode || activeTerminalNode.kind !== "room") {
       return;
     }
 
-    const destinationRoomNode = getSecretPassageDestinationNodeByRoomNodeId(currentMoveNode.id);
+    const destinationRoomNode = getSecretPassageDestinationNodeByRoomNodeId(activeTerminalNode.id);
     const socket = lobbySocketRef.current;
 
     if (!destinationRoomNode || !socket) {
@@ -513,7 +603,7 @@ export function TerminalView() {
     setIsEmittingSecretPassage(true);
 
     try {
-      const response = await emitTeamSecretPassage(socket, currentMoveNode.id, destinationRoomNode.id);
+      const response = await emitTeamSecretPassage(socket, activeTerminalNode.id, destinationRoomNode.id);
       if (!response.ok) {
         setMoveError(response.error);
         return;
@@ -529,6 +619,121 @@ export function TerminalView() {
     }
   };
 
+  const handleSubmitSuggestion = async () => {
+    const socket = lobbySocketRef.current;
+    const currentRoomNode = currentMoveNode ?? resolveCurrentTeamBoardNode(boardTeams, storedTeamId);
+
+    if (!socket || !selectedSubjectId || !selectedObjectId || !currentRoomNode || currentRoomNode.kind !== "room") {
+      return;
+    }
+
+    const roomSpaceSlotIndex = getBoardRoomSpaceSlotIndex(currentRoomNode.id);
+    const currentRoomSpace = roomSpaceSlotIndex === null ? null : categories.c3[roomSpaceSlotIndex] ?? null;
+
+    if (!currentRoomSpace) {
+      setSuggestionError("No se ha podido identificar el espacio asociado a la sala actual.");
+      return;
+    }
+
+    setSuggestionError(null);
+    setSuggestionNotice(null);
+    setRefutationResult(null);
+    setIsSubmittingSuggestion(true);
+
+    try {
+      const response = await emitTeamSuggestion(socket, {
+        subjectElementId: selectedSubjectId,
+        objectElementId: selectedObjectId,
+        spaceElementId: currentRoomSpace.id,
+      });
+
+      if (!response.ok) {
+        setSuggestionError(response.error);
+        return;
+      }
+
+      setSelectedSubjectId("");
+      setSelectedObjectId("");
+      setSuggestionNotice(
+        response.status === "waiting-refutation"
+          ? "Sugerencia registrada. Esperando la respuesta privada del equipo refutador."
+          : "Sugerencia registrada. Nadie ha podido refutarla."
+      );
+
+      const refreshedState = await refreshTerminalState();
+      if (refreshedState?.pendingSuggestion?.type === "AWAITING_REFUTATION") {
+        setPendingSuggestion(refreshedState.pendingSuggestion);
+      }
+    } catch {
+      setSuggestionError("No se ha podido registrar la sugerencia desde este terminal.");
+    } finally {
+      setIsSubmittingSuggestion(false);
+    }
+  };
+
+  const handleSubmitRefutation = async () => {
+    const socket = lobbySocketRef.current;
+
+    if (!socket || !selectedRefuteCardId) {
+      return;
+    }
+
+    setSuggestionError(null);
+    setSuggestionNotice(null);
+    setIsSubmittingRefutation(true);
+
+    try {
+      const response = await emitTeamRefutation(socket, selectedRefuteCardId);
+      if (!response.ok) {
+        setSuggestionError(response.error);
+        return;
+      }
+
+      setPendingSuggestion(null);
+      setSelectedRefuteCardId("");
+      setSuggestionNotice("Carta mostrada. Solo el equipo sugerente verá cuál ha sido.");
+      await refreshTerminalState();
+    } catch {
+      setSuggestionError("No se ha podido completar la refutación privada.");
+    } finally {
+      setIsSubmittingRefutation(false);
+    }
+  };
+
+  const handleEndTurnFromRoom = async () => {
+    const accessCode = getStoredSessionCode();
+    const teamId = getStoredTeamId();
+
+    if (!accessCode || !teamId) {
+      return;
+    }
+
+    setSuggestionError(null);
+    setSuggestionNotice(null);
+    setIsEndingTurn(true);
+
+    try {
+      const result = await endTeamTurn(accessCode, teamId);
+      const currentTeam = result.session.teams.find((team) => team.id === teamId);
+
+      setPendingSuggestion(null);
+      setActiveSuggestion(result.session.activeSuggestion);
+      setDestinationNodes([]);
+      setSelectedDestinationNodeId("");
+      setDiceResetSignal((previousValue) => previousValue + 1);
+
+      if (currentTeam) {
+        applyRealtimeSession(result.session, currentTeam);
+      }
+
+      setSuggestionNotice("Turno cerrado sin lanzar sugerencia.");
+    } catch (error) {
+      setSuggestionError(getSessionErrorMessage(error, "No se ha podido cerrar el turno desde la sala actual."));
+    } finally {
+      setIsEndingTurn(false);
+    }
+  };
+
   const applyGameConfig = (config: GameConfig) => {
     setBoardTheme(config);
     setCatNames({
@@ -540,6 +745,7 @@ export function TerminalView() {
     const showMotifs = config.hasMotifs === true;
     const mapItems = (items: RawItem[], defaultIcon: React.ReactNode, defaultColor: string): ElementoItem[] => {
       return items.map((item) => ({
+        id: item.id,
         name: item.name,
         desc: item.desc,
         motif: showMotifs ? item.motif : undefined,
@@ -591,21 +797,11 @@ export function TerminalView() {
     setIsLoadingHand(true);
     setHandError(null);
 
-    getTeamTerminalState(accessCode, teamId)
+    refreshTerminalState()
       .then((state) => {
-        if (!active) {
+        if (!active || !state) {
           return;
         }
-
-        const sessionConfig = state.session.skin as unknown as GameConfig;
-        storeJoinedLobbySession({ session: state.session, team: state.team });
-        applyGameConfig(sessionConfig);
-        setBoardTeams(state.session.teams);
-        setTeamName(state.team.name);
-        setTeamColor(state.team.color);
-        setSessionStatus(state.session.status);
-        setSessionTurn(state.session.turn);
-        setTeamHand(state.hand.map((card) => mapHandCardToTerminalCard(card, sessionConfig)));
       })
       .catch((error) => {
         if (!active) {
@@ -685,6 +881,8 @@ export function TerminalView() {
       setTeamColor(currentTeam.color);
       setSessionStatus(state.status);
       setSessionTurn(state.turn);
+      setActiveSuggestion(state.activeSuggestion);
+      setCurrentMoveNode((previousNode) => mergePublicCurrentMoveNode(previousNode, state.teams, currentTeam.id));
       setLobbyConnectionStatus(currentTeam.connected ? "connected" : "disconnected");
     };
 
@@ -700,6 +898,34 @@ export function TerminalView() {
       applyRealtimeSession(payload.session, currentTeam);
       setLobbyConnectionStatus("connected");
       setMoveError(payload.status === "PAUSADA" ? "La partida esta pausada por el Game Master." : null);
+    };
+
+    const handleRefuteRequest = (payload: GameRefuteRequestPayload) => {
+      setPendingSuggestion({
+        type: "REFUTE_REQUEST",
+        suggestion: payload.suggestion,
+        matchingCards: payload.matchingCards,
+      });
+      setActiveSuggestion(payload.suggestion);
+      setSelectedRefuteCardId(payload.matchingCards[0]?.id ?? "");
+      setSuggestionError(null);
+      setSuggestionNotice("Selecciona una carta para refutar en privado.");
+      setRefutationResult(null);
+      setActiveTab("suggest");
+    };
+
+    const handleRefutationResult = (payload: GameRefutationResultPayload) => {
+      setPendingSuggestion(null);
+      setActiveSuggestion(null);
+      setRefutationResult(payload);
+      setSuggestionError(null);
+      setSuggestionNotice(
+        payload.outcome === "REFUTED"
+          ? `${payload.shownByTeamName ?? "Un equipo"} ha mostrado ${payload.shownCard?.name ?? "una carta"}.`
+          : "Nadie ha podido refutar tu sugerencia."
+      );
+      setActiveTab("suggest");
+      void refreshTerminalState();
     };
 
     socket.on("connect", async () => {
@@ -721,6 +947,8 @@ export function TerminalView() {
     socket.on("lobby:presence-updated", applyPresenceState);
     socket.on("gameStarted", applyGameStarted);
     socket.on("game:status-changed", applyGameStatusChanged);
+    socket.on("game:refute-request", handleRefuteRequest);
+    socket.on("game:refutation-result", handleRefutationResult);
     socket.on("disconnect", () => {
       isSubscribed = false;
       setLobbyConnectionStatus("disconnected");
@@ -741,7 +969,7 @@ export function TerminalView() {
   }, [navigate]);
 
   React.useEffect(() => {
-    if (!isMyTurn || activeTab !== "map" || sessionStatus !== "EN_CURSO") {
+    if (!isMyTurn || activeSuggestion || pendingSuggestion || activeTab !== "map" || sessionStatus !== "EN_CURSO") {
       setDestinationNodes([]);
       setSelectedDestinationNodeId("");
       setIsMoveConfirmOpen(false);
@@ -762,16 +990,43 @@ export function TerminalView() {
       setIsLoadingMoves(false);
       setDiceResetSignal((previousValue) => previousValue + 1);
     }
-  }, [activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
+  }, [activeSuggestion, activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, pendingSuggestion, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
 
   // Carga la posición actual del equipo al inicio del turno (dado=null) para detectar sala esquina
   React.useEffect(() => {
-    if (!isMyTurn || sessionStatus !== "EN_CURSO" || sessionTurn?.dice !== null) {
+    if (!isMyTurn || activeSuggestion || pendingSuggestion || sessionStatus !== "EN_CURSO" || sessionTurn?.dice !== null) {
       return;
     }
     void refreshMoveState();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMyTurn, sessionStatus, sessionTurn?.currentTeamId]);
+  }, [activeSuggestion, isMyTurn, pendingSuggestion, sessionStatus, sessionTurn?.currentTeamId]);
+
+  React.useEffect(() => {
+    if (pendingSuggestion?.type === "REFUTE_REQUEST") {
+      setSelectedRefuteCardId((currentValue) => {
+        if (pendingSuggestion.matchingCards.some((card) => card.id === currentValue)) {
+          return currentValue;
+        }
+
+        return pendingSuggestion.matchingCards[0]?.id ?? "";
+      });
+      return;
+    }
+
+    setSelectedRefuteCardId("");
+  }, [pendingSuggestion]);
+
+  React.useEffect(() => {
+    if (selectedSubjectId && !categories.c1.some((item) => item.id === selectedSubjectId)) {
+      setSelectedSubjectId("");
+    }
+  }, [categories.c1, selectedSubjectId]);
+
+  React.useEffect(() => {
+    if (selectedObjectId && !categories.c2.some((item) => item.id === selectedObjectId)) {
+      setSelectedObjectId("");
+    }
+  }, [categories.c2, selectedObjectId]);
 
   const currentTeamMeta = teamColor ? getTeamMeta(teamColor) : null;
   const sessionStatusLabel =
@@ -819,20 +1074,23 @@ export function TerminalView() {
       isCurrent: true,
     }));
   const selectedDestinationNode = destinationNodes.find((node) => node.id === selectedDestinationNodeId) ?? null;
-  const secretPassageDestinationNode = currentMoveNode?.kind === "room"
-    ? getSecretPassageDestinationNodeByRoomNodeId(currentMoveNode.id)
+  const resolvedCurrentMoveNode = currentMoveNode ?? resolveCurrentTeamBoardNode(boardTeams, storedTeamId);
+  const secretPassageDestinationNode = resolvedCurrentMoveNode?.kind === "room"
+    ? getSecretPassageDestinationNodeByRoomNodeId(resolvedCurrentMoveNode.id)
     : null;
   const canEmitSecretPassageEvent =
     sessionStatus === "EN_CURSO" &&
     isMyTurn &&
     sessionTurn?.dice === null &&
-    currentMoveNode?.kind === "room" &&
+    resolvedCurrentMoveNode?.kind === "room" &&
+    !activeSuggestion &&
+    !pendingSuggestion &&
     Boolean(secretPassageDestinationNode) &&
     lobbyConnectionStatus === "connected";
-  const selectedDestinationRoomNode = currentMoveNode?.kind !== "room" && selectedDestinationNode
+  const selectedDestinationRoomNode = resolvedCurrentMoveNode?.kind !== "room" && selectedDestinationNode
     ? getRoomEntryNodeByDoorNodeId(selectedDestinationNode.id)
     : null;
-  const boardDebugHighlightedNodeIds = [currentMoveNode?.id, selectedDestinationNode?.id, selectedDestinationRoomNode?.id].filter(
+  const boardDebugHighlightedNodeIds = [resolvedCurrentMoveNode?.id, selectedDestinationNode?.id, selectedDestinationRoomNode?.id].filter(
     (nodeId): nodeId is string => Boolean(nodeId)
   );
   const currentTurnLabel = sessionTurn?.currentTeamName ?? "Sin turno activo";
@@ -842,6 +1100,100 @@ export function TerminalView() {
   const currentTurnRemainingLabel = currentTurnRemainingMoves === null
     ? "Sin movimiento activo"
     : `Alcance de tirada: ${currentTurnRemainingMoves}`;
+  const currentRoomSpaceSlotIndex = resolvedCurrentMoveNode?.kind === "room" ? getBoardRoomSpaceSlotIndex(resolvedCurrentMoveNode.id) : null;
+  const currentRoomSpace = currentRoomSpaceSlotIndex === null ? null : categories.c3[currentRoomSpaceSlotIndex] ?? null;
+  const selectedSubject = categories.c1.find((item) => item.id === selectedSubjectId) ?? null;
+  const selectedObject = categories.c2.find((item) => item.id === selectedObjectId) ?? null;
+  const refuteRequest = pendingSuggestion?.type === "REFUTE_REQUEST" ? pendingSuggestion : null;
+  const awaitingRefutation = pendingSuggestion?.type === "AWAITING_REFUTATION" ? pendingSuggestion : null;
+  const canUseRealtimeSuggestion = lobbyConnectionStatus === "connected" && Boolean(lobbySocketRef.current);
+  const canComposeSuggestion =
+    sessionStatus === "EN_CURSO" &&
+    isMyTurn &&
+    resolvedCurrentMoveNode?.kind === "room" &&
+    sessionTurn?.dice === null &&
+    !activeSuggestion &&
+    !pendingSuggestion;
+  const suggestionPreview = currentRoomSpace && selectedSubject && selectedObject
+    ? {
+        subject: selectedSubject,
+        object: selectedObject,
+        space: currentRoomSpace,
+      }
+    : null;
+  const isFinalAccusationMode = deductionMode === "final-accusation";
+  const selectedRefuteCard = refuteRequest?.matchingCards.find((card) => card.id === selectedRefuteCardId) ?? null;
+  const mapDeductionSuggestion = refuteRequest?.suggestion ?? awaitingRefutation?.suggestion ?? activeSuggestion ?? refutationResult?.suggestion ?? null;
+  const mapDeductionSpaceIndex = mapDeductionSuggestion
+    ? boardSpaces.findIndex((space) => space.id === mapDeductionSuggestion.space.id)
+    : -1;
+  const mapDeductionSlot = mapDeductionSpaceIndex >= 0 ? BOARD_SPACE_SLOTS[mapDeductionSpaceIndex] ?? null : null;
+  const mapDeductionState = refuteRequest
+    ? {
+        title: "Refuta",
+        subtitle: refuteRequest.suggestion.space.name,
+        chip: "Privado",
+        tone: "border-red-700/70 bg-red-950/45 text-red-100",
+        glow: "bg-red-500/20",
+        ring: "border-red-400/80",
+        icon: <Shield className="h-4 w-4 text-red-200" />,
+      }
+    : awaitingRefutation
+    ? {
+        title: "Hipotesis",
+        subtitle: "En refutacion",
+        chip: awaitingRefutation.suggestion.receiverTeamName ?? "En curso",
+        tone: "border-amber-700/70 bg-amber-950/45 text-amber-100",
+        glow: "bg-amber-400/20",
+        ring: "border-amber-300/80",
+        icon: <MessageSquare className="h-4 w-4 text-amber-100" />,
+      }
+    : activeSuggestion
+    ? {
+        title: "Hipotesis",
+        subtitle: activeSuggestion.space.name,
+        chip: activeSuggestion.receiverTeamName ? "Refutacion" : "En mesa",
+        tone: "border-cyan-700/70 bg-cyan-950/45 text-cyan-100",
+        glow: "bg-cyan-400/20",
+        ring: "border-cyan-300/80",
+        icon: <MessageSquare className="h-4 w-4 text-cyan-100" />,
+      }
+    : refutationResult
+    ? {
+        title: refutationResult.outcome === "REFUTED" ? "Refutada" : "Sin refutar",
+        subtitle: refutationResult.suggestion.space.name,
+        chip: refutationResult.outcome === "REFUTED" ? (refutationResult.shownByTeamName ?? "Carta mostrada") : "Mesa limpia",
+        tone: refutationResult.outcome === "REFUTED"
+          ? "border-emerald-700/70 bg-emerald-950/45 text-emerald-100"
+          : "border-fuchsia-700/70 bg-fuchsia-950/45 text-fuchsia-100",
+        glow: refutationResult.outcome === "REFUTED" ? "bg-emerald-400/20" : "bg-fuchsia-400/20",
+        ring: refutationResult.outcome === "REFUTED" ? "border-emerald-300/80" : "border-fuchsia-300/80",
+        icon: refutationResult.outcome === "REFUTED"
+          ? <Shield className="h-4 w-4 text-emerald-100" />
+          : <Crosshair className="h-4 w-4 text-fuchsia-100" />,
+      }
+    : null;
+  const suggestionPanelMessage =
+    sessionStatus !== "EN_CURSO"
+      ? "La partida debe estar en curso para abrir un canal de sugerencia."
+      : !isMyTurn
+      ? `Ahora mismo juega ${currentTurnLabel}. El canal se activará cuando llegue tu turno.`
+      : resolvedCurrentMoveNode?.kind !== "room"
+      ? "Muévete a una sala del tablero para poder lanzar una sugerencia." 
+      : sessionTurn?.dice !== null
+      ? "Completa primero el movimiento del peón antes de sugerir desde la sala." 
+      : activeSuggestion
+      ? `Hay una sugerencia activa en mesa: ${buildSuggestionSentence(activeSuggestion)}.`
+      : !canUseRealtimeSuggestion
+      ? "El canal privado de refutación se está reconectando."
+      : "Selecciona un sujeto y un objeto para lanzar la sugerencia desde tu sala actual.";
+  const topStatusMessage = activeSuggestion
+    ? `Sugerencia activa: ${buildSuggestionSentence(activeSuggestion)}${activeSuggestion.receiverTeamName ? `. Esperando refutación de ${activeSuggestion.receiverTeamName}.` : "."}`
+    : sessionStatus === "EN_CURSO"
+    ? `Turno actual: ${currentTurnLabel}. ${sessionTurn?.dice ? `Dados ${currentTurnDiceLabel}. ${currentTurnRemainingLabel}.` : "Sin tirada activa."}`
+    : sessionStatus === "PAUSADA"
+    ? "Partida pausada por el Game Master. Esperando reanudacion."
+    : "Esperando a que el Game Master inicie la partida.";
 
   return (
     <div className="flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#020617] text-cyan-400 font-mono relative overflow-hidden shadow-2xl border-x border-slate-900">
@@ -871,11 +1223,7 @@ export function TerminalView() {
 
       {!lobbyError ? (
         <div data-cy="terminal-lobby-status-banner" className="px-4 py-2 bg-cyan-950/30 border-b border-cyan-900/50 text-[11px] text-cyan-100 uppercase tracking-[0.22em]">
-          {sessionStatus === "EN_CURSO"
-            ? `Turno actual: ${currentTurnLabel}. ${sessionTurn?.dice ? `Dados ${currentTurnDiceLabel}. ${currentTurnRemainingLabel}.` : "Sin tirada activa."}`
-            : sessionStatus === "PAUSADA"
-            ? "Partida pausada por el Game Master. Esperando reanudacion."
-            : "Esperando a que el Game Master inicie la partida."}
+          {topStatusMessage}
         </div>
       ) : null}
 
@@ -920,6 +1268,46 @@ export function TerminalView() {
                    boardImageAlt="Mapa temático de la partida"
                    dataCy="terminal-themed-board"
                  >
+                   {mapDeductionState && mapDeductionSlot ? (
+                     <>
+                       <div
+                         data-cy="terminal-map-deduction-focus"
+                         className="pointer-events-none absolute z-[26] -translate-x-1/2 -translate-y-1/2"
+                         style={{
+                           left: toBoardPercent(mapDeductionSlot.positionX),
+                           top: toBoardPercent(mapDeductionSlot.positionY),
+                         }}
+                       >
+                         <span className={`absolute inset-[-32%] rounded-full ${mapDeductionState.glow} blur-xl`} />
+                         <span className={`absolute inset-[-20%] rounded-full ${mapDeductionState.ring} animate-ping border`} />
+                         <span className={`absolute inset-[-10%] rounded-full ${mapDeductionState.ring} border opacity-80`} />
+                         <div className={`relative flex h-10 w-10 items-center justify-center rounded-full border bg-slate-950/90 shadow-[0_0_22px_rgba(2,6,23,0.5)] ${mapDeductionState.ring}`}>
+                           {mapDeductionState.icon}
+                         </div>
+                       </div>
+
+                       <div
+                         data-cy="terminal-map-deduction-activity"
+                         className={`pointer-events-none absolute bottom-3 left-3 z-[27] min-w-[10.5rem] rounded-2xl border px-3 py-2 shadow-[0_12px_28px_rgba(2,6,23,0.45)] backdrop-blur-md ${mapDeductionState.tone}`}
+                       >
+                         <div className="flex items-center justify-between gap-3">
+                           <div className="flex items-center gap-2">
+                             <div className="rounded-full border border-white/10 bg-slate-950/55 p-1.5">
+                               {mapDeductionState.icon}
+                             </div>
+                             <div>
+                               <p className="text-[10px] font-black uppercase tracking-[0.22em]">{mapDeductionState.title}</p>
+                               <p className="text-[11px] text-white">{mapDeductionState.subtitle}</p>
+                             </div>
+                           </div>
+                           <span className="rounded-full border border-white/10 bg-slate-950/55 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.18em] text-white/90">
+                             {mapDeductionState.chip}
+                           </span>
+                         </div>
+                       </div>
+                     </>
+                   ) : null}
+
                    {sessionStatus === "EN_CURSO" ? (
                      <div
                        data-cy="terminal-board-surface"
@@ -1256,70 +1644,395 @@ export function TerminalView() {
             <motion.div 
               key="suggest"
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-              className="p-4 pb-24 flex flex-col gap-6"
+              className="p-4 pb-24 flex flex-col gap-4 bg-[radial-gradient(circle_at_top,_rgba(6,182,212,0.16),_transparent_34%),linear-gradient(180deg,_rgba(8,47,73,0.18),_rgba(2,6,23,0.96)_72%)]"
             >
-              <div className="bg-slate-900/80 border border-cyan-900/50 rounded-xl p-6 shadow-lg shadow-black flex flex-col gap-6">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                  <div className="flex items-center gap-3">
-                    <Cpu className="w-5 h-5 text-emerald-400" />
-                    <h3 className="text-sm font-bold tracking-widest uppercase text-emerald-400">Lanzar</h3>
+              <div data-cy="terminal-suggest-panel" className="relative overflow-hidden rounded-[28px] border border-cyan-900/50 bg-slate-950/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                <div className="absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.18),_transparent_70%)]" />
+                <div className="relative flex flex-col gap-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="inline-flex items-center gap-2 rounded-full border border-cyan-900/60 bg-cyan-950/20 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-200">
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        Canal de deduccion
+                      </div>
+                      <h3 className="mt-3 text-lg font-black uppercase tracking-[0.2em] text-emerald-300">
+                        Sugerencia y refutacion
+                      </h3>
+                    </div>
+
+                    <div className={`shrink-0 rounded-2xl border px-3 py-2 text-right text-[10px] font-bold uppercase tracking-[0.22em] ${
+                      refuteRequest
+                        ? "border-red-700/70 bg-red-950/40 text-red-100"
+                        : awaitingRefutation || activeSuggestion
+                        ? "border-amber-700/70 bg-amber-950/35 text-amber-100"
+                        : canComposeSuggestion
+                        ? "border-emerald-700/70 bg-emerald-950/35 text-emerald-100"
+                        : "border-slate-700 bg-slate-900/70 text-slate-400"
+                    }`}>
+                      {refuteRequest
+                        ? "Refuta ahora"
+                        : awaitingRefutation
+                        ? "Esperando carta"
+                        : activeSuggestion
+                        ? "Mesa bloqueada"
+                        : canComposeSuggestion
+                        ? "Sala lista"
+                        : "Canal en espera"}
+                    </div>
                   </div>
-                  <select 
-                    value={suggestMode}
-                    onChange={(e) => setSuggestMode(e.target.value)}
-                    className="bg-slate-950 border border-cyan-900/50 rounded p-1 text-[10px] text-cyan-400 outline-none focus:border-cyan-500 font-bold uppercase tracking-widest"
-                  >
-                    <option value="hipotesis">Hipótesis</option>
-                    <option value="acusacion">Acusación Final</option>
-                  </select>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl border border-cyan-900/50 bg-cyan-950/20 p-3">
+                      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-300">
+                        <MapPin className="h-3.5 w-3.5" />
+                        Sala actual
+                      </div>
+                      <p className="mt-2 text-sm font-semibold text-white">{currentRoomSpace?.name ?? resolvedCurrentMoveNode?.label ?? "Sin sala activa"}</p>
+                    </div>
+                    <div className="rounded-2xl border border-emerald-900/50 bg-emerald-950/20 p-3">
+                      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-300">
+                        <Shield className="h-3.5 w-3.5" />
+                        Turno
+                      </div>
+                      <p className="mt-2 text-sm font-semibold text-white">{isMyTurn ? "Control local" : currentTurnLabel}</p>
+                    </div>
+                  </div>
+                  <div className="rounded-[24px] border border-slate-700/80 bg-[linear-gradient(145deg,rgba(15,23,42,0.82),rgba(8,47,73,0.2))] p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Modo de deduccion</p>
+
+                    <RadioGroup
+                      data-cy="terminal-deduction-mode-toggle"
+                      value={deductionMode}
+                      onValueChange={(value) => {
+                        if (value === "hypothesis" || value === "final-accusation") {
+                          setDeductionMode(value);
+                        }
+                      }}
+                      className="mt-4 grid gap-3"
+                    >
+                      {[
+                        {
+                          value: "hypothesis" as DeductionMode,
+                          title: "Hipotesis",
+                          badge: "Disponible",
+                          tone: "border-cyan-700/70 bg-cyan-950/20 text-cyan-100",
+                          accent: "text-cyan-300",
+                          icon: <MessageSquare className="h-4 w-4 text-cyan-300" />,
+                          dataCy: "terminal-deduction-mode-hypothesis",
+                        },
+                        {
+                          value: "final-accusation" as DeductionMode,
+                          title: "Acusacion final",
+                          badge: "Proximamente",
+                          tone: "border-fuchsia-700/70 bg-fuchsia-950/20 text-fuchsia-100",
+                          accent: "text-fuchsia-200",
+                          icon: <Crosshair className="h-4 w-4 text-fuchsia-200" />,
+                          dataCy: "terminal-deduction-mode-final-accusation",
+                        },
+                      ].map((option) => {
+                        const isSelected = deductionMode === option.value;
+
+                        return (
+                          <div
+                            key={option.value}
+                            data-cy={option.dataCy}
+                            onClick={() => setDeductionMode(option.value)}
+                            className={`cursor-pointer rounded-2xl border p-4 transition-all ${option.tone} ${isSelected ? "shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_0_24px_rgba(15,23,42,0.35)]" : "opacity-85 hover:opacity-100"}`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <RadioGroupItem value={option.value} className="mt-1 border-current text-current" />
+                              <div className="flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    {option.icon}
+                                    <p className="text-sm font-black uppercase tracking-[0.18em] text-white">{option.title}</p>
+                                  </div>
+                                  <span className={`rounded-full border border-white/10 bg-slate-950/50 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.2em] ${option.accent}`}>
+                                    {option.badge}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </RadioGroup>
+                  </div>
+
+                  {suggestionError ? (
+                    <div className="rounded-2xl border border-red-800/70 bg-red-950/30 px-4 py-3 text-sm text-red-100">
+                      {suggestionError}
+                    </div>
+                  ) : null}
+
+                  {suggestionNotice ? (
+                    <div className="rounded-2xl border border-cyan-800/60 bg-cyan-950/25 px-4 py-3 text-sm text-cyan-100">
+                      {suggestionNotice}
+                    </div>
+                  ) : null}
+
+                  {activeSuggestion ? (
+                    <div data-cy="terminal-active-suggestion" className="rounded-[26px] border border-slate-700/80 bg-[linear-gradient(135deg,rgba(8,47,73,0.42),rgba(15,23,42,0.88))] p-5 shadow-[0_10px_30px_rgba(8,47,73,0.18)]">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-200">Sugerencia activa</p>
+                          <h4 className="mt-2 text-base font-black text-white">{buildSuggestionSentence(activeSuggestion)}</h4>
+                          <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
+                            {activeSuggestion.emitterTeamName}
+                            {activeSuggestion.receiverTeamName ? ` · Refuta ${activeSuggestion.receiverTeamName}` : " · En mesa"}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl border border-cyan-800/70 bg-slate-950/60 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
+                          {activeSuggestion.receiverTeamName ? "En refutacion" : "Abierta"}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                        {[
+                          { label: catNames.c1, element: activeSuggestion.subject, tone: "border-cyan-700/70 bg-cyan-950/30 text-cyan-100", icon: <User className="h-4 w-4 text-cyan-300" /> },
+                          { label: catNames.c2, element: activeSuggestion.object, tone: "border-emerald-700/70 bg-emerald-950/30 text-emerald-100", icon: <Box className="h-4 w-4 text-emerald-300" /> },
+                          { label: catNames.c3, element: activeSuggestion.space, tone: "border-rose-700/70 bg-rose-950/30 text-rose-100", icon: <MapPin className="h-4 w-4 text-rose-300" /> },
+                        ].map((item) => (
+                          <div key={item.label} className={`rounded-2xl border p-3 ${item.tone}`}>
+                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em]">
+                              {item.icon}
+                              {item.label}
+                            </div>
+                            <p className="mt-2 text-sm font-semibold">{item.element.name}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {refuteRequest ? (
+                    <div data-cy="terminal-refute-panel" className="rounded-[26px] border border-red-800/70 bg-[linear-gradient(145deg,rgba(69,10,10,0.72),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_32px_rgba(69,10,10,0.24)]">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-red-200">Solicitud privada de refutacion</p>
+                          <h4 className="mt-2 text-base font-black text-white">Elige una carta para bloquear la sugerencia</h4>
+                        </div>
+                        <div className="rounded-2xl border border-red-700/80 bg-red-950/50 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-red-100">
+                          Privado
+                        </div>
+                      </div>
+
+                      <div className="mt-5 grid gap-3">
+                        {refuteRequest.matchingCards.map((card) => {
+                          const isSelected = selectedRefuteCardId === card.id;
+                          const tone = card.kind === "SUJETO"
+                            ? "border-cyan-700/70 bg-cyan-950/25"
+                            : card.kind === "OBJETO"
+                            ? "border-emerald-700/70 bg-emerald-950/25"
+                            : "border-rose-700/70 bg-rose-950/25";
+
+                          return (
+                            <button
+                              data-cy="terminal-refute-card"
+                              key={card.id}
+                              type="button"
+                              onClick={() => setSelectedRefuteCardId(card.id)}
+                              className={`rounded-2xl border p-4 text-left transition-all ${tone} ${isSelected ? "scale-[1.01] shadow-[0_0_0_1px_rgba(248,113,113,0.6),0_0_20px_rgba(127,29,29,0.28)]" : "opacity-90 hover:opacity-100"}`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="rounded-xl border border-white/10 bg-slate-950/60 p-2">
+                                  {card.kind === "SUJETO" ? <User className="h-4 w-4 text-cyan-300" /> : card.kind === "OBJETO" ? <Box className="h-4 w-4 text-emerald-300" /> : <MapPin className="h-4 w-4 text-rose-300" />}
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-300">{card.kind}</p>
+                                  <p className="mt-1 text-sm font-semibold text-white">{card.name}</p>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        data-cy="terminal-refute-submit"
+                        type="button"
+                        onClick={() => void handleSubmitRefutation()}
+                        disabled={!selectedRefuteCard || isSubmittingRefutation || !canUseRealtimeSuggestion}
+                        className="mt-5 w-full rounded-2xl bg-red-500 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(239,68,68,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isSubmittingRefutation ? "Mostrando carta..." : selectedRefuteCard ? `Mostrar ${selectedRefuteCard.name}` : "Selecciona una carta"}
+                      </button>
+                    </div>
+                  ) : awaitingRefutation ? (
+                    <div data-cy="terminal-awaiting-refutation" className="rounded-[26px] border border-amber-700/70 bg-[linear-gradient(145deg,rgba(120,53,15,0.42),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_30px_rgba(120,53,15,0.18)]">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-200">Esperando refutacion</p>
+                          <h4 className="mt-2 text-base font-black text-white">Tu sugerencia ya esta en mesa</h4>
+                          <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-amber-100/90">
+                            {awaitingRefutation.suggestion.receiverTeamName
+                              ? `${awaitingRefutation.suggestion.receiverTeamName} eligiendo carta`
+                              : "Resolucion en curso"}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl border border-amber-600/70 bg-amber-950/45 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-amber-100">
+                          En curso
+                        </div>
+                      </div>
+                    </div>
+                  ) : refutationResult ? (
+                    <div data-cy="terminal-refutation-result" className="rounded-[26px] border border-emerald-700/70 bg-[linear-gradient(145deg,rgba(6,78,59,0.46),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_30px_rgba(6,78,59,0.2)]">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-200">Resultado privado</p>
+                          <h4 className="mt-2 text-base font-black text-white">
+                            {refutationResult.outcome === "REFUTED" ? "Tu sugerencia fue refutada" : "Nadie pudo refutar tu sugerencia"}
+                          </h4>
+                          <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-100/90">
+                            {refutationResult.outcome === "REFUTED"
+                              ? `${refutationResult.shownByTeamName ?? "Un equipo"} mostro una carta`
+                              : "Sin cartas coincidentes"}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl border border-emerald-600/70 bg-emerald-950/45 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-100">
+                          {refutationResult.outcome === "REFUTED" ? "Refutada" : "Sin refutar"}
+                        </div>
+                      </div>
+
+                      {refutationResult.shownCard ? (
+                        <div className="mt-4 rounded-2xl border border-emerald-700/60 bg-slate-950/55 p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="rounded-xl border border-white/10 bg-slate-900/80 p-2">
+                              {refutationResult.shownCard.kind === "SUJETO" ? <User className="h-4 w-4 text-cyan-300" /> : refutationResult.shownCard.kind === "OBJETO" ? <Box className="h-4 w-4 text-emerald-300" /> : <MapPin className="h-4 w-4 text-rose-300" />}
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Carta revelada</p>
+                              <p className="mt-1 text-sm font-semibold text-white">{refutationResult.shownCard.name}</p>
+                              <p className="mt-1 text-xs text-slate-400">{refutationResult.shownCard.desc}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : isFinalAccusationMode ? (
+                    <div data-cy="terminal-final-accusation-placeholder" className="rounded-[26px] border border-fuchsia-700/60 bg-[linear-gradient(145deg,rgba(88,28,135,0.25),rgba(15,23,42,0.95))] p-5 shadow-[0_12px_32px_rgba(88,28,135,0.16)]">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-fuchsia-200">Acusacion final</p>
+                          <h4 className="mt-2 text-base font-black text-white">Canal reservado para la resolucion definitiva</h4>
+                        </div>
+                        <div className="rounded-2xl border border-fuchsia-700/70 bg-fuchsia-950/35 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-fuchsia-100">
+                          Proximamente
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled
+                        className="mt-5 w-full rounded-2xl border border-fuchsia-700/60 bg-fuchsia-950/30 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-fuchsia-100 opacity-70"
+                      >
+                        Acusacion final disponible en la siguiente historia
+                      </button>
+                    </div>
+                  ) : canComposeSuggestion ? (
+                    <div data-cy="terminal-compose-suggestion" className="rounded-[26px] border border-emerald-700/60 bg-[linear-gradient(145deg,rgba(6,95,70,0.28),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_32px_rgba(6,95,70,0.16)]">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-200">Hipotesis operativa</p>
+                          <h4 className="mt-2 text-base font-black text-white">Compone la sugerencia desde la sala actual</h4>
+                        </div>
+                        <div className="rounded-2xl border border-emerald-700/70 bg-emerald-950/45 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-100">
+                          {currentRoomSpace?.name ?? "Sincronizando sala"}
+                        </div>
+                      </div>
+
+                      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/45 p-4">
+                          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
+                            <User className="h-3.5 w-3.5" />
+                            {catNames.c1}
+                          </div>
+                          <div className="mt-3 grid gap-2">
+                            {categories.c1.map((item) => {
+                              const isSelected = selectedSubjectId === item.id;
+                              return (
+                                <button
+                                  data-cy="terminal-suggest-subject"
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => setSelectedSubjectId(item.id)}
+                                  className={`rounded-xl border px-3 py-3 text-left transition-all ${isSelected ? "border-cyan-400 bg-cyan-950/40 shadow-[0_0_18px_rgba(34,211,238,0.18)]" : "border-slate-700 bg-slate-900/70 hover:border-cyan-700/60"}`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`rounded-lg border p-2 ${item.color}`}>{item.avatar}</div>
+                                    <p className="text-sm font-semibold text-white">{item.name}</p>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-emerald-800/60 bg-slate-950/45 p-4">
+                          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">
+                            <Box className="h-3.5 w-3.5" />
+                            {catNames.c2}
+                          </div>
+                          <div className="mt-3 grid gap-2">
+                            {categories.c2.map((item) => {
+                              const isSelected = selectedObjectId === item.id;
+                              return (
+                                <button
+                                  data-cy="terminal-suggest-object"
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => setSelectedObjectId(item.id)}
+                                  className={`rounded-xl border px-3 py-3 text-left transition-all ${isSelected ? "border-emerald-400 bg-emerald-950/40 shadow-[0_0_18px_rgba(16,185,129,0.18)]" : "border-slate-700 bg-slate-900/70 hover:border-emerald-700/60"}`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`rounded-lg border p-2 ${item.color}`}>{item.avatar}</div>
+                                    <p className="text-sm font-semibold text-white">{item.name}</p>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div data-cy="terminal-suggestion-preview" className="mt-5 rounded-2xl border border-slate-700 bg-slate-950/65 p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Vista previa</p>
+                        <p className="mt-2 text-sm text-white">
+                          {suggestionPreview
+                            ? `${suggestionPreview.subject.name} con ${suggestionPreview.object.name} en ${suggestionPreview.space.name}`
+                            : "Selecciona un sujeto y un objeto para completar la hipótesis desde la sala actual."}
+                        </p>
+                      </div>
+
+                      <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
+                        <button
+                          data-cy="terminal-suggest-submit"
+                          type="button"
+                          onClick={() => void handleSubmitSuggestion()}
+                          disabled={!suggestionPreview || isSubmittingSuggestion || !canUseRealtimeSuggestion}
+                          className="rounded-2xl bg-cyan-500 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.3)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isSubmittingSuggestion ? "Enviando sugerencia..." : "Lanzar sugerencia"}
+                        </button>
+                        <button
+                          data-cy="terminal-end-turn-submit"
+                          type="button"
+                          onClick={() => void handleEndTurnFromRoom()}
+                          disabled={isEndingTurn}
+                          className="rounded-2xl border border-slate-600 bg-slate-900/75 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isEndingTurn ? "Cerrando..." : "Terminar turno"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div data-cy="terminal-suggest-blocked" className="rounded-[26px] border border-slate-700/80 bg-[linear-gradient(145deg,rgba(15,23,42,0.92),rgba(2,6,23,0.98))] p-5">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Canal bloqueado</p>
+                      <h4 className="mt-2 text-base font-black text-white">Todavia no puedes interactuar con la sugerencia</h4>
+                      <p className="mt-3 text-sm leading-relaxed text-slate-300">{suggestionPanelMessage}</p>
+                    </div>
+                  )}
                 </div>
-
-                {/* 1. Selector de Espacios (C3) - CORREGIDO: Eliminados paréntesis triples */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-[10px] uppercase text-slate-500 flex items-center gap-2"><MapPin className="w-3 h-3"/> {catNames.c3} (Actual)</label>
-                  <select 
-                    value={selectedRoom}
-                    onChange={(e) => setSelectedRoom(e.target.value)}
-                    disabled={suggestMode === "hipotesis"}
-                    className={`w-full bg-slate-900 border border-slate-800 focus:border-cyan-400 rounded-lg p-3 text-sm text-cyan-100 appearance-none outline-none focus:ring-1 focus:ring-cyan-500 transition-colors ${suggestMode === 'hipotesis' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <option value="" disabled>Selecciona...</option>
-                    {/* SINTAXIS CORRECTA: (e: ElementoItem) => ... */}
-                    {categories.c3.map((e: ElementoItem) => (
-                      <option key={e.name} value={e.name}>{e.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 2. Selector de Sujetos (C1) - CORREGIDO: Cambiado 'any' por 'ElementoItem' */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-[10px] uppercase text-cyan-500 flex items-center gap-2"><User className="w-3 h-3"/> {catNames.c1}</label>
-                  <select defaultValue="" className="w-full bg-slate-900 border border-cyan-800 focus:border-cyan-400 rounded-lg p-3 text-sm text-cyan-100 appearance-none outline-none focus:ring-1 focus:ring-cyan-500 transition-colors">
-                    <option value="" disabled>Selecciona...</option>
-                    {categories.c1.map((s: ElementoItem) => (
-                      <option key={s.name} value={s.name}>{s.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-{/* 3. Selector de Objetos (C2) - CORREGIDO: Cambiado 'any' por 'ElementoItem' */}
-<div className="flex flex-col gap-2">
-  <label className="text-[10px] uppercase text-emerald-500 flex items-center gap-2"><Box className="w-3 h-3"/> {catNames.c2}</label>
-  <select defaultValue="" className="w-full bg-slate-900 border border-emerald-800 focus:border-emerald-400 rounded-lg p-3 text-sm text-emerald-100 appearance-none outline-none focus:ring-1 focus:ring-emerald-500 transition-colors">
-    <option value="" disabled>Selecciona...</option>
-    {categories.c2.map((o: ElementoItem) => (
-      <option key={o.name} value={o.name}>{o.name}</option>
-    ))}
-  </select>
-</div>
-
-                <button className={`w-full mt-4 text-slate-950 font-bold uppercase tracking-widest py-4 rounded-lg flex items-center justify-center gap-2 transition-all active:scale-95 ${
-                  suggestMode === "hipotesis" 
-                    ? "bg-cyan-600 hover:bg-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.4)]" 
-                    : "bg-red-600 hover:bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)]"
-                }`}>
-                   {suggestMode === "hipotesis" ? "Lanzar Hipótesis" : "Realizar Acusación"}
-                </button>
               </div>
             </motion.div>
           )}
@@ -1333,7 +2046,7 @@ export function TerminalView() {
           { id: "map", icon: MapIcon, label: "MAPA" },
           { id: "matrix", icon: Search, label: "MATRIZ" },
           { id: "notes", icon: FileText, label: "NOTAS" },
-          { id: "suggest", icon: MessageSquare, label: "SUGERIR/ACUSAR" }
+          { id: "suggest", icon: MessageSquare, label: "DEDUCIR" }
         ].map(tab => (
           <button
             key={tab.id}

@@ -238,7 +238,8 @@ describe("SCRUM-42/43/44 inicio sincronizado de partida", () => {
                 });
 
               cy.location("pathname").should("eq", "/terminal");
-              cy.get('[data-cy="terminal-lobby-status-banner"]').should("contain", "Partida iniciada por el Game Master.");
+              cy.get('[data-cy="terminal-lobby-status-banner"]').should("contain", "Turno actual: Equipo Rojo.");
+              cy.get('[data-cy="terminal-lobby-status-banner"]').should("contain", "Sin tirada activa.");
               cy.get('[data-cy="terminal-hand-list"]').should("be.visible");
               cy.get('[data-cy="terminal-hand-card"]').should("have.length", 9);
               cy.window().then((window) => {

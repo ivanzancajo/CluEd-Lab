@@ -25,8 +25,20 @@ export const teamSecretPassageCommandSchema = z.object({
   toNodeId: z.string().trim().min(1, 'La sala destino del pasadizo es obligatoria.'),
 });
 
+export const gameSuggestCommandSchema = z.object({
+  subjectElementId: z.string().uuid('El sospechoso sugerido debe ser un UUID válido.'),
+  objectElementId: z.string().uuid('El arma sugerida debe ser un UUID válido.'),
+  spaceElementId: z.string().uuid('La habitación sugerida debe ser un UUID válido.'),
+});
+
+export const gameRefuteCommandSchema = z.object({
+  shownElementId: z.string().uuid('La carta mostrada debe ser un UUID válido.'),
+});
+
 export type HostLobbySubscriptionInput = z.infer<typeof hostLobbySubscriptionSchema>;
 export type TeamLobbySubscriptionInput = z.infer<typeof teamLobbySubscriptionSchema>;
 export type StartGameCommandInput = z.infer<typeof startGameCommandSchema>;
 export type GameStatusCommandInput = z.infer<typeof gameStatusCommandSchema>;
 export type TeamSecretPassageCommandInput = z.infer<typeof teamSecretPassageCommandSchema>;
+export type GameSuggestCommandInput = z.infer<typeof gameSuggestCommandSchema>;
+export type GameRefuteCommandInput = z.infer<typeof gameRefuteCommandSchema>;

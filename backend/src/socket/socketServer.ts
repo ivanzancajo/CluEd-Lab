@@ -3,11 +3,15 @@ import type { Server as HttpServer } from 'node:http';
 import { EstadoPartida, type ColorEquipo } from '@prisma/client';
 import { Server, type Socket } from 'socket.io';
 import {
+  gameRefuteCommandSchema,
+  gameSuggestCommandSchema,
   gameStatusCommandSchema,
   hostLobbySubscriptionSchema,
   startGameCommandSchema,
   teamSecretPassageCommandSchema,
   teamLobbySubscriptionSchema,
+  type GameRefuteCommandInput,
+  type GameSuggestCommandInput,
   type GameStatusCommandInput,
   type HostLobbySubscriptionInput,
   type StartGameCommandInput,
@@ -27,8 +31,13 @@ import { verifyAdminToken, type AuthTokenPayload } from '../middleware/auth.js';
 import { lobbyPresenceStore } from './lobbyPresenceStore.js';
 import { pauseSession, resumeSession, startSessionByAccessCode } from '../lib/sessionGameplay.js';
 import { findBoardMovementNodeByPosition, isSecretPassageMoveValid } from '../lib/sessionMovement.js';
-import { buildNextTurnUpdate } from '../lib/sessionTurn.js';
 import { BOARD_MOVEMENT_NODES } from '../lib/boardGraph.js';
+import {
+  createSuggestionBySessionId,
+  refuteActiveSuggestionBySessionId,
+  type SuggestionElementSnapshot,
+  type SuggestionSummary,
+} from '../lib/sessionSuggestion.js';
 
 type LobbyPresenceTeam = SessionTeamSnapshot & {
   connected: boolean;
@@ -44,6 +53,7 @@ export type LobbyPresenceState = {
   remainingSeconds: number;
   teams: LobbyPresenceTeam[];
   turn: SessionTurnSnapshot | null;
+  activeSuggestion: SuggestionSummary | null;
   updatedAt: number;
 };
 
@@ -97,6 +107,42 @@ type TeamSecretPassageAck =
       error: string;
     };
 
+export type GameSuggestAck =
+  | {
+      ok: true;
+      status: 'waiting-refutation' | 'resolved-without-refutation';
+      occurredAt: number;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+export type GameRefuteAck =
+  | {
+      ok: true;
+      occurredAt: number;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+export type GameRefuteRequestPayload = {
+  suggestion: SuggestionSummary;
+  matchingCards: SuggestionElementSnapshot[];
+  occurredAt: number;
+};
+
+export type GameRefutationResultPayload = {
+  suggestion: SuggestionSummary;
+  outcome: 'REFUTED' | 'UNREFUTED';
+  occurredAt: number;
+  shownCard?: SuggestionElementSnapshot | undefined;
+  shownByTeamId?: string | undefined;
+  shownByTeamName?: string | undefined;
+};
+
 type GameStatusChangeAck =
   | {
       ok: true;
@@ -115,6 +161,8 @@ type LobbyClientToServerEvents = {
   'game:resume': (payload: unknown, acknowledge?: (response: GameStatusChangeAck) => void) => void;
   'lobby:team-heartbeat': () => void;
   'turn:use-secret-passage': (payload: unknown, acknowledge?: (response: TeamSecretPassageAck) => void) => void;
+  'game:suggest': (payload: unknown, acknowledge?: (response: GameSuggestAck) => void) => void;
+  'game:refute': (payload: unknown, acknowledge?: (response: GameRefuteAck) => void) => void;
 };
 
 type LobbySocketData = {
@@ -131,12 +179,15 @@ type LobbySocket = Socket<
     'lobby:event': (event: LobbyEvent) => void;
     gameStarted: (payload: GameStartedPayload) => void;
     'game:status-changed': (payload: GameStatusChangedPayload) => void;
+    'game:refute-request': (payload: GameRefuteRequestPayload) => void;
+    'game:refutation-result': (payload: GameRefutationResultPayload) => void;
   },
   Record<string, never>,
   LobbySocketData
 >;
 
 const LOBBY_ROOM_PREFIX = 'lobby:session:';
+const TEAM_ROOM_PREFIX = 'lobby:session-team:';
 const REALTIME_ENABLED_STATES: ReadonlySet<EstadoPartida> = new Set<EstadoPartida>([
   EstadoPartida.LOBBY,
   EstadoPartida.EN_CURSO,
@@ -209,6 +260,7 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
       socket.data.sessionId = input.sessionId;
       socket.data.teamId = input.teamId;
       await socket.join(getLobbyRoom(input.sessionId));
+      await socket.join(getTeamRoom(input.sessionId, input.teamId));
 
       lobbyPresenceStore.connectTeam(input.sessionId, input.teamId, socket.id);
 
@@ -336,6 +388,7 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
           id: true,
           status: true,
           currentTurnTeamId: true,
+          activeSuggestionEventId: true,
           teams: {
             where: { id: socket.data.teamId },
             select: {
@@ -363,6 +416,10 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
         throw new HttpError(409, 'Solo el equipo con turno activo puede usar un pasadizo.');
       }
 
+      if (session.activeSuggestionEventId) {
+        throw new HttpError(409, 'Hay una sugerencia pendiente de refutación y la partida está temporalmente bloqueada.');
+      }
+
       const currentTeam = session.teams[0];
       if (!currentTeam) {
         throw new HttpError(404, 'El equipo indicado no pertenece a la sesión actual.');
@@ -385,24 +442,6 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
         throw new HttpError(404, 'El nodo destino del pasadizo no existe en el tablero.');
       }
 
-      // Mover el peón al nodo destino y avanzar el turno
-      const sessionFull = await prisma.partida.findUnique({
-        where: { id: socket.data.sessionId },
-        select: {
-          id: true,
-          currentTurnTeamId: true,
-          currentTurnStartedAt: true,
-          activeDiceValueOne: true,
-          activeDiceValueTwo: true,
-          activeDiceRemainingMoves: true,
-          teams: { select: { id: true, name: true, color: true } },
-        },
-      });
-
-      if (!sessionFull) {
-        throw new HttpError(404, 'La sesión no existe.');
-      }
-
       await prisma.equipo.update({
         where: { id: socket.data.teamId },
         data: {
@@ -413,7 +452,11 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
 
       await prisma.partida.update({
         where: { id: socket.data.sessionId },
-        data: buildNextTurnUpdate(sessionFull),
+        data: {
+          activeDiceValueOne: null,
+          activeDiceValueTwo: null,
+          activeDiceRemainingMoves: null,
+        },
       });
 
       const occurredAt = Date.now();
@@ -421,10 +464,101 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
       await emitSessionSnapshotUpdate(socket.data.sessionId, {
         id: randomUUID(),
         type: 'system',
-        message: `${currentTeam.name} ha usado el pasadizo de ${fromRoomLabel} a ${toRoomLabel}.`,
+        message: `${currentTeam.name} ha usado el pasadizo de ${fromRoomLabel} a ${toRoomLabel}. Puede lanzar una sugerencia o terminar su turno.`,
         occurredAt,
         teamColor: currentTeam.color,
         teamId: currentTeam.id,
+      });
+
+      acknowledge?.({ ok: true, occurredAt });
+    } catch (error) {
+      acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });
+    }
+  });
+
+  socket.on('game:suggest', async (payload: unknown, acknowledge?: (response: GameSuggestAck) => void) => {
+    try {
+      if (socket.data.role !== 'team' || !socket.data.sessionId || !socket.data.teamId) {
+        throw new HttpError(403, 'Solo un terminal de equipo puede lanzar sugerencias.');
+      }
+
+      const input = parseGameSuggestCommand(payload);
+      const result = await prisma.$transaction(
+        (tx) => createSuggestionBySessionId(tx, socket.data.sessionId as string, socket.data.teamId as string, input),
+        { isolationLevel: 'Serializable' }
+      );
+      const occurredAt = Date.now();
+
+      if (result.refutationRequired && result.suggestion.receiverTeamId) {
+        await emitSessionSnapshotUpdate(result.sessionId, {
+          id: randomUUID(),
+          type: 'system',
+          message: `${result.suggestion.emitterTeamName} ha sugerido ${result.suggestion.subject.name} con ${result.suggestion.object.name} en ${result.suggestion.space.name}. Esperando refutación de ${result.suggestion.receiverTeamName}.`,
+          occurredAt,
+          teamColor: result.suggestion.emitterTeamColor,
+          teamId: result.suggestion.emitterTeamId,
+        });
+
+        emitRefuteRequest(io, result.sessionId, result.suggestion.receiverTeamId, {
+          suggestion: result.suggestion,
+          matchingCards: result.matchingCards,
+          occurredAt,
+        });
+
+        acknowledge?.({ ok: true, status: 'waiting-refutation', occurredAt });
+        return;
+      }
+
+      await emitSessionSnapshotUpdate(result.sessionId, {
+        id: randomUUID(),
+        type: 'system',
+        message: `${result.suggestion.emitterTeamName} ha sugerido ${result.suggestion.subject.name} con ${result.suggestion.object.name} en ${result.suggestion.space.name}. Nadie ha podido refutar.${result.nextTurnTeamName ? ` Turno para ${result.nextTurnTeamName}.` : ''}`,
+        occurredAt,
+        teamColor: result.suggestion.emitterTeamColor,
+        teamId: result.suggestion.emitterTeamId,
+      });
+
+      emitRefutationResult(io, result.sessionId, result.suggestion.emitterTeamId, {
+        suggestion: result.suggestion,
+        outcome: 'UNREFUTED',
+        occurredAt,
+      });
+
+      acknowledge?.({ ok: true, status: 'resolved-without-refutation', occurredAt });
+    } catch (error) {
+      acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });
+    }
+  });
+
+  socket.on('game:refute', async (payload: unknown, acknowledge?: (response: GameRefuteAck) => void) => {
+    try {
+      if (socket.data.role !== 'team' || !socket.data.sessionId || !socket.data.teamId) {
+        throw new HttpError(403, 'Solo un terminal de equipo puede refutar sugerencias.');
+      }
+
+      const input = parseGameRefuteCommand(payload);
+      const result = await prisma.$transaction(
+        (tx) => refuteActiveSuggestionBySessionId(tx, socket.data.sessionId as string, socket.data.teamId as string, input.shownElementId),
+        { isolationLevel: 'Serializable' }
+      );
+      const occurredAt = Date.now();
+
+      await emitSessionSnapshotUpdate(result.sessionId, {
+        id: randomUUID(),
+        type: 'system',
+        message: `${result.refutingTeamName} ha refutado la sugerencia de ${result.suggestion.emitterTeamName}.${result.nextTurnTeamName ? ` Turno para ${result.nextTurnTeamName}.` : ''}`,
+        occurredAt,
+        teamColor: result.refutingTeamColor,
+        teamId: result.refutingTeamId,
+      });
+
+      emitRefutationResult(io, result.sessionId, result.suggestion.emitterTeamId, {
+        suggestion: result.suggestion,
+        outcome: 'REFUTED',
+        occurredAt,
+        shownCard: result.shownCard,
+        shownByTeamId: result.refutingTeamId,
+        shownByTeamName: result.refutingTeamName,
       });
 
       acknowledge?.({ ok: true, occurredAt });
@@ -522,6 +656,24 @@ function parseTeamSecretPassageCommand(payload: unknown): TeamSecretPassageComma
   return parsed.data;
 }
 
+function parseGameSuggestCommand(payload: unknown): GameSuggestCommandInput {
+  const parsed = gameSuggestCommandSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new HttpError(400, 'La sugerencia indicada no es válida.', parsed.error.issues.map((issue) => issue.message));
+  }
+
+  return parsed.data;
+}
+
+function parseGameRefuteCommand(payload: unknown): GameRefuteCommandInput {
+  const parsed = gameRefuteCommandSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new HttpError(400, 'La refutación indicada no es válida.', parsed.error.issues.map((issue) => issue.message));
+  }
+
+  return parsed.data;
+}
+
 function requireAdminUser(socket: LobbySocket) {
   const token = getSocketToken(socket);
 
@@ -562,6 +714,7 @@ async function buildLobbyPresenceState(sessionId: string): Promise<LobbyPresence
       lastSeenAt: lobbyPresenceStore.getTeamLastSeen(snapshot.id, team.id),
     })),
     turn: snapshot.turn,
+    activeSuggestion: snapshot.activeSuggestion,
     updatedAt: Date.now(),
   };
 }
@@ -582,8 +735,20 @@ function broadcastGameStatusChanged(io: Server, sessionId: string, payload: Game
   io.to(getLobbyRoom(sessionId)).emit('game:status-changed', payload);
 }
 
+function emitRefuteRequest(io: Server, sessionId: string, teamId: string, payload: GameRefuteRequestPayload) {
+  io.to(getTeamRoom(sessionId, teamId)).emit('game:refute-request', payload);
+}
+
+function emitRefutationResult(io: Server, sessionId: string, teamId: string, payload: GameRefutationResultPayload) {
+  io.to(getTeamRoom(sessionId, teamId)).emit('game:refutation-result', payload);
+}
+
 function getLobbyRoom(sessionId: string) {
   return `${LOBBY_ROOM_PREFIX}${sessionId}`;
+}
+
+function getTeamRoom(sessionId: string, teamId: string) {
+  return `${TEAM_ROOM_PREFIX}${sessionId}:${teamId}`;
 }
 
 function getSocketErrorMessage(error: unknown) {

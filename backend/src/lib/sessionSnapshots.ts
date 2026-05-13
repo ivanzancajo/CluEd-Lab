@@ -2,15 +2,8 @@ import { ColorEquipo, EstadoPartida } from '@prisma/client';
 import { HttpError } from './http.js';
 import { prisma } from './prisma.js';
 import { loadSkinConfiguration, type LoadedSkinConfiguration } from './skinConfigs.js';
-
-export const COLOR_SORT_ORDER: ColorEquipo[] = [
-  ColorEquipo.ROJO,
-  ColorEquipo.AMARILLO,
-  ColorEquipo.AZUL,
-  ColorEquipo.VERDE,
-  ColorEquipo.MORADO,
-  ColorEquipo.BLANCO,
-];
+import { loadActiveSuggestionSummaryById, type SuggestionSummary } from './sessionSuggestion.js';
+import { COLOR_SORT_ORDER } from './teamOrder.js';
 
 export const COLOR_LABELS: Record<ColorEquipo, string> = {
   [ColorEquipo.ROJO]: 'Equipo Rojo',
@@ -21,7 +14,7 @@ export const COLOR_LABELS: Record<ColorEquipo, string> = {
   [ColorEquipo.BLANCO]: 'Equipo Blanco',
 };
 
-export type SessionReader = Pick<typeof prisma, 'partida' | 'cluedoSkin'>;
+export type SessionReader = Pick<typeof prisma, 'partida' | 'cluedoSkin' | 'evento'>;
 
 export type SessionTeamSnapshot = {
   id: string;
@@ -57,6 +50,7 @@ export type SessionSnapshot = {
   skin: LoadedSkinConfiguration;
   teams: SessionTeamSnapshot[];
   turn: SessionTurnSnapshot | null;
+  activeSuggestion: SuggestionSummary | null;
 };
 
 export async function loadSessionSnapshotByAccessCode(
@@ -114,6 +108,7 @@ async function loadSessionSnapshot(
       activeDiceValueOne: true,
       activeDiceValueTwo: true,
       activeDiceRemainingMoves: true,
+      activeSuggestionEventId: true,
       currentTurnTeam: {
         select: {
           id: true,
@@ -146,6 +141,9 @@ async function loadSessionSnapshot(
   const durationMinutes = normalizeDurationMinutes(session.durationMinutes, skin.duration);
   const durationSeconds = durationMinutes * 60;
   const startedAt = session.startedAt?.toISOString() ?? null;
+  const activeSuggestion = session.activeSuggestionEventId
+    ? await loadActiveSuggestionSummaryById(client, session.activeSuggestionEventId)
+    : null;
 
   return {
     id: session.id,
@@ -162,6 +160,7 @@ async function loadSessionSnapshot(
     skin,
     teams: session.teams.map(mapTeamSnapshot).sort(sortTeamsByColor),
     turn: buildTurnSnapshot(session),
+    activeSuggestion,
   };
 }
 

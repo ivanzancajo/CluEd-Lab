@@ -4,6 +4,8 @@ import { prisma } from './prisma.js';
 import {
   BOARD_MOVEMENT_CONNECTIONS,
   BOARD_MOVEMENT_NODES,
+  BOARD_MOVEMENT_POSITION_TOLERANCE,
+  findBoardMovementNodeByPosition,
   getRoomEntryNodeByDoorNodeId,
   getSecretPassageDestinationNodeByRoomNodeId,
   type BoardMovementNode,
@@ -20,6 +22,7 @@ import {
 
 type TeamMovementClient = Pick<typeof prisma, 'partida' | 'equipo'>;
 export { BOARD_MOVEMENT_CONNECTIONS, BOARD_MOVEMENT_NODES } from './boardGraph.js';
+export { findBoardMovementNodeByPosition } from './boardGraph.js';
 export type { BoardMovementNode } from './boardGraph.js';
 
 export type TeamMoveState = {
@@ -59,8 +62,7 @@ export type TeamDiceRollResult = {
   turnAdvanced: boolean;
 };
 
-const MOVEMENT_POSITION_TOLERANCE = 0.75;
-const SPAWN_SNAP_TOLERANCE = MOVEMENT_POSITION_TOLERANCE * 2;
+const SPAWN_SNAP_TOLERANCE = BOARD_MOVEMENT_POSITION_TOLERANCE * 2;
 
 const TEAM_COLOR_SPAWN_NODE_ID: Record<ColorEquipo, string> = {
   [ColorEquipo.ROJO]: 'spawn-rojo',
@@ -167,54 +169,6 @@ export function getReachableMoveNodes(currentNodeId: string, occupiedNodeIds: It
   });
 }
 
-export function findBoardMovementNodeByPosition(positionX: number | null, positionY: number | null) {
-  if (typeof positionX !== 'number' || typeof positionY !== 'number') {
-    return null;
-  }
-
-  const candidates = Object.values(BOARD_MOVEMENT_NODES).filter(
-    (node) =>
-      Math.abs(node.positionX - positionX) <= MOVEMENT_POSITION_TOLERANCE &&
-      Math.abs(node.positionY - positionY) <= MOVEMENT_POSITION_TOLERANCE
-  );
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const getKindPriority = (kind: BoardMovementNode['kind']) => {
-    if (kind === 'spawn') {
-      return 0;
-    }
-
-    if (kind === 'square') {
-      return 1;
-    }
-
-    return 2;
-  };
-
-  return candidates
-    .map((node) => ({
-      node,
-      distance: Math.hypot(node.positionX - positionX, node.positionY - positionY),
-      kindPriority: getKindPriority(node.kind),
-    }))
-    .sort((left, right) => {
-      const distanceDelta = left.distance - right.distance;
-      if (distanceDelta !== 0) {
-        return distanceDelta;
-      }
-
-      const kindDelta = left.kindPriority - right.kindPriority;
-      if (kindDelta !== 0) {
-        return kindDelta;
-      }
-
-      return left.node.id.localeCompare(right.node.id, 'es');
-    })[0]?.node ?? null;
-}
-
 export function resolveCommittedMoveTargetNode(currentNode: BoardMovementNode, targetNode: BoardMovementNode) {
   if (currentNode.kind === 'room') {
     return targetNode;
@@ -258,6 +212,7 @@ export async function loadTeamMoveStateByAccessCode(
 ): Promise<TeamMoveState> {
   const session = await loadMovementSessionByAccessCode(client, accessCode);
   ensureSessionIsMovable(session.status);
+  ensureSessionHasNoPendingSuggestion(session);
   ensureCurrentTurnBelongsToTeam(session, teamId);
 
   const currentNode = resolveTeamMovementContext(session, teamId).currentNode;
@@ -298,6 +253,7 @@ export async function rollTeamDiceByAccessCode(
 ): Promise<TeamDiceRollResult> {
   const session = await loadMovementSessionByAccessCode(client, accessCode);
   ensureSessionIsMovable(session.status);
+  ensureSessionHasNoPendingSuggestion(session);
   ensureCurrentTurnBelongsToTeam(session, teamId);
   ensureTurnHasNoActiveDice(session);
 
@@ -342,6 +298,7 @@ export async function moveTeamByAccessCode(
 ): Promise<TeamMoveResult> {
   const session = await loadMovementSessionByAccessCode(client, accessCode);
   ensureSessionIsMovable(session.status);
+  ensureSessionHasNoPendingSuggestion(session);
   ensureCurrentTurnBelongsToTeam(session, teamId);
 
   const activeDice = getActiveDice(session);
@@ -376,9 +333,17 @@ export async function moveTeamByAccessCode(
     },
   });
 
+  const turnAdvanced = committedTargetNode.kind !== 'room';
+
   await client.partida.update({
     where: { id: session.id },
-    data: buildNextTurnUpdate(session),
+    data: turnAdvanced
+      ? buildNextTurnUpdate(session)
+      : {
+          activeDiceValueOne: null,
+          activeDiceValueTwo: null,
+          activeDiceRemainingMoves: null,
+        },
   });
 
   const updatedSession = await loadMovementSessionByAccessCode(client, accessCode);
@@ -393,7 +358,7 @@ export async function moveTeamByAccessCode(
     remainingMoves: null,
     currentNode: updatedContext.currentNode,
     destinationNodes: [],
-    turnAdvanced: true,
+    turnAdvanced,
   };
 }
 
@@ -420,6 +385,7 @@ async function loadMovementSessionByAccessCode(client: TeamMovementClient, acces
       activeDiceValueOne: true,
       activeDiceValueTwo: true,
       activeDiceRemainingMoves: true,
+      activeSuggestionEventId: true,
       teams: {
         select: {
           id: true,
@@ -444,8 +410,15 @@ async function loadMovementSessionByAccessCode(client: TeamMovementClient, acces
     activeDiceValueOne: session.activeDiceValueOne,
     activeDiceValueTwo: session.activeDiceValueTwo,
     activeDiceRemainingMoves: session.activeDiceRemainingMoves,
+    activeSuggestionEventId: session.activeSuggestionEventId,
     teams: session.teams,
   };
+}
+
+function ensureSessionHasNoPendingSuggestion(session: { activeSuggestionEventId: string | null }) {
+  if (session.activeSuggestionEventId) {
+    throw new HttpError(409, 'Hay una sugerencia pendiente de refutación y la partida está temporalmente bloqueada.');
+  }
 }
 
 function buildTeamMoveValidationState(

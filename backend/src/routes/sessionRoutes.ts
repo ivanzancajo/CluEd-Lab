@@ -31,6 +31,7 @@ import {
   moveTeamByAccessCode,
   rollTeamDiceByAccessCode,
 } from '../lib/sessionMovement.js';
+import { endTeamTurnWithoutSuggestionByAccessCode } from '../lib/sessionSuggestion.js';
 import { getTeamSpawnPosition } from '../lib/teamSpawnPositions.js';
 import { verifyToken } from '../middleware/auth.js';
 import { emitGameStarted, emitSessionSnapshotUpdate } from '../socket/socketServer.js';
@@ -168,9 +169,9 @@ router.post('/sessions/:accessCode/teams/:teamId/move', async (req, res) => {
       await emitSessionSnapshotUpdate(moveResult.sessionId, {
         id: randomUUID(),
         type: 'system',
-        message: `${moveResult.teamName} se ha movido a ${moveResult.currentNode.label}.${
-          nextTeamName ? ` Turno para ${nextTeamName}.` : ''
-        }`,
+        message: moveResult.turnAdvanced
+          ? `${moveResult.teamName} se ha movido a ${moveResult.currentNode.label}.${nextTeamName ? ` Turno para ${nextTeamName}.` : ''}`
+          : `${moveResult.teamName} ha entrado en ${moveResult.currentNode.label}. Puede lanzar una sugerencia o terminar su turno.`,
         occurredAt: Date.now(),
         teamColor: moveResult.teamColor,
         teamId: moveResult.teamId,
@@ -188,6 +189,42 @@ router.post('/sessions/:accessCode/teams/:teamId/move', async (req, res) => {
         currentNode: moveResult.currentNode,
         destinationNodes: moveResult.destinationNodes,
         turnAdvanced: moveResult.turnAdvanced,
+      },
+    });
+  } catch (error) {
+    respondUnexpectedError(res, error);
+  }
+});
+
+router.post('/sessions/:accessCode/teams/:teamId/end-turn', async (req, res) => {
+  const teamParams = parseTeamSessionStateParams(req.params, res);
+  if (!teamParams) {
+    return;
+  }
+
+  try {
+    const endTurnResult = await prisma.$transaction(
+      (tx) => endTeamTurnWithoutSuggestionByAccessCode(tx, teamParams.accessCode, teamParams.teamId),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+    const session = await loadSessionSnapshotByAccessCode(prisma, teamParams.accessCode);
+
+    try {
+      await emitSessionSnapshotUpdate(endTurnResult.sessionId, {
+        id: randomUUID(),
+        type: 'system',
+        message: `${endTurnResult.teamName} ha terminado su turno en ${endTurnResult.currentRoomLabel}.${endTurnResult.nextTurnTeamName ? ` Turno para ${endTurnResult.nextTurnTeamName}.` : ''}`,
+        occurredAt: Date.now(),
+        teamColor: endTurnResult.teamColor,
+        teamId: endTurnResult.teamId,
+      });
+    } catch {
+      // El fin de turno ya quedó persistido; un fallo de broadcast no debe revertirlo.
+    }
+
+    res.json({
+      item: {
+        session,
       },
     });
   } catch (error) {

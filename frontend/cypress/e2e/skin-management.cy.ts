@@ -331,6 +331,10 @@ describe("Gestion de CluedoSkins", () => {
         body: { items: currentItems },
       });
     }).as("listSkinsRequest");
+    cy.intercept("GET", `**/api/config/skins/${existingSkin.id}`, {
+      statusCode: 200,
+      body: { item: existingSkin },
+    }).as("skinDetailRequest");
     cy.intercept("DELETE", `**/api/config/skins/${existingSkin.id}`, (req) => {
       currentItems = [];
       req.reply({
@@ -343,6 +347,7 @@ describe("Gestion de CluedoSkins", () => {
 
     cy.wait("@sessionRequest");
     cy.wait("@listSkinsRequest");
+    cy.wait("@skinDetailRequest");
     cy.get('[data-cy="admin-config-card-delete-button"]').first().click();
 
     cy.wait("@deleteSkinRequest");

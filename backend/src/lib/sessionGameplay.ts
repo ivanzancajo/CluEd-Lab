@@ -4,6 +4,10 @@ import { HttpError } from './http.js';
 import { prisma } from './prisma.js';
 import { loadSkinConfiguration, type LoadedSkinConfiguration } from './skinConfigs.js';
 import {
+  loadPendingTeamSuggestionStateByAccessCode,
+  type TeamPendingSuggestionState,
+} from './sessionSuggestion.js';
+import {
   COLOR_SORT_ORDER,
   loadSessionSnapshotById,
   loadSessionSnapshotByAccessCode,
@@ -13,10 +17,10 @@ import {
 
 type SessionGameplayClient = Pick<
   typeof prisma,
-  'partida' | 'solucion' | 'tablaRazonamiento' | 'celdaRazonamiento' | 'cartaEquipo' | 'cluedoSkin'
+  'partida' | 'solucion' | 'tablaRazonamiento' | 'celdaRazonamiento' | 'cartaEquipo' | 'cluedoSkin' | 'evento'
 >;
 
-type TeamTerminalStateClient = Pick<typeof prisma, 'partida' | 'cartaEquipo' | 'cluedoSkin'>;
+type TeamTerminalStateClient = Pick<typeof prisma, 'partida' | 'cartaEquipo' | 'cluedoSkin' | 'evento'>;
 
 type SessionTeamRecord = {
   id: string;
@@ -55,6 +59,7 @@ export type TeamTerminalState = {
   session: SessionSnapshot;
   team: SessionTeamSnapshot;
   hand: TeamHandCard[];
+  pendingSuggestion: TeamPendingSuggestionState | null;
 };
 
 export async function initializeStartedSession(client: SessionGameplayClient, sessionId: string) {
@@ -148,6 +153,7 @@ export async function initializeStartedSession(client: SessionGameplayClient, se
       currentTurnStartedAt: initialTurnTeamId ? startedAt : null,
       activeDiceValueOne: null,
       activeDiceValueTwo: null,
+      activeSuggestionEventId: null,
       solutionId: solution.id,
     },
   });
@@ -304,6 +310,7 @@ export async function loadTeamTerminalStateByAccessCode(
         } satisfies TeamHandCard;
       })
       .sort(sortHandCards),
+    pendingSuggestion: await loadPendingTeamSuggestionStateByAccessCode(client, accessCode, teamId),
   };
 }
 

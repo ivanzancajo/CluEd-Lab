@@ -1,7 +1,8 @@
-import { ColorEquipo, EstadoPartida } from '@prisma/client';
+import { ColorEquipo, EstadoPartida, RazonEliminacionEquipo } from '@prisma/client';
 import { HttpError } from './http.js';
 import { prisma } from './prisma.js';
 import { loadSkinConfiguration, type LoadedSkinConfiguration } from './skinConfigs.js';
+import { loadActiveSuggestionSummaryById, type SuggestionSummary } from './sessionSuggestion.js';
 
 export const COLOR_SORT_ORDER: ColorEquipo[] = [
   ColorEquipo.ROJO,
@@ -21,7 +22,7 @@ export const COLOR_LABELS: Record<ColorEquipo, string> = {
   [ColorEquipo.BLANCO]: 'Equipo Blanco',
 };
 
-export type SessionReader = Pick<typeof prisma, 'partida' | 'cluedoSkin'>;
+export type SessionReader = Pick<typeof prisma, 'partida' | 'cluedoSkin' | 'evento'>;
 
 export type SessionTeamSnapshot = {
   id: string;
@@ -30,6 +31,14 @@ export type SessionTeamSnapshot = {
   positionX: number;
   positionY: number;
   falseAccusation: boolean;
+  eliminatedAt: string | null;
+  eliminationReason: RazonEliminacionEquipo | null;
+};
+
+export type SessionWinnerSnapshot = {
+  id: string;
+  name: string;
+  color: ColorEquipo;
 };
 
 export type SessionTurnDiceSnapshot = {
@@ -52,11 +61,14 @@ export type SessionSnapshot = {
   accessCode: string;
   status: EstadoPartida;
   startedAt: string | null;
+  finishedAt: string | null;
   durationSeconds: number;
   remainingSeconds: number;
   skin: LoadedSkinConfiguration;
   teams: SessionTeamSnapshot[];
   turn: SessionTurnSnapshot | null;
+  activeSuggestion: SuggestionSummary | null;
+  winnerTeam: SessionWinnerSnapshot | null;
 };
 
 export async function loadSessionSnapshotByAccessCode(
@@ -80,6 +92,8 @@ export function mapTeamSnapshot(team: {
   positionX: number | null;
   positionY: number | null;
   falseAccusation: boolean | null;
+  eliminatedAt: Date | null;
+  eliminationReason: RazonEliminacionEquipo | null;
 }): SessionTeamSnapshot {
   return {
     id: team.id,
@@ -88,6 +102,8 @@ export function mapTeamSnapshot(team: {
     positionX: team.positionX ?? 0,
     positionY: team.positionY ?? 0,
     falseAccusation: team.falseAccusation ?? false,
+    eliminatedAt: team.eliminatedAt?.toISOString() ?? null,
+    eliminationReason: team.eliminationReason ?? null,
   };
 }
 
@@ -107,6 +123,7 @@ async function loadSessionSnapshot(
       status: true,
       startedAt: true,
       pausedAt: true,
+      finishedAt: true,
       durationMinutes: true,
       skinId: true,
       currentTurnTeamId: true,
@@ -114,6 +131,14 @@ async function loadSessionSnapshot(
       activeDiceValueOne: true,
       activeDiceValueTwo: true,
       activeDiceRemainingMoves: true,
+      activeSuggestionEventId: true,
+      winnerTeam: {
+        select: {
+          id: true,
+          name: true,
+          color: true,
+        },
+      },
       currentTurnTeam: {
         select: {
           id: true,
@@ -129,6 +154,8 @@ async function loadSessionSnapshot(
           positionX: true,
           positionY: true,
           falseAccusation: true,
+          eliminatedAt: true,
+          eliminationReason: true,
         },
       },
     },
@@ -146,22 +173,36 @@ async function loadSessionSnapshot(
   const durationMinutes = normalizeDurationMinutes(session.durationMinutes, skin.duration);
   const durationSeconds = durationMinutes * 60;
   const startedAt = session.startedAt?.toISOString() ?? null;
+  const finishedAt = session.finishedAt?.toISOString() ?? null;
+  const activeSuggestion = session.activeSuggestionEventId
+    ? await loadActiveSuggestionSummaryById(client, session.activeSuggestionEventId)
+    : null;
 
   return {
     id: session.id,
     accessCode: session.accessCode,
     status: session.status ?? EstadoPartida.LOBBY,
     startedAt,
+    finishedAt,
     durationSeconds,
     remainingSeconds: calculateRemainingSeconds(
       durationSeconds,
       session.status ?? EstadoPartida.LOBBY,
       session.startedAt,
-      session.pausedAt
+      session.pausedAt,
+      session.finishedAt
     ),
     skin,
     teams: session.teams.map(mapTeamSnapshot).sort(sortTeamsByColor),
     turn: buildTurnSnapshot(session),
+    activeSuggestion,
+    winnerTeam: session.winnerTeam
+      ? {
+          id: session.winnerTeam.id,
+          name: session.winnerTeam.name,
+          color: session.winnerTeam.color,
+        }
+      : null,
   };
 }
 
@@ -225,10 +266,16 @@ function calculateRemainingSeconds(
   durationSeconds: number,
   status: EstadoPartida,
   startedAt: Date | null,
-  pausedAt: Date | null
+  pausedAt: Date | null,
+  finishedAt: Date | null
 ) {
   if (!startedAt) {
     return durationSeconds;
+  }
+
+  if (status === EstadoPartida.FINALIZADA && finishedAt) {
+    const elapsedSecondsWhenFinished = Math.max(0, Math.floor((finishedAt.getTime() - startedAt.getTime()) / 1000));
+    return Math.max(0, durationSeconds - elapsedSecondsWhenFinished);
   }
 
   if (status === EstadoPartida.PAUSADA && pausedAt) {

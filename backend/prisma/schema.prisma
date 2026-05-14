@@ -54,6 +54,12 @@ enum EstadoPartida {
   @@map("estado_partida")
 }
 
+enum RazonEliminacionEquipo {
+  ACUSACION_FALSA
+
+  @@map("razon_eliminacion_equipo")
+}
+
 model CluedoSkin {
   id                  String                @id @default(uuid()) @db.Uuid @map("id_skin")
   name                String                @map("nombre") @db.VarChar(100)
@@ -116,23 +122,29 @@ model Partida {
   status     EstadoPartida? @default(LOBBY) @map("estado")
   startedAt  DateTime?    @map("inicio") @db.Timestamp(6)
   pausedAt   DateTime?    @map("pausada_en") @db.Timestamp(6)
+  finishedAt DateTime?    @map("finalizada_en") @db.Timestamp(6)
   durationMinutes Int     @default(60) @map("duracion_minutos")
   skinId     String?      @db.Uuid @map("id_skin")
   solutionId String?      @db.Uuid @map("id_solucion")
   currentTurnTeamId String? @db.Uuid @map("id_equipo_turno_actual")
+  winnerTeamId String?    @db.Uuid @map("id_equipo_ganador")
   currentTurnStartedAt DateTime? @map("inicio_turno_actual") @db.Timestamp(6)
   activeDiceValueOne Int?  @map("dado_activo_1")
   activeDiceValueTwo Int?  @map("dado_activo_2")
   activeDiceRemainingMoves Int? @map("pasos_mov_restantes")
+  activeSuggestionEventId String? @db.Uuid @map("id_evento_sugerencia_activa")
 
   skin       CluedoSkin? @relation(fields: [skinId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   solution   Solucion?   @relation(fields: [solutionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   currentTurnTeam Equipo? @relation("CurrentSessionTurn", fields: [currentTurnTeamId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  winnerTeam Equipo? @relation("WinningSession", fields: [winnerTeamId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   teams      Equipo[]
   events     Evento[]
 
   @@unique([accessCode], map: "partida_codigo_acceso_key")
   @@index([currentTurnTeamId], map: "partida_id_equipo_turno_actual_idx")
+  @@index([activeSuggestionEventId], map: "partida_id_evento_sugerencia_activa_idx")
+  @@index([winnerTeamId], map: "partida_id_equipo_ganador_idx")
   @@map("partida")
 }
 
@@ -144,9 +156,12 @@ model Equipo {
   positionX        Float?              @default(0) @map("pos_x")
   positionY        Float?              @default(0) @map("pos_y")
   falseAccusation  Boolean?            @default(false) @map("acusacion_falsa")
+  eliminatedAt     DateTime?           @map("eliminado_en") @db.Timestamp(6)
+  eliminationReason RazonEliminacionEquipo? @map("razon_eliminacion")
 
   partida          Partida?            @relation(fields: [partidaId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   currentTurnSessions Partida[]        @relation("CurrentSessionTurn")
+  winningSessions  Partida[]           @relation("WinningSession")
   cards            CartaEquipo[]
   emittedEvents    Evento[]            @relation("EventEmitter")
   receivedEvents   Evento[]            @relation("EventReceiver")

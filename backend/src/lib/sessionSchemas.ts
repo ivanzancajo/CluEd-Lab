@@ -27,6 +27,13 @@ export const moveTeamSchema = z.object({
   targetNodeId: z.string().trim().min(1, 'El destino del movimiento es obligatorio.'),
 });
 
+export const finalAccusationSchema = z.object({
+  subjectElementId: z.string().uuid('El sujeto de la acusación debe ser un UUID válido.'),
+  objectElementId: z.string().uuid('El objeto de la acusación debe ser un UUID válido.'),
+  spaceElementId: z.string().uuid('El espacio de la acusación debe ser un UUID válido.'),
+});
+
 export type CreateSessionInput = z.infer<typeof createSessionSchema>;
 export type JoinSessionInput = z.infer<typeof joinSessionSchema>;
 export type MoveTeamInput = z.infer<typeof moveTeamSchema>;
+export type FinalAccusationInput = z.infer<typeof finalAccusationSchema>;

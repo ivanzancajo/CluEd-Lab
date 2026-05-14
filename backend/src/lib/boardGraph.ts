@@ -25,6 +25,24 @@ export const BOARD_MOVEMENT_NODE_PICK_RADIUS = {
   roomHeightPercent: 9.4,
 };
 
+export const BOARD_MOVEMENT_POSITION_TOLERANCE = 0.75;
+
+export const BOARD_ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER = [
+  'sala-superior-izquierda',
+  'sala-superior-centro',
+  'sala-superior-derecha',
+  'sala-media-izquierda',
+  'sala-media-izquierda-inferior',
+  'sala-media-derecha',
+  'sala-inferior-izquierda',
+  'sala-inferior-centro',
+  'sala-inferior-derecha',
+] as const;
+
+const BOARD_ROOM_SPACE_SLOT_INDEX_BY_NODE_ID = Object.fromEntries(
+  BOARD_ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER.map((roomNodeId, index) => [roomNodeId, index])
+) as Record<(typeof BOARD_ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER)[number], number>;
+
 type BoardGridPoint = {
   col: number;
   row: number;
@@ -526,6 +544,58 @@ export function getSecretPassageDestinationNodeByRoomNodeId(nodeId: string) {
 
   const destinationRoomNodeId = ROOM_SECRET_PASSAGE_DESTINATIONS[node.id];
   return destinationRoomNodeId ? BOARD_MOVEMENT_NODES[destinationRoomNodeId] ?? null : null;
+}
+
+export function getBoardRoomSpaceSlotIndex(nodeId: string) {
+  return BOARD_ROOM_SPACE_SLOT_INDEX_BY_NODE_ID[nodeId as keyof typeof BOARD_ROOM_SPACE_SLOT_INDEX_BY_NODE_ID] ?? null;
+}
+
+export function findBoardMovementNodeByPosition(positionX: number | null, positionY: number | null) {
+  if (typeof positionX !== 'number' || typeof positionY !== 'number') {
+    return null;
+  }
+
+  const candidates = Object.values(BOARD_MOVEMENT_NODES).filter(
+    (node) =>
+      Math.abs(node.positionX - positionX) <= BOARD_MOVEMENT_POSITION_TOLERANCE &&
+      Math.abs(node.positionY - positionY) <= BOARD_MOVEMENT_POSITION_TOLERANCE
+  );
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const getKindPriority = (kind: BoardMovementNode['kind']) => {
+    if (kind === 'spawn') {
+      return 0;
+    }
+
+    if (kind === 'square') {
+      return 1;
+    }
+
+    return 2;
+  };
+
+  return candidates
+    .map((node) => ({
+      node,
+      distance: Math.hypot(node.positionX - positionX, node.positionY - positionY),
+      kindPriority: getKindPriority(node.kind),
+    }))
+    .sort((left, right) => {
+      const distanceDelta = left.distance - right.distance;
+      if (distanceDelta !== 0) {
+        return distanceDelta;
+      }
+
+      const kindDelta = left.kindPriority - right.kindPriority;
+      if (kindDelta !== 0) {
+        return kindDelta;
+      }
+
+      return left.node.id.localeCompare(right.node.id, 'es');
+    })[0]?.node ?? null;
 }
 
 export function findNearestBoardMovementNode(

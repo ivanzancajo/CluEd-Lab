@@ -11,6 +11,7 @@ import {
 import {
   buildNextTurnUpdate,
   ensureCurrentTurnBelongsToTeam,
+  ensureTeamCanTakeTurn,
   ensureTurnHasNoActiveDice,
   getActiveDice,
   getActiveDiceRemainingMoves,
@@ -258,6 +259,7 @@ export async function loadTeamMoveStateByAccessCode(
 ): Promise<TeamMoveState> {
   const session = await loadMovementSessionByAccessCode(client, accessCode);
   ensureSessionIsMovable(session.status);
+  ensureSessionHasNoPendingSuggestion(session);
   ensureCurrentTurnBelongsToTeam(session, teamId);
 
   const currentNode = resolveTeamMovementContext(session, teamId).currentNode;
@@ -298,6 +300,7 @@ export async function rollTeamDiceByAccessCode(
 ): Promise<TeamDiceRollResult> {
   const session = await loadMovementSessionByAccessCode(client, accessCode);
   ensureSessionIsMovable(session.status);
+  ensureSessionHasNoPendingSuggestion(session);
   ensureCurrentTurnBelongsToTeam(session, teamId);
   ensureTurnHasNoActiveDice(session);
 
@@ -342,6 +345,7 @@ export async function moveTeamByAccessCode(
 ): Promise<TeamMoveResult> {
   const session = await loadMovementSessionByAccessCode(client, accessCode);
   ensureSessionIsMovable(session.status);
+  ensureSessionHasNoPendingSuggestion(session);
   ensureCurrentTurnBelongsToTeam(session, teamId);
 
   const activeDice = getActiveDice(session);
@@ -376,9 +380,17 @@ export async function moveTeamByAccessCode(
     },
   });
 
+  const turnAdvanced = committedTargetNode.kind !== 'room';
+
   await client.partida.update({
     where: { id: session.id },
-    data: buildNextTurnUpdate(session),
+    data: turnAdvanced
+      ? buildNextTurnUpdate(session)
+      : {
+          activeDiceValueOne: null,
+          activeDiceValueTwo: null,
+          activeDiceRemainingMoves: null,
+        },
   });
 
   const updatedSession = await loadMovementSessionByAccessCode(client, accessCode);
@@ -393,7 +405,7 @@ export async function moveTeamByAccessCode(
     remainingMoves: null,
     currentNode: updatedContext.currentNode,
     destinationNodes: [],
-    turnAdvanced: true,
+    turnAdvanced,
   };
 }
 
@@ -420,6 +432,7 @@ async function loadMovementSessionByAccessCode(client: TeamMovementClient, acces
       activeDiceValueOne: true,
       activeDiceValueTwo: true,
       activeDiceRemainingMoves: true,
+      activeSuggestionEventId: true,
       teams: {
         select: {
           id: true,
@@ -427,6 +440,8 @@ async function loadMovementSessionByAccessCode(client: TeamMovementClient, acces
           color: true,
           positionX: true,
           positionY: true,
+          falseAccusation: true,
+          eliminatedAt: true,
         },
       },
     },
@@ -444,8 +459,15 @@ async function loadMovementSessionByAccessCode(client: TeamMovementClient, acces
     activeDiceValueOne: session.activeDiceValueOne,
     activeDiceValueTwo: session.activeDiceValueTwo,
     activeDiceRemainingMoves: session.activeDiceRemainingMoves,
+    activeSuggestionEventId: session.activeSuggestionEventId,
     teams: session.teams,
   };
+}
+
+function ensureSessionHasNoPendingSuggestion(session: { activeSuggestionEventId: string | null }) {
+  if (session.activeSuggestionEventId) {
+    throw new HttpError(409, 'Hay una sugerencia pendiente de refutación y la partida está temporalmente bloqueada.');
+  }
 }
 
 function buildTeamMoveValidationState(
@@ -463,6 +485,8 @@ function buildTeamMoveValidationState(
       color: ColorEquipo;
       positionX: number | null;
       positionY: number | null;
+      falseAccusation?: boolean | null;
+      eliminatedAt?: Date | null;
     }>;
   },
   teamId: string,
@@ -490,6 +514,8 @@ function resolveTeamMovementContext(session: {
     color: ColorEquipo;
     positionX: number | null;
     positionY: number | null;
+    falseAccusation?: boolean | null;
+    eliminatedAt?: Date | null;
   }>;
 }, teamId: string) {
   const team = session.teams.find((currentTeam) => currentTeam.id === teamId);
@@ -497,6 +523,8 @@ function resolveTeamMovementContext(session: {
   if (!team) {
     throw new HttpError(404, 'El equipo indicado no pertenece a la sesión seleccionada.');
   }
+
+  ensureTeamCanTakeTurn(team);
 
   const currentNode = resolveTeamCurrentNode(team);
   if (!currentNode) {

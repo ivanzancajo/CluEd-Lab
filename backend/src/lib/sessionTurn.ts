@@ -7,6 +7,8 @@ export type SessionTurnManagedTeam = {
   id: string;
   name: string;
   color: ColorEquipo;
+  falseAccusation?: boolean | null;
+  eliminatedAt?: Date | null;
 };
 
 type SessionTurnManagedState = {
@@ -27,7 +29,10 @@ export function sortTeamsByTurnOrder<T extends { color: ColorEquipo }>(teams: re
   return [...teams].sort((left, right) => getTeamSortIndex(left.color) - getTeamSortIndex(right.color));
 }
 
-export function ensureCurrentTurnBelongsToTeam(session: SessionTurnManagedState, teamId: string) {
+export function ensureCurrentTurnBelongsToTeam(
+  session: Pick<SessionTurnManagedState, 'teams' | 'currentTurnTeamId'>,
+  teamId: string
+) {
   if (session.currentTurnTeamId === teamId) {
     return;
   }
@@ -88,20 +93,42 @@ export function getNextTurnTeam<T extends SessionTurnManagedTeam>(
   currentTurnTeamId: string | null
 ) {
   const orderedTeams = sortTeamsByTurnOrder(teams);
-  if (orderedTeams.length === 0) {
+  const activeTeams = orderedTeams.filter((team) => !isTeamEliminated(team));
+
+  if (activeTeams.length === 0) {
     return null;
   }
 
   if (!currentTurnTeamId) {
-    return orderedTeams[0];
+    return activeTeams[0];
   }
 
   const currentTeamIndex = orderedTeams.findIndex((team) => team.id === currentTurnTeamId);
   if (currentTeamIndex === -1) {
-    return orderedTeams[0];
+    return activeTeams[0];
   }
 
-  return orderedTeams[(currentTeamIndex + 1) % orderedTeams.length];
+  for (let offset = 1; offset <= orderedTeams.length; offset += 1) {
+    const candidate = orderedTeams[(currentTeamIndex + offset) % orderedTeams.length];
+
+    if (candidate && !isTeamEliminated(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+export function isTeamEliminated(team: Pick<SessionTurnManagedTeam, 'falseAccusation' | 'eliminatedAt'>) {
+  return team.falseAccusation === true || team.eliminatedAt instanceof Date;
+}
+
+export function ensureTeamCanTakeTurn(team: Pick<SessionTurnManagedTeam, 'name' | 'falseAccusation' | 'eliminatedAt'>) {
+  if (!isTeamEliminated(team)) {
+    return;
+  }
+
+  throw new HttpError(409, `${team.name} ya ha quedado eliminado y no puede realizar acciones de turno.`);
 }
 
 export function buildNextTurnUpdate(

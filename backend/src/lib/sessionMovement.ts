@@ -13,6 +13,7 @@ import {
 import {
   buildNextTurnUpdate,
   ensureCurrentTurnBelongsToTeam,
+  ensureTeamCanTakeTurn,
   ensureTurnHasNoActiveDice,
   getActiveDice,
   getActiveDiceRemainingMoves,
@@ -393,6 +394,8 @@ async function loadMovementSessionByAccessCode(client: TeamMovementClient, acces
           color: true,
           positionX: true,
           positionY: true,
+          falseAccusation: true,
+          eliminatedAt: true,
         },
       },
     },
@@ -436,6 +439,8 @@ function buildTeamMoveValidationState(
       color: ColorEquipo;
       positionX: number | null;
       positionY: number | null;
+      falseAccusation?: boolean | null;
+      eliminatedAt?: Date | null;
     }>;
   },
   teamId: string,
@@ -463,6 +468,8 @@ function resolveTeamMovementContext(session: {
     color: ColorEquipo;
     positionX: number | null;
     positionY: number | null;
+    falseAccusation?: boolean | null;
+    eliminatedAt?: Date | null;
   }>;
 }, teamId: string) {
   const team = session.teams.find((currentTeam) => currentTeam.id === teamId);
@@ -470,6 +477,8 @@ function resolveTeamMovementContext(session: {
   if (!team) {
     throw new HttpError(404, 'El equipo indicado no pertenece a la sesión seleccionada.');
   }
+
+  ensureTeamCanTakeTurn(team);
 
   const currentNode = resolveTeamCurrentNode(team);
   if (!currentNode) {

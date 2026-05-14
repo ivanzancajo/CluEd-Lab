@@ -1,6 +1,7 @@
 import { io, type Socket } from 'socket.io-client';
 import { getStoredAdminToken } from './auth';
 import type {
+  FinalAccusationVerdict,
   LobbySession,
   LobbyTeam,
   SessionStatus,
@@ -30,11 +31,12 @@ export type LobbyPresenceState = {
 
 export type LobbyEventMessage = {
   id: string;
-  type: 'system' | 'team-connected' | 'team-disconnected';
+  type: 'system' | 'team-connected' | 'team-disconnected' | 'final-accusation-verdict';
   message: string;
   occurredAt: number;
   teamColor?: TeamColor | undefined;
   teamId?: string | undefined;
+  accusationVerdict?: FinalAccusationVerdict | undefined;
 };
 
 export type GameStartedPayload = {

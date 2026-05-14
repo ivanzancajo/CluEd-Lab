@@ -26,13 +26,13 @@ export const teamSecretPassageCommandSchema = z.object({
 });
 
 export const gameSuggestCommandSchema = z.object({
-  subjectElementId: z.string().uuid('El sospechoso sugerido debe ser un UUID válido.'),
-  objectElementId: z.string().uuid('El arma sugerida debe ser un UUID válido.'),
-  spaceElementId: z.string().uuid('La habitación sugerida debe ser un UUID válido.'),
+  subjectElementId: z.string().uuid('El sujeto de la sugerencia no es válido.'),
+  objectElementId: z.string().uuid('El objeto de la sugerencia no es válido.'),
+  spaceElementId: z.string().uuid('La sala de la sugerencia no es válida.'),
 });
 
 export const gameRefuteCommandSchema = z.object({
-  shownElementId: z.string().uuid('La carta mostrada debe ser un UUID válido.'),
+  shownElementId: z.string().uuid('La carta mostrada para refutar no es válida.'),
 });
 
 export type HostLobbySubscriptionInput = z.infer<typeof hostLobbySubscriptionSchema>;

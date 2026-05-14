@@ -24,15 +24,16 @@ import {
 import { DiceAnimation } from "../DiceAnimation";
 import {
   createLobbySocketClient,
+  emitTeamHeartbeat,
   emitTeamRefutation,
   emitTeamSecretPassage,
   emitTeamSuggestion,
-  emitTeamHeartbeat,
   subscribeTeamToLobby,
   type GameRefuteRequestPayload,
   type GameRefutationResultPayload,
   type GameStatusChangedPayload,
   type GameStartedPayload,
+  type LobbyEventMessage,
   type LobbySocketClient,
   type LobbyPresenceState,
 } from "../../src/lib/lobbySocket";
@@ -44,6 +45,11 @@ import {
   type BoardMovementNode,
 } from "../../src/lib/boardMovement";
 import { BOARD_CENTER_IMAGE_BOUNDS, BOARD_SPACE_SLOTS, mapBoardSpaces, readStoredBoardTheme, toBoardPercent, type StoredBoardTheme } from "../../src/lib/boardTheme";
+import {
+  type SuggestionSummary,
+  type TeamPendingSuggestionState,
+  type TeamTerminalState as SessionTerminalState,
+} from "../../src/lib/sessionApi";
 import {
   buildBoardDebugProbe,
   getStoredBoardDebugMode,
@@ -62,7 +68,9 @@ import {
 import { TEAM_HEARTBEAT_INTERVAL_MS } from "../../src/lib/teamMonitoring";
 import { getTeamMeta } from "../../src/lib/teamMeta";
 import {
+  accuseFinalSession,
   endTeamTurn,
+  type FinalAccusationVerdict,
   getSessionErrorMessage,
   getTeamMoveState,
   getTeamTerminalState,
@@ -70,12 +78,9 @@ import {
   rollTeamDice,
   type LobbySession,
   type SessionStatus,
-  type SuggestionSummary,
   type TeamColor,
   type TeamHandCard,
   type TeamMoveNode,
-  type TeamPendingSuggestionState,
-  type TeamTerminalState as SessionTerminalState,
 } from "../../src/lib/sessionApi";
 import { ThemedBoard } from "../game/ThemedBoard";
 import {
@@ -88,7 +93,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
-import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 
 interface ElementoItem {
   id: string;
@@ -107,8 +111,6 @@ interface RawItem {
   motif?: string;
   imageUrl?: string;
 }
-
-type DeductionMode = "hypothesis" | "final-accusation";
 
 interface GameConfig {
   id: string;
@@ -208,7 +210,7 @@ function mapHandCardToTerminalCard(card: TeamHandCard, config: GameConfig): Term
   };
 }
 
-function resolveCurrentTeamBoardNode(teams: LobbySession["teams"], teamId: string | null) {
+function resolveCurrentTeamBoardNode(teams: LobbySession["teams"], teamId: string | null): TeamMoveNode | null {
   if (!teamId) {
     return null;
   }
@@ -223,17 +225,14 @@ function resolveCurrentTeamBoardNode(teams: LobbySession["teams"], teamId: strin
 
 function mergePublicCurrentMoveNode(
   previousNode: TeamMoveNode | null,
-  teams: BoardTeamState[],
+  teams: LobbySession["teams"],
   teamId: string | null
 ): TeamMoveNode | null {
   const resolvedNode = resolveCurrentTeamBoardNode(teams, teamId);
+  const stablePreviousNode = previousNode as TeamMoveNode | null;
 
-  if (!previousNode) {
-    return resolvedNode;
-  }
-
-  if (previousNode.kind === "room" && resolvedNode?.kind !== "room") {
-    return previousNode;
+  if (stablePreviousNode?.kind === "room" && resolvedNode?.kind !== "room") {
+    return stablePreviousNode;
   }
 
   return resolvedNode;
@@ -274,32 +273,42 @@ export function TerminalView() {
   const [pendingSuggestion, setPendingSuggestion] = useState<TeamPendingSuggestionState | null>(null);
   const [selectedSubjectId, setSelectedSubjectId] = useState("");
   const [selectedObjectId, setSelectedObjectId] = useState("");
+  const [selectedSpaceId, setSelectedSpaceId] = useState("");
   const [selectedRefuteCardId, setSelectedRefuteCardId] = useState("");
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [suggestionNotice, setSuggestionNotice] = useState<string | null>(null);
   const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
   const [isSubmittingRefutation, setIsSubmittingRefutation] = useState(false);
   const [isEndingTurn, setIsEndingTurn] = useState(false);
+  const [isSubmittingAccusation, setIsSubmittingAccusation] = useState(false);
+  const [accusationError, setAccusationError] = useState<string | null>(null);
+  const [accusationFeedback, setAccusationFeedback] = useState<string | null>(null);
+  const [latestAccusationVerdict, setLatestAccusationVerdict] = useState<FinalAccusationVerdict | null>(null);
   const [refutationResult, setRefutationResult] = useState<GameRefutationResultPayload | null>(null);
-  const [deductionMode, setDeductionMode] = useState<DeductionMode>("hypothesis");
   
   const [categories, setCategories] = useState<{
     c1: ElementoItem[];
     c2: ElementoItem[];
     c3: ElementoItem[];
   }>({
-    c1: CATEGORIES.sujetos.map((s) => ({ id: s.name, ...s, desc: "Descripción", motif: "" })),
-    c2: CATEGORIES.objetos.map((o) => ({ id: o.name, ...o, desc: "Descripción", motif: "" })),
-    c3: CATEGORIES.espacios.map((e) => ({ id: e.name, ...e, desc: "Descripción", motif: "" }))
+    c1: CATEGORIES.sujetos.map(s => ({ id: s.name, ...s, desc: "Descripción", motif: "" })),
+    c2: CATEGORIES.objetos.map(o => ({ id: o.name, ...o, desc: "Descripción", motif: "" })),
+    c3: CATEGORIES.espacios.map(e => ({ id: e.name, ...e, desc: "Descripción", motif: "" }))
   });
   const [catNames, setCatNames] = useState({ c1: "Sujetos", c2: "Objetos", c3: "Espacios" });
 
   const storedTeamId = getStoredTeamId();
   const isMyTurn = sessionTurn?.currentTeamId === storedTeamId;
   const currentTurnRemainingMoves = sessionTurn?.remainingMoves ?? null;
+  const currentTeamState = boardTeams.find((team) => team.id === storedTeamId) ?? null;
+  const isTeamEliminated = Boolean(currentTeamState?.falseAccusation || currentTeamState?.eliminatedAt);
 
   const [selectedCard, setSelectedCard] = useState<TerminalCard | null>(null);
   const [cardFlipped, setCardFlipped] = useState(false);
+  const [suggestMode, setSuggestMode] = useState("hipotesis");
+  
+  // Mock room for locking hypothesis
+  const currentRoomMock = "Cámara Anecoica";
 
   const applyRealtimeSession = (session: LobbySession, currentTeam: LobbySession["teams"][number]) => {
     storeJoinedLobbySession({ session, team: currentTeam });
@@ -446,6 +455,11 @@ export function TerminalView() {
       return;
     }
 
+    if (isTeamEliminated) {
+      setMoveError(eliminatedMoveErrorMessage);
+      return;
+    }
+
     if (!isMyTurn) {
       setMoveError("Ahora mismo no puedes mover este peón porque no es tu turno.");
       return;
@@ -499,6 +513,13 @@ export function TerminalView() {
 
     if (isBoardDebugEnabled) {
       setBoardDebugProbe(buildBoardDebugProbe(positionX, positionY, matchedNode));
+    }
+
+    if (sessionStatus === "EN_CURSO" && isTeamEliminated) {
+      setIsMoveConfirmOpen(false);
+      setSelectedDestinationNodeId("");
+      setMoveError(eliminatedMoveErrorMessage);
+      return;
     }
 
     if (
@@ -867,16 +888,7 @@ export function TerminalView() {
         return;
       }
 
-      setBoardTeams(
-        state.teams.map((team) => ({
-          id: team.id,
-          name: team.name,
-          color: team.color,
-          positionX: team.positionX,
-          positionY: team.positionY,
-          falseAccusation: team.falseAccusation,
-        }))
-      );
+      setBoardTeams(state.teams.map((team) => team));
       setTeamName(currentTeam.name);
       setTeamColor(currentTeam.color);
       setSessionStatus(state.status);
@@ -886,18 +898,14 @@ export function TerminalView() {
       setLobbyConnectionStatus(currentTeam.connected ? "connected" : "disconnected");
     };
 
-    const applyGameStatusChanged = (payload: GameStatusChangedPayload) => {
-      const currentTeam = payload.session.teams.find((team) => team.id === teamId) ?? null;
-
-      if (!currentTeam) {
-        setLobbyConnectionStatus("error");
-        setLobbyError("El equipo seleccionado ya no pertenece a la partida actual.");
+    const applyLobbyEvent = (event: LobbyEventMessage) => {
+      if (event.type !== "final-accusation-verdict" || !event.accusationVerdict) {
         return;
       }
 
-      applyRealtimeSession(payload.session, currentTeam);
-      setLobbyConnectionStatus("connected");
-      setMoveError(payload.status === "PAUSADA" ? "La partida esta pausada por el Game Master." : null);
+      setLatestAccusationVerdict(event.accusationVerdict);
+      setAccusationFeedback(buildAccusationFeedback(event.accusationVerdict, teamId));
+      setAccusationError(null);
     };
 
     const handleRefuteRequest = (payload: GameRefuteRequestPayload) => {
@@ -928,6 +936,20 @@ export function TerminalView() {
       void refreshTerminalState();
     };
 
+    const applyGameStatusChanged = (payload: GameStatusChangedPayload) => {
+      const currentTeam = payload.session.teams.find((team) => team.id === teamId) ?? null;
+
+      if (!currentTeam) {
+        setLobbyConnectionStatus("error");
+        setLobbyError("El equipo seleccionado ya no pertenece a la partida actual.");
+        return;
+      }
+
+      applyRealtimeSession(payload.session, currentTeam);
+      setLobbyConnectionStatus("connected");
+      setMoveError(payload.status === "PAUSADA" ? "La partida esta pausada por el Game Master." : null);
+    };
+
     socket.on("connect", async () => {
       setLobbyConnectionStatus("connecting");
 
@@ -945,6 +967,7 @@ export function TerminalView() {
     });
 
     socket.on("lobby:presence-updated", applyPresenceState);
+    socket.on("lobby:event", applyLobbyEvent);
     socket.on("gameStarted", applyGameStarted);
     socket.on("game:status-changed", applyGameStatusChanged);
     socket.on("game:refute-request", handleRefuteRequest);
@@ -1029,11 +1052,18 @@ export function TerminalView() {
   }, [categories.c2, selectedObjectId]);
 
   const currentTeamMeta = teamColor ? getTeamMeta(teamColor) : null;
+  const hasActiveTeams = boardTeams.some((team) => !team.falseAccusation && !team.eliminatedAt);
+  const eliminatedMovementMessage = "Tu equipo ha sido eliminado. El peon permanece donde quedo y ya no volvera a tener turno. Si bloquea una puerta, seguira ocupandola.";
+  const eliminatedMoveErrorMessage = "Tu equipo ya ha sido eliminado y no puede volver a mover este peon.";
+  const eliminatedSuggestionMessage = "Tu equipo ha sido eliminado. Ya no puede sugerir ni acusar, pero debe mostrar una carta si la mesa le pide refutar y mantener la solucion en secreto.";
+  const eliminatedRefuteMessage = "Aunque tu equipo este eliminado, debes mostrar una carta para refutar en privado y mantener la solucion del sobre en secreto.";
   const sessionStatusLabel =
     sessionStatus === "EN_CURSO"
       ? "PARTIDA EN CURSO"
       : sessionStatus === "PAUSADA"
       ? "PARTIDA PAUSADA"
+      : sessionStatus === "FINALIZADA"
+      ? "PARTIDA FINALIZADA"
       : sessionStatus === "REPARTO"
       ? "REPARTO DE CARTAS"
       : "SALA DE ESPERA";
@@ -1081,6 +1111,7 @@ export function TerminalView() {
   const canEmitSecretPassageEvent =
     sessionStatus === "EN_CURSO" &&
     isMyTurn &&
+    !isTeamEliminated &&
     sessionTurn?.dice === null &&
     resolvedCurrentMoveNode?.kind === "room" &&
     !activeSuggestion &&
@@ -1100,100 +1131,117 @@ export function TerminalView() {
   const currentTurnRemainingLabel = currentTurnRemainingMoves === null
     ? "Sin movimiento activo"
     : `Alcance de tirada: ${currentTurnRemainingMoves}`;
-  const currentRoomSpaceSlotIndex = resolvedCurrentMoveNode?.kind === "room" ? getBoardRoomSpaceSlotIndex(resolvedCurrentMoveNode.id) : null;
+  const currentRoomLabel = resolvedCurrentMoveNode?.kind === "room" ? resolvedCurrentMoveNode.label : currentRoomMock;
+  const currentRoomSpaceSlotIndex = resolvedCurrentMoveNode?.kind === "room"
+    ? getBoardRoomSpaceSlotIndex(resolvedCurrentMoveNode.id)
+    : null;
   const currentRoomSpace = currentRoomSpaceSlotIndex === null ? null : categories.c3[currentRoomSpaceSlotIndex] ?? null;
   const selectedSubject = categories.c1.find((item) => item.id === selectedSubjectId) ?? null;
   const selectedObject = categories.c2.find((item) => item.id === selectedObjectId) ?? null;
   const refuteRequest = pendingSuggestion?.type === "REFUTE_REQUEST" ? pendingSuggestion : null;
   const awaitingRefutation = pendingSuggestion?.type === "AWAITING_REFUTATION" ? pendingSuggestion : null;
+  const selectedRefuteCard = refuteRequest?.matchingCards.find((card) => card.id === selectedRefuteCardId) ?? null;
   const canUseRealtimeSuggestion = lobbyConnectionStatus === "connected" && Boolean(lobbySocketRef.current);
   const canComposeSuggestion =
+    suggestMode === "hipotesis" &&
     sessionStatus === "EN_CURSO" &&
     isMyTurn &&
+    !isTeamEliminated &&
     resolvedCurrentMoveNode?.kind === "room" &&
     sessionTurn?.dice === null &&
     !activeSuggestion &&
     !pendingSuggestion;
   const suggestionPreview = currentRoomSpace && selectedSubject && selectedObject
-    ? {
-        subject: selectedSubject,
-        object: selectedObject,
-        space: currentRoomSpace,
-      }
+    ? { subject: selectedSubject, object: selectedObject, space: currentRoomSpace }
     : null;
-  const isFinalAccusationMode = deductionMode === "final-accusation";
-  const selectedRefuteCard = refuteRequest?.matchingCards.find((card) => card.id === selectedRefuteCardId) ?? null;
-  const mapDeductionSuggestion = refuteRequest?.suggestion ?? awaitingRefutation?.suggestion ?? activeSuggestion ?? refutationResult?.suggestion ?? null;
-  const mapDeductionSpaceIndex = mapDeductionSuggestion
-    ? boardSpaces.findIndex((space) => space.id === mapDeductionSuggestion.space.id)
-    : -1;
-  const mapDeductionSlot = mapDeductionSpaceIndex >= 0 ? BOARD_SPACE_SLOTS[mapDeductionSpaceIndex] ?? null : null;
-  const mapDeductionState = refuteRequest
-    ? {
-        title: "Refuta",
-        subtitle: refuteRequest.suggestion.space.name,
-        chip: "Privado",
-        tone: "border-red-700/70 bg-red-950/45 text-red-100",
-        glow: "bg-red-500/20",
-        ring: "border-red-400/80",
-        icon: <Shield className="h-4 w-4 text-red-200" />,
-      }
-    : awaitingRefutation
-    ? {
-        title: "Hipotesis",
-        subtitle: "En refutacion",
-        chip: awaitingRefutation.suggestion.receiverTeamName ?? "En curso",
-        tone: "border-amber-700/70 bg-amber-950/45 text-amber-100",
-        glow: "bg-amber-400/20",
-        ring: "border-amber-300/80",
-        icon: <MessageSquare className="h-4 w-4 text-amber-100" />,
-      }
+  const suggestionPanelMessage = refuteRequest
+    ? isTeamEliminated
+      ? eliminatedRefuteMessage
+      : "Selecciona una carta para refutar en privado la sugerencia activa."
+    : isTeamEliminated
+    ? eliminatedSuggestionMessage
     : activeSuggestion
-    ? {
-        title: "Hipotesis",
-        subtitle: activeSuggestion.space.name,
-        chip: activeSuggestion.receiverTeamName ? "Refutacion" : "En mesa",
-        tone: "border-cyan-700/70 bg-cyan-950/45 text-cyan-100",
-        glow: "bg-cyan-400/20",
-        ring: "border-cyan-300/80",
-        icon: <MessageSquare className="h-4 w-4 text-cyan-100" />,
-      }
-    : refutationResult
-    ? {
-        title: refutationResult.outcome === "REFUTED" ? "Refutada" : "Sin refutar",
-        subtitle: refutationResult.suggestion.space.name,
-        chip: refutationResult.outcome === "REFUTED" ? (refutationResult.shownByTeamName ?? "Carta mostrada") : "Mesa limpia",
-        tone: refutationResult.outcome === "REFUTED"
-          ? "border-emerald-700/70 bg-emerald-950/45 text-emerald-100"
-          : "border-fuchsia-700/70 bg-fuchsia-950/45 text-fuchsia-100",
-        glow: refutationResult.outcome === "REFUTED" ? "bg-emerald-400/20" : "bg-fuchsia-400/20",
-        ring: refutationResult.outcome === "REFUTED" ? "border-emerald-300/80" : "border-fuchsia-300/80",
-        icon: refutationResult.outcome === "REFUTED"
-          ? <Shield className="h-4 w-4 text-emerald-100" />
-          : <Crosshair className="h-4 w-4 text-fuchsia-100" />,
-      }
-    : null;
-  const suggestionPanelMessage =
-    sessionStatus !== "EN_CURSO"
-      ? "La partida debe estar en curso para abrir un canal de sugerencia."
-      : !isMyTurn
-      ? `Ahora mismo juega ${currentTurnLabel}. El canal se activará cuando llegue tu turno.`
-      : resolvedCurrentMoveNode?.kind !== "room"
-      ? "Muévete a una sala del tablero para poder lanzar una sugerencia." 
-      : sessionTurn?.dice !== null
-      ? "Completa primero el movimiento del peón antes de sugerir desde la sala." 
-      : activeSuggestion
-      ? `Hay una sugerencia activa en mesa: ${buildSuggestionSentence(activeSuggestion)}.`
-      : !canUseRealtimeSuggestion
-      ? "El canal privado de refutación se está reconectando."
-      : "Selecciona un sujeto y un objeto para lanzar la sugerencia desde tu sala actual.";
+    ? "La mesa está esperando a que termine la resolución de la sugerencia activa."
+    : sessionStatus !== "EN_CURSO"
+    ? "La deducción solo se habilita mientras la partida está en curso."
+    : !isMyTurn
+    ? `Solo puedes sugerir en tu turno. Ahora juega ${currentTurnLabel}.`
+    : sessionTurn?.dice !== null
+    ? "Completa el movimiento del peón antes de usar el canal de deducción."
+    : resolvedCurrentMoveNode?.kind !== "room"
+    ? "Debes terminar tu movimiento dentro de una sala para poder lanzar una sugerencia."
+    : "La sala está lista. Puedes sugerir o cerrar el turno sin sugerencia.";
   const topStatusMessage = activeSuggestion
-    ? `Sugerencia activa: ${buildSuggestionSentence(activeSuggestion)}${activeSuggestion.receiverTeamName ? `. Esperando refutación de ${activeSuggestion.receiverTeamName}.` : "."}`
+    ? `Sugerencia activa: ${buildSuggestionSentence(activeSuggestion)}.`
     : sessionStatus === "EN_CURSO"
     ? `Turno actual: ${currentTurnLabel}. ${sessionTurn?.dice ? `Dados ${currentTurnDiceLabel}. ${currentTurnRemainingLabel}.` : "Sin tirada activa."}`
     : sessionStatus === "PAUSADA"
     ? "Partida pausada por el Game Master. Esperando reanudacion."
+    : sessionStatus === "FINALIZADA"
+    ? hasActiveTeams
+      ? "Partida finalizada. Ya no hay turnos activos."
+      : "Partida finalizada. No quedan equipos activos."
     : "Esperando a que el Game Master inicie la partida.";
+  const accusationBannerMessage = latestAccusationVerdict
+    ? accusationFeedback ?? buildAccusationFeedback(latestAccusationVerdict, storedTeamId)
+    : null;
+
+  const handleFinalAccusation = async () => {
+    const accessCode = getStoredSessionCode();
+    const teamId = getStoredTeamId();
+
+    if (!accessCode || !teamId) {
+      return;
+    }
+
+    if (sessionStatus !== "EN_CURSO") {
+      setAccusationError("La acusación final solo está disponible mientras la partida sigue en curso.");
+      return;
+    }
+
+    if (activeSuggestion || pendingSuggestion) {
+      setAccusationError("No puedes realizar la acusación final mientras haya una sugerencia pendiente de resolución.");
+      return;
+    }
+
+    if (!isMyTurn) {
+      setAccusationError("Solo puedes realizar la acusación final durante tu turno.");
+      return;
+    }
+
+    if (isTeamEliminated) {
+      setAccusationError("Tu equipo ya está eliminado y no puede volver a acusar.");
+      return;
+    }
+
+    if (!selectedSubjectId || !selectedObjectId || !selectedSpaceId) {
+      setAccusationError("Debes seleccionar un sujeto, un objeto y un espacio antes de acusar.");
+      return;
+    }
+
+    setIsSubmittingAccusation(true);
+    setAccusationError(null);
+
+    try {
+      const result = await accuseFinalSession(accessCode, teamId, {
+        subjectElementId: selectedSubjectId,
+        objectElementId: selectedObjectId,
+        spaceElementId: selectedSpaceId,
+      });
+      const currentTeam = result.session.teams.find((team) => team.id === teamId) ?? null;
+
+      if (currentTeam) {
+        applyRealtimeSession(result.session, currentTeam);
+      }
+
+      setLatestAccusationVerdict(result.verdict);
+      setAccusationFeedback(buildAccusationFeedback(result.verdict, teamId));
+    } catch (error) {
+      setAccusationError(getSessionErrorMessage(error, "No se ha podido resolver la acusación final."));
+    } finally {
+      setIsSubmittingAccusation(false);
+    }
+  };
 
   return (
     <div className="flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#020617] text-cyan-400 font-mono relative overflow-hidden shadow-2xl border-x border-slate-900">
@@ -1214,7 +1262,7 @@ export function TerminalView() {
               {isMyTurn ? "MI TURNO" : "ESPERA"}
             </span>
           </h2>
-          <p className={`text-[10px] mt-1 ${currentTeamMeta?.textClass ?? 'text-slate-500'}`}>
+          <p data-cy="terminal-status-line" className={`text-[10px] mt-1 ${currentTeamMeta?.textClass ?? 'text-slate-500'}`}>
             {teamName.toUpperCase()} - {sessionStatusLabel} - {connectionLabel}
           </p>
         </div>
@@ -1230,6 +1278,19 @@ export function TerminalView() {
       {lobbyError ? (
         <div className="px-4 py-2 bg-red-950/40 border-b border-red-900/60 text-[11px] text-red-100">
           {lobbyError}
+        </div>
+      ) : null}
+
+      {accusationBannerMessage ? (
+        <div
+          data-cy="terminal-accusation-banner"
+          className={`px-4 py-2 border-b text-[11px] ${
+            latestAccusationVerdict?.outcome === "CORRECTA"
+              ? "bg-emerald-950/40 border-emerald-900/60 text-emerald-100"
+              : "bg-red-950/40 border-red-900/60 text-red-100"
+          }`}
+        >
+          {accusationBannerMessage}
         </div>
       ) : null}
 
@@ -1268,46 +1329,6 @@ export function TerminalView() {
                    boardImageAlt="Mapa temático de la partida"
                    dataCy="terminal-themed-board"
                  >
-                   {mapDeductionState && mapDeductionSlot ? (
-                     <>
-                       <div
-                         data-cy="terminal-map-deduction-focus"
-                         className="pointer-events-none absolute z-[26] -translate-x-1/2 -translate-y-1/2"
-                         style={{
-                           left: toBoardPercent(mapDeductionSlot.positionX),
-                           top: toBoardPercent(mapDeductionSlot.positionY),
-                         }}
-                       >
-                         <span className={`absolute inset-[-32%] rounded-full ${mapDeductionState.glow} blur-xl`} />
-                         <span className={`absolute inset-[-20%] rounded-full ${mapDeductionState.ring} animate-ping border`} />
-                         <span className={`absolute inset-[-10%] rounded-full ${mapDeductionState.ring} border opacity-80`} />
-                         <div className={`relative flex h-10 w-10 items-center justify-center rounded-full border bg-slate-950/90 shadow-[0_0_22px_rgba(2,6,23,0.5)] ${mapDeductionState.ring}`}>
-                           {mapDeductionState.icon}
-                         </div>
-                       </div>
-
-                       <div
-                         data-cy="terminal-map-deduction-activity"
-                         className={`pointer-events-none absolute bottom-3 left-3 z-[27] min-w-[10.5rem] rounded-2xl border px-3 py-2 shadow-[0_12px_28px_rgba(2,6,23,0.45)] backdrop-blur-md ${mapDeductionState.tone}`}
-                       >
-                         <div className="flex items-center justify-between gap-3">
-                           <div className="flex items-center gap-2">
-                             <div className="rounded-full border border-white/10 bg-slate-950/55 p-1.5">
-                               {mapDeductionState.icon}
-                             </div>
-                             <div>
-                               <p className="text-[10px] font-black uppercase tracking-[0.22em]">{mapDeductionState.title}</p>
-                               <p className="text-[11px] text-white">{mapDeductionState.subtitle}</p>
-                             </div>
-                           </div>
-                           <span className="rounded-full border border-white/10 bg-slate-950/55 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.18em] text-white/90">
-                             {mapDeductionState.chip}
-                           </span>
-                         </div>
-                       </div>
-                     </>
-                   ) : null}
-
                    {sessionStatus === "EN_CURSO" ? (
                      <div
                        data-cy="terminal-board-surface"
@@ -1412,6 +1433,10 @@ export function TerminalView() {
                     {!sessionTurn ? (
                       <p className="mt-3 text-[11px] text-slate-400">
                         Sincronizando el estado del turno actual.
+                      </p>
+                    ) : isTeamEliminated ? (
+                      <p className="mt-3 text-[11px] text-slate-400">
+                        {eliminatedMovementMessage}
                       </p>
                     ) : !isMyTurn ? (
                       <p className="mt-3 text-[11px] text-slate-400">
@@ -1660,24 +1685,40 @@ export function TerminalView() {
                       </h3>
                     </div>
 
-                    <div className={`shrink-0 rounded-2xl border px-3 py-2 text-right text-[10px] font-bold uppercase tracking-[0.22em] ${
-                      refuteRequest
-                        ? "border-red-700/70 bg-red-950/40 text-red-100"
-                        : awaitingRefutation || activeSuggestion
-                        ? "border-amber-700/70 bg-amber-950/35 text-amber-100"
-                        : canComposeSuggestion
-                        ? "border-emerald-700/70 bg-emerald-950/35 text-emerald-100"
-                        : "border-slate-700 bg-slate-900/70 text-slate-400"
-                    }`}>
-                      {refuteRequest
-                        ? "Refuta ahora"
-                        : awaitingRefutation
-                        ? "Esperando carta"
-                        : activeSuggestion
-                        ? "Mesa bloqueada"
-                        : canComposeSuggestion
-                        ? "Sala lista"
-                        : "Canal en espera"}
+                    <div className="flex flex-col items-end gap-3">
+                      <div className={`shrink-0 rounded-2xl border px-3 py-2 text-right text-[10px] font-bold uppercase tracking-[0.22em] ${
+                        refuteRequest
+                          ? "border-red-700/70 bg-red-950/40 text-red-100"
+                          : awaitingRefutation || activeSuggestion
+                          ? "border-amber-700/70 bg-amber-950/35 text-amber-100"
+                          : isTeamEliminated
+                          ? "border-red-700/70 bg-red-950/40 text-red-100"
+                          : canComposeSuggestion
+                          ? "border-emerald-700/70 bg-emerald-950/35 text-emerald-100"
+                          : "border-slate-700 bg-slate-900/70 text-slate-400"
+                      }`}>
+                        {refuteRequest
+                          ? "Refuta ahora"
+                          : awaitingRefutation
+                          ? "Esperando carta"
+                          : activeSuggestion
+                          ? "Mesa bloqueada"
+                          : isTeamEliminated
+                          ? "Equipo eliminado"
+                          : canComposeSuggestion
+                          ? "Sala lista"
+                          : "Canal en espera"}
+                      </div>
+
+                      <select
+                        data-cy="terminal-suggest-mode-select"
+                        value={suggestMode}
+                        onChange={(event) => setSuggestMode(event.target.value)}
+                        className="rounded-xl border border-cyan-900/60 bg-slate-950/85 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200 outline-none focus:border-cyan-500"
+                      >
+                        <option value="hipotesis">Hipotesis</option>
+                        <option value="acusacion">Acusacion final</option>
+                      </select>
                     </div>
                   </div>
 
@@ -1687,7 +1728,7 @@ export function TerminalView() {
                         <MapPin className="h-3.5 w-3.5" />
                         Sala actual
                       </div>
-                      <p className="mt-2 text-sm font-semibold text-white">{currentRoomSpace?.name ?? resolvedCurrentMoveNode?.label ?? "Sin sala activa"}</p>
+                      <p className="mt-2 text-sm font-semibold text-white">{currentRoomSpace?.name ?? currentRoomLabel ?? "Sin sala activa"}</p>
                     </div>
                     <div className="rounded-2xl border border-emerald-900/50 bg-emerald-950/20 p-3">
                       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-300">
@@ -1696,67 +1737,6 @@ export function TerminalView() {
                       </div>
                       <p className="mt-2 text-sm font-semibold text-white">{isMyTurn ? "Control local" : currentTurnLabel}</p>
                     </div>
-                  </div>
-                  <div className="rounded-[24px] border border-slate-700/80 bg-[linear-gradient(145deg,rgba(15,23,42,0.82),rgba(8,47,73,0.2))] p-4">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Modo de deduccion</p>
-
-                    <RadioGroup
-                      data-cy="terminal-deduction-mode-toggle"
-                      value={deductionMode}
-                      onValueChange={(value) => {
-                        if (value === "hypothesis" || value === "final-accusation") {
-                          setDeductionMode(value);
-                        }
-                      }}
-                      className="mt-4 grid gap-3"
-                    >
-                      {[
-                        {
-                          value: "hypothesis" as DeductionMode,
-                          title: "Hipotesis",
-                          badge: "Disponible",
-                          tone: "border-cyan-700/70 bg-cyan-950/20 text-cyan-100",
-                          accent: "text-cyan-300",
-                          icon: <MessageSquare className="h-4 w-4 text-cyan-300" />,
-                          dataCy: "terminal-deduction-mode-hypothesis",
-                        },
-                        {
-                          value: "final-accusation" as DeductionMode,
-                          title: "Acusacion final",
-                          badge: "Proximamente",
-                          tone: "border-fuchsia-700/70 bg-fuchsia-950/20 text-fuchsia-100",
-                          accent: "text-fuchsia-200",
-                          icon: <Crosshair className="h-4 w-4 text-fuchsia-200" />,
-                          dataCy: "terminal-deduction-mode-final-accusation",
-                        },
-                      ].map((option) => {
-                        const isSelected = deductionMode === option.value;
-
-                        return (
-                          <div
-                            key={option.value}
-                            data-cy={option.dataCy}
-                            onClick={() => setDeductionMode(option.value)}
-                            className={`cursor-pointer rounded-2xl border p-4 transition-all ${option.tone} ${isSelected ? "shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_0_24px_rgba(15,23,42,0.35)]" : "opacity-85 hover:opacity-100"}`}
-                          >
-                            <div className="flex items-start gap-3">
-                              <RadioGroupItem value={option.value} className="mt-1 border-current text-current" />
-                              <div className="flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <div className="flex min-w-0 items-center gap-2">
-                                    {option.icon}
-                                    <p className="text-sm font-black uppercase tracking-[0.18em] text-white">{option.title}</p>
-                                  </div>
-                                  <span className={`rounded-full border border-white/10 bg-slate-950/50 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.2em] ${option.accent}`}>
-                                    {option.badge}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </RadioGroup>
                   </div>
 
                   {suggestionError ? (
@@ -1771,266 +1751,371 @@ export function TerminalView() {
                     </div>
                   ) : null}
 
-                  {activeSuggestion ? (
-                    <div data-cy="terminal-active-suggestion" className="rounded-[26px] border border-slate-700/80 bg-[linear-gradient(135deg,rgba(8,47,73,0.42),rgba(15,23,42,0.88))] p-5 shadow-[0_10px_30px_rgba(8,47,73,0.18)]">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-200">Sugerencia activa</p>
-                          <h4 className="mt-2 text-base font-black text-white">{buildSuggestionSentence(activeSuggestion)}</h4>
-                          <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
-                            {activeSuggestion.emitterTeamName}
-                            {activeSuggestion.receiverTeamName ? ` · Refuta ${activeSuggestion.receiverTeamName}` : " · En mesa"}
-                          </p>
-                        </div>
-                        <div className="rounded-2xl border border-cyan-800/70 bg-slate-950/60 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
-                          {activeSuggestion.receiverTeamName ? "En refutacion" : "Abierta"}
-                        </div>
-                      </div>
-
-                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                        {[
-                          { label: catNames.c1, element: activeSuggestion.subject, tone: "border-cyan-700/70 bg-cyan-950/30 text-cyan-100", icon: <User className="h-4 w-4 text-cyan-300" /> },
-                          { label: catNames.c2, element: activeSuggestion.object, tone: "border-emerald-700/70 bg-emerald-950/30 text-emerald-100", icon: <Box className="h-4 w-4 text-emerald-300" /> },
-                          { label: catNames.c3, element: activeSuggestion.space, tone: "border-rose-700/70 bg-rose-950/30 text-rose-100", icon: <MapPin className="h-4 w-4 text-rose-300" /> },
-                        ].map((item) => (
-                          <div key={item.label} className={`rounded-2xl border p-3 ${item.tone}`}>
-                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em]">
-                              {item.icon}
-                              {item.label}
-                            </div>
-                            <p className="mt-2 text-sm font-semibold">{item.element.name}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {refuteRequest ? (
-                    <div data-cy="terminal-refute-panel" className="rounded-[26px] border border-red-800/70 bg-[linear-gradient(145deg,rgba(69,10,10,0.72),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_32px_rgba(69,10,10,0.24)]">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-red-200">Solicitud privada de refutacion</p>
-                          <h4 className="mt-2 text-base font-black text-white">Elige una carta para bloquear la sugerencia</h4>
-                        </div>
-                        <div className="rounded-2xl border border-red-700/80 bg-red-950/50 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-red-100">
-                          Privado
-                        </div>
-                      </div>
-
-                      <div className="mt-5 grid gap-3">
-                        {refuteRequest.matchingCards.map((card) => {
-                          const isSelected = selectedRefuteCardId === card.id;
-                          const tone = card.kind === "SUJETO"
-                            ? "border-cyan-700/70 bg-cyan-950/25"
-                            : card.kind === "OBJETO"
-                            ? "border-emerald-700/70 bg-emerald-950/25"
-                            : "border-rose-700/70 bg-rose-950/25";
-
-                          return (
-                            <button
-                              data-cy="terminal-refute-card"
-                              key={card.id}
-                              type="button"
-                              onClick={() => setSelectedRefuteCardId(card.id)}
-                              className={`rounded-2xl border p-4 text-left transition-all ${tone} ${isSelected ? "scale-[1.01] shadow-[0_0_0_1px_rgba(248,113,113,0.6),0_0_20px_rgba(127,29,29,0.28)]" : "opacity-90 hover:opacity-100"}`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="rounded-xl border border-white/10 bg-slate-950/60 p-2">
-                                  {card.kind === "SUJETO" ? <User className="h-4 w-4 text-cyan-300" /> : card.kind === "OBJETO" ? <Box className="h-4 w-4 text-emerald-300" /> : <MapPin className="h-4 w-4 text-rose-300" />}
-                                </div>
-                                <div className="flex-1">
-                                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-300">{card.kind}</p>
-                                  <p className="mt-1 text-sm font-semibold text-white">{card.name}</p>
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <button
-                        data-cy="terminal-refute-submit"
-                        type="button"
-                        onClick={() => void handleSubmitRefutation()}
-                        disabled={!selectedRefuteCard || isSubmittingRefutation || !canUseRealtimeSuggestion}
-                        className="mt-5 w-full rounded-2xl bg-red-500 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(239,68,68,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {isSubmittingRefutation ? "Mostrando carta..." : selectedRefuteCard ? `Mostrar ${selectedRefuteCard.name}` : "Selecciona una carta"}
-                      </button>
-                    </div>
-                  ) : awaitingRefutation ? (
-                    <div data-cy="terminal-awaiting-refutation" className="rounded-[26px] border border-amber-700/70 bg-[linear-gradient(145deg,rgba(120,53,15,0.42),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_30px_rgba(120,53,15,0.18)]">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-200">Esperando refutacion</p>
-                          <h4 className="mt-2 text-base font-black text-white">Tu sugerencia ya esta en mesa</h4>
-                          <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-amber-100/90">
-                            {awaitingRefutation.suggestion.receiverTeamName
-                              ? `${awaitingRefutation.suggestion.receiverTeamName} eligiendo carta`
-                              : "Resolucion en curso"}
-                          </p>
-                        </div>
-                        <div className="rounded-2xl border border-amber-600/70 bg-amber-950/45 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-amber-100">
-                          En curso
-                        </div>
-                      </div>
-                    </div>
-                  ) : refutationResult ? (
-                    <div data-cy="terminal-refutation-result" className="rounded-[26px] border border-emerald-700/70 bg-[linear-gradient(145deg,rgba(6,78,59,0.46),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_30px_rgba(6,78,59,0.2)]">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-200">Resultado privado</p>
-                          <h4 className="mt-2 text-base font-black text-white">
-                            {refutationResult.outcome === "REFUTED" ? "Tu sugerencia fue refutada" : "Nadie pudo refutar tu sugerencia"}
-                          </h4>
-                          <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-100/90">
-                            {refutationResult.outcome === "REFUTED"
-                              ? `${refutationResult.shownByTeamName ?? "Un equipo"} mostro una carta`
-                              : "Sin cartas coincidentes"}
-                          </p>
-                        </div>
-                        <div className="rounded-2xl border border-emerald-600/70 bg-emerald-950/45 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-100">
-                          {refutationResult.outcome === "REFUTED" ? "Refutada" : "Sin refutar"}
-                        </div>
-                      </div>
-
-                      {refutationResult.shownCard ? (
-                        <div className="mt-4 rounded-2xl border border-emerald-700/60 bg-slate-950/55 p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="rounded-xl border border-white/10 bg-slate-900/80 p-2">
-                              {refutationResult.shownCard.kind === "SUJETO" ? <User className="h-4 w-4 text-cyan-300" /> : refutationResult.shownCard.kind === "OBJETO" ? <Box className="h-4 w-4 text-emerald-300" /> : <MapPin className="h-4 w-4 text-rose-300" />}
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Carta revelada</p>
-                              <p className="mt-1 text-sm font-semibold text-white">{refutationResult.shownCard.name}</p>
-                              <p className="mt-1 text-xs text-slate-400">{refutationResult.shownCard.desc}</p>
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : isFinalAccusationMode ? (
-                    <div data-cy="terminal-final-accusation-placeholder" className="rounded-[26px] border border-fuchsia-700/60 bg-[linear-gradient(145deg,rgba(88,28,135,0.25),rgba(15,23,42,0.95))] p-5 shadow-[0_12px_32px_rgba(88,28,135,0.16)]">
+                  {suggestMode === "acusacion" ? (
+                    <div data-cy="terminal-final-accusation-panel" className="rounded-[26px] border border-fuchsia-700/60 bg-[linear-gradient(145deg,rgba(88,28,135,0.25),rgba(15,23,42,0.95))] p-5 shadow-[0_12px_32px_rgba(88,28,135,0.16)]">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-fuchsia-200">Acusacion final</p>
-                          <h4 className="mt-2 text-base font-black text-white">Canal reservado para la resolucion definitiva</h4>
+                          <h4 className="mt-2 text-base font-black text-white">Resolucion definitiva del sobre</h4>
                         </div>
                         <div className="rounded-2xl border border-fuchsia-700/70 bg-fuchsia-950/35 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-fuchsia-100">
-                          Proximamente
+                          Riesgo maximo
+                        </div>
+                      </div>
+
+                      <div data-cy="terminal-final-accusation-guard" className="mt-5 rounded-2xl border border-red-900/60 bg-red-950/15 px-4 py-3 text-[11px] text-red-100">
+                        {isTeamEliminated
+                          ? "Tu equipo ya ha sido eliminado y no puede realizar otra acusacion final."
+                          : activeSuggestion || pendingSuggestion
+                          ? "La mesa sigue resolviendo una sugerencia. Espera a que termine la refutacion antes de acusar."
+                          : !isMyTurn
+                          ? `Solo puedes acusar durante tu turno. Ahora juega ${currentTurnLabel}.`
+                          : "La acusacion final cierra tu turno. Si fallas, tu equipo queda eliminado."}
+                      </div>
+
+                      {accusationError ? (
+                        <div className="mt-4 rounded-2xl border border-red-900/60 bg-red-950/20 px-4 py-3 text-[11px] text-red-100">
+                          {accusationError}
+                        </div>
+                      ) : null}
+
+                      <div className="mt-5 grid gap-3">
+                        <div className="rounded-2xl border border-rose-800/60 bg-slate-950/45 p-4">
+                          <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-rose-200">
+                            <MapPin className="h-3.5 w-3.5" />
+                            {catNames.c3}
+                          </label>
+                          <select
+                            data-cy="terminal-final-accusation-space"
+                            value={selectedSpaceId}
+                            onChange={(event) => setSelectedSpaceId(event.target.value)}
+                            className="mt-3 w-full rounded-xl border border-rose-800/70 bg-slate-900/80 p-3 text-sm text-rose-100 outline-none focus:border-rose-400"
+                          >
+                            <option value="" disabled>Selecciona...</option>
+                            {BOARD_SPACE_SLOTS.map((slot, index) => {
+                              const space = categories.c3[index];
+                              const optionLabel = space?.name ?? `Sala ${index + 1}`;
+                              const optionValue = space?.id ?? slot.id;
+
+                              return (
+                                <option key={optionValue} value={optionValue}>
+                                  {optionLabel}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+
+                        <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/45 p-4">
+                          <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
+                            <User className="h-3.5 w-3.5" />
+                            {catNames.c1}
+                          </label>
+                          <select
+                            data-cy="terminal-final-accusation-subject"
+                            value={selectedSubjectId}
+                            onChange={(event) => setSelectedSubjectId(event.target.value)}
+                            className="mt-3 w-full rounded-xl border border-cyan-800/70 bg-slate-900/80 p-3 text-sm text-cyan-100 outline-none focus:border-cyan-400"
+                          >
+                            <option value="" disabled>Selecciona...</option>
+                            {categories.c1.map((item) => (
+                              <option key={item.id} value={item.id}>{item.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="rounded-2xl border border-emerald-800/60 bg-slate-950/45 p-4">
+                          <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">
+                            <Box className="h-3.5 w-3.5" />
+                            {catNames.c2}
+                          </label>
+                          <select
+                            data-cy="terminal-final-accusation-object"
+                            value={selectedObjectId}
+                            onChange={(event) => setSelectedObjectId(event.target.value)}
+                            className="mt-3 w-full rounded-xl border border-emerald-800/70 bg-slate-900/80 p-3 text-sm text-emerald-100 outline-none focus:border-emerald-400"
+                          >
+                            <option value="" disabled>Selecciona...</option>
+                            {categories.c2.map((item) => (
+                              <option key={item.id} value={item.id}>{item.name}</option>
+                            ))}
+                          </select>
                         </div>
                       </div>
 
                       <button
+                        data-cy="terminal-final-accusation-submit"
                         type="button"
-                        disabled
-                        className="mt-5 w-full rounded-2xl border border-fuchsia-700/60 bg-fuchsia-950/30 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-fuchsia-100 opacity-70"
+                        onClick={() => void handleFinalAccusation()}
+                        disabled={
+                          isSubmittingAccusation ||
+                          sessionStatus !== "EN_CURSO" ||
+                          activeSuggestion !== null ||
+                          pendingSuggestion !== null ||
+                          !isMyTurn ||
+                          isTeamEliminated ||
+                          !selectedSubjectId ||
+                          !selectedObjectId ||
+                          !selectedSpaceId
+                        }
+                        className="mt-5 w-full rounded-2xl bg-red-600 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(239,68,68,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        Acusacion final disponible en la siguiente historia
+                        {isSubmittingAccusation ? "Resolviendo acusacion..." : "Realizar acusacion"}
                       </button>
                     </div>
-                  ) : canComposeSuggestion ? (
-                    <div data-cy="terminal-compose-suggestion" className="rounded-[26px] border border-emerald-700/60 bg-[linear-gradient(145deg,rgba(6,95,70,0.28),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_32px_rgba(6,95,70,0.16)]">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-200">Hipotesis operativa</p>
-                          <h4 className="mt-2 text-base font-black text-white">Compone la sugerencia desde la sala actual</h4>
-                        </div>
-                        <div className="rounded-2xl border border-emerald-700/70 bg-emerald-950/45 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-100">
-                          {currentRoomSpace?.name ?? "Sincronizando sala"}
-                        </div>
-                      </div>
-
-                      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/45 p-4">
-                          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
-                            <User className="h-3.5 w-3.5" />
-                            {catNames.c1}
-                          </div>
-                          <div className="mt-3 grid gap-2">
-                            {categories.c1.map((item) => {
-                              const isSelected = selectedSubjectId === item.id;
-                              return (
-                                <button
-                                  data-cy="terminal-suggest-subject"
-                                  key={item.id}
-                                  type="button"
-                                  onClick={() => setSelectedSubjectId(item.id)}
-                                  className={`rounded-xl border px-3 py-3 text-left transition-all ${isSelected ? "border-cyan-400 bg-cyan-950/40 shadow-[0_0_18px_rgba(34,211,238,0.18)]" : "border-slate-700 bg-slate-900/70 hover:border-cyan-700/60"}`}
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <div className={`rounded-lg border p-2 ${item.color}`}>{item.avatar}</div>
-                                    <p className="text-sm font-semibold text-white">{item.name}</p>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div className="rounded-2xl border border-emerald-800/60 bg-slate-950/45 p-4">
-                          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">
-                            <Box className="h-3.5 w-3.5" />
-                            {catNames.c2}
-                          </div>
-                          <div className="mt-3 grid gap-2">
-                            {categories.c2.map((item) => {
-                              const isSelected = selectedObjectId === item.id;
-                              return (
-                                <button
-                                  data-cy="terminal-suggest-object"
-                                  key={item.id}
-                                  type="button"
-                                  onClick={() => setSelectedObjectId(item.id)}
-                                  className={`rounded-xl border px-3 py-3 text-left transition-all ${isSelected ? "border-emerald-400 bg-emerald-950/40 shadow-[0_0_18px_rgba(16,185,129,0.18)]" : "border-slate-700 bg-slate-900/70 hover:border-emerald-700/60"}`}
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <div className={`rounded-lg border p-2 ${item.color}`}>{item.avatar}</div>
-                                    <p className="text-sm font-semibold text-white">{item.name}</p>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div data-cy="terminal-suggestion-preview" className="mt-5 rounded-2xl border border-slate-700 bg-slate-950/65 p-4">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Vista previa</p>
-                        <p className="mt-2 text-sm text-white">
-                          {suggestionPreview
-                            ? `${suggestionPreview.subject.name} con ${suggestionPreview.object.name} en ${suggestionPreview.space.name}`
-                            : "Selecciona un sujeto y un objeto para completar la hipótesis desde la sala actual."}
-                        </p>
-                      </div>
-
-                      <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
-                        <button
-                          data-cy="terminal-suggest-submit"
-                          type="button"
-                          onClick={() => void handleSubmitSuggestion()}
-                          disabled={!suggestionPreview || isSubmittingSuggestion || !canUseRealtimeSuggestion}
-                          className="rounded-2xl bg-cyan-500 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.3)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isSubmittingSuggestion ? "Enviando sugerencia..." : "Lanzar sugerencia"}
-                        </button>
-                        <button
-                          data-cy="terminal-end-turn-submit"
-                          type="button"
-                          onClick={() => void handleEndTurnFromRoom()}
-                          disabled={isEndingTurn}
-                          className="rounded-2xl border border-slate-600 bg-slate-900/75 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isEndingTurn ? "Cerrando..." : "Terminar turno"}
-                        </button>
-                      </div>
-                    </div>
                   ) : (
-                    <div data-cy="terminal-suggest-blocked" className="rounded-[26px] border border-slate-700/80 bg-[linear-gradient(145deg,rgba(15,23,42,0.92),rgba(2,6,23,0.98))] p-5">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Canal bloqueado</p>
-                      <h4 className="mt-2 text-base font-black text-white">Todavia no puedes interactuar con la sugerencia</h4>
-                      <p className="mt-3 text-sm leading-relaxed text-slate-300">{suggestionPanelMessage}</p>
-                    </div>
+                    <>
+                      {activeSuggestion ? (
+                        <div data-cy="terminal-active-suggestion" className="rounded-[26px] border border-slate-700/80 bg-[linear-gradient(135deg,rgba(8,47,73,0.42),rgba(15,23,42,0.88))] p-5 shadow-[0_10px_30px_rgba(8,47,73,0.18)]">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-200">Sugerencia activa</p>
+                              <h4 className="mt-2 text-base font-black text-white">{buildSuggestionSentence(activeSuggestion)}</h4>
+                              <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
+                                {activeSuggestion.emitterTeamName}
+                                {activeSuggestion.receiverTeamName ? ` · Refuta ${activeSuggestion.receiverTeamName}` : " · En mesa"}
+                              </p>
+                            </div>
+                            <div className="rounded-2xl border border-cyan-800/70 bg-slate-950/60 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
+                              {activeSuggestion.receiverTeamName ? "En refutacion" : "Abierta"}
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                            {[
+                              { label: catNames.c1, element: activeSuggestion.subject, tone: "border-cyan-700/70 bg-cyan-950/30 text-cyan-100", icon: <User className="h-4 w-4 text-cyan-300" /> },
+                              { label: catNames.c2, element: activeSuggestion.object, tone: "border-emerald-700/70 bg-emerald-950/30 text-emerald-100", icon: <Box className="h-4 w-4 text-emerald-300" /> },
+                              { label: catNames.c3, element: activeSuggestion.space, tone: "border-rose-700/70 bg-rose-950/30 text-rose-100", icon: <MapPin className="h-4 w-4 text-rose-300" /> },
+                            ].map((item) => (
+                              <div key={item.label} className={`rounded-2xl border p-3 ${item.tone}`}>
+                                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em]">
+                                  {item.icon}
+                                  {item.label}
+                                </div>
+                                <p className="mt-2 text-sm font-semibold">{item.element.name}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {refuteRequest ? (
+                        <div data-cy="terminal-refute-panel" className="rounded-[26px] border border-red-800/70 bg-[linear-gradient(145deg,rgba(69,10,10,0.72),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_32px_rgba(69,10,10,0.24)]">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-red-200">Solicitud privada de refutacion</p>
+                              <h4 className="mt-2 text-base font-black text-white">Elige una carta para bloquear la sugerencia</h4>
+                            </div>
+                            <div className="rounded-2xl border border-red-700/80 bg-red-950/50 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-red-100">
+                              Privado
+                            </div>
+                          </div>
+
+                          {isTeamEliminated ? (
+                            <div
+                              data-cy="terminal-eliminated-refute-note"
+                              className="mt-4 rounded-2xl border border-amber-700/70 bg-amber-950/25 px-4 py-3 text-[11px] text-amber-100"
+                            >
+                              {eliminatedRefuteMessage}
+                            </div>
+                          ) : null}
+
+                          <div className="mt-5 grid gap-3">
+                            {refuteRequest.matchingCards.map((card) => {
+                              const isSelected = selectedRefuteCardId === card.id;
+                              const tone = card.kind === "SUJETO"
+                                ? "border-cyan-700/70 bg-cyan-950/25"
+                                : card.kind === "OBJETO"
+                                ? "border-emerald-700/70 bg-emerald-950/25"
+                                : "border-rose-700/70 bg-rose-950/25";
+
+                              return (
+                                <button
+                                  data-cy="terminal-refute-card"
+                                  key={card.id}
+                                  type="button"
+                                  onClick={() => setSelectedRefuteCardId(card.id)}
+                                  className={`rounded-2xl border p-4 text-left transition-all ${tone} ${isSelected ? "scale-[1.01] shadow-[0_0_0_1px_rgba(248,113,113,0.6),0_0_20px_rgba(127,29,29,0.28)]" : "opacity-90 hover:opacity-100"}`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className="rounded-xl border border-white/10 bg-slate-950/60 p-2">
+                                      {card.kind === "SUJETO" ? <User className="h-4 w-4 text-cyan-300" /> : card.kind === "OBJETO" ? <Box className="h-4 w-4 text-emerald-300" /> : <MapPin className="h-4 w-4 text-rose-300" />}
+                                    </div>
+                                    <div className="flex-1">
+                                      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-300">{card.kind}</p>
+                                      <p className="mt-1 text-sm font-semibold text-white">{card.name}</p>
+                                    </div>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <button
+                            data-cy="terminal-refute-submit"
+                            type="button"
+                            onClick={() => void handleSubmitRefutation()}
+                            disabled={!selectedRefuteCard || isSubmittingRefutation || !canUseRealtimeSuggestion}
+                            className="mt-5 w-full rounded-2xl bg-red-500 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(239,68,68,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isSubmittingRefutation ? "Mostrando carta..." : selectedRefuteCard ? `Mostrar ${selectedRefuteCard.name}` : "Selecciona una carta"}
+                          </button>
+                        </div>
+                      ) : awaitingRefutation ? (
+                        <div data-cy="terminal-awaiting-refutation" className="rounded-[26px] border border-amber-700/70 bg-[linear-gradient(145deg,rgba(120,53,15,0.42),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_30px_rgba(120,53,15,0.18)]">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-200">Esperando refutacion</p>
+                              <h4 className="mt-2 text-base font-black text-white">Tu sugerencia ya esta en mesa</h4>
+                              <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-amber-100/90">
+                                {awaitingRefutation.suggestion.receiverTeamName
+                                  ? `${awaitingRefutation.suggestion.receiverTeamName} eligiendo carta`
+                                  : "Resolucion en curso"}
+                              </p>
+                            </div>
+                            <div className="rounded-2xl border border-amber-600/70 bg-amber-950/45 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-amber-100">
+                              En curso
+                            </div>
+                          </div>
+                        </div>
+                      ) : refutationResult ? (
+                        <div data-cy="terminal-refutation-result" className="rounded-[26px] border border-emerald-700/70 bg-[linear-gradient(145deg,rgba(6,78,59,0.46),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_30px_rgba(6,78,59,0.2)]">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-200">Resultado privado</p>
+                              <h4 className="mt-2 text-base font-black text-white">
+                                {refutationResult.outcome === "REFUTED" ? "Tu sugerencia fue refutada" : "Nadie pudo refutar tu sugerencia"}
+                              </h4>
+                              <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-100/90">
+                                {refutationResult.outcome === "REFUTED"
+                                  ? `${refutationResult.shownByTeamName ?? "Un equipo"} mostro una carta`
+                                  : "Sin cartas coincidentes"}
+                              </p>
+                            </div>
+                            <div className="rounded-2xl border border-emerald-600/70 bg-emerald-950/45 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-100">
+                              {refutationResult.outcome === "REFUTED" ? "Refutada" : "Sin refutar"}
+                            </div>
+                          </div>
+
+                          {refutationResult.shownCard ? (
+                            <div className="mt-4 rounded-2xl border border-emerald-700/60 bg-slate-950/55 p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="rounded-xl border border-white/10 bg-slate-900/80 p-2">
+                                  {refutationResult.shownCard.kind === "SUJETO" ? <User className="h-4 w-4 text-cyan-300" /> : refutationResult.shownCard.kind === "OBJETO" ? <Box className="h-4 w-4 text-emerald-300" /> : <MapPin className="h-4 w-4 text-rose-300" />}
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Carta revelada</p>
+                                  <p className="mt-1 text-sm font-semibold text-white">{refutationResult.shownCard.name}</p>
+                                  <p className="mt-1 text-xs text-slate-400">{refutationResult.shownCard.desc}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : canComposeSuggestion ? (
+                        <div data-cy="terminal-compose-suggestion" className="rounded-[26px] border border-emerald-700/60 bg-[linear-gradient(145deg,rgba(6,95,70,0.28),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_32px_rgba(6,95,70,0.16)]">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-200">Hipotesis operativa</p>
+                              <h4 className="mt-2 text-base font-black text-white">Compone la sugerencia desde la sala actual</h4>
+                            </div>
+                            <div className="rounded-2xl border border-emerald-700/70 bg-emerald-950/45 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-100">
+                              {currentRoomSpace?.name ?? "Sincronizando sala"}
+                            </div>
+                          </div>
+
+                          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/45 p-4">
+                              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
+                                <User className="h-3.5 w-3.5" />
+                                {catNames.c1}
+                              </div>
+                              <div className="mt-3 grid gap-2">
+                                {categories.c1.map((item) => {
+                                  const isSelected = selectedSubjectId === item.id;
+                                  return (
+                                    <button
+                                      data-cy="terminal-suggest-subject"
+                                      key={item.id}
+                                      type="button"
+                                      onClick={() => setSelectedSubjectId(item.id)}
+                                      className={`rounded-xl border px-3 py-3 text-left transition-all ${isSelected ? "border-cyan-400 bg-cyan-950/40 shadow-[0_0_18px_rgba(34,211,238,0.18)]" : "border-slate-700 bg-slate-900/70 hover:border-cyan-700/60"}`}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <div className={`rounded-lg border p-2 ${item.color}`}>{item.avatar}</div>
+                                        <p className="text-sm font-semibold text-white">{item.name}</p>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-emerald-800/60 bg-slate-950/45 p-4">
+                              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">
+                                <Box className="h-3.5 w-3.5" />
+                                {catNames.c2}
+                              </div>
+                              <div className="mt-3 grid gap-2">
+                                {categories.c2.map((item) => {
+                                  const isSelected = selectedObjectId === item.id;
+                                  return (
+                                    <button
+                                      data-cy="terminal-suggest-object"
+                                      key={item.id}
+                                      type="button"
+                                      onClick={() => setSelectedObjectId(item.id)}
+                                      className={`rounded-xl border px-3 py-3 text-left transition-all ${isSelected ? "border-emerald-400 bg-emerald-950/40 shadow-[0_0_18px_rgba(16,185,129,0.18)]" : "border-slate-700 bg-slate-900/70 hover:border-emerald-700/60"}`}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <div className={`rounded-lg border p-2 ${item.color}`}>{item.avatar}</div>
+                                        <p className="text-sm font-semibold text-white">{item.name}</p>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div data-cy="terminal-suggestion-preview" className="mt-5 rounded-2xl border border-slate-700 bg-slate-950/65 p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Vista previa</p>
+                            <p className="mt-2 text-sm text-white">
+                              {suggestionPreview
+                                ? `${suggestionPreview.subject.name} con ${suggestionPreview.object.name} en ${suggestionPreview.space.name}`
+                                : "Selecciona un sujeto y un objeto para completar la hipotesis desde la sala actual."}
+                            </p>
+                          </div>
+
+                          <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
+                            <button
+                              data-cy="terminal-suggest-submit"
+                              type="button"
+                              onClick={() => void handleSubmitSuggestion()}
+                              disabled={!suggestionPreview || isSubmittingSuggestion || !canUseRealtimeSuggestion}
+                              className="rounded-2xl bg-cyan-500 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.3)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {isSubmittingSuggestion ? "Enviando sugerencia..." : "Lanzar sugerencia"}
+                            </button>
+                            <button
+                              data-cy="terminal-end-turn-submit"
+                              type="button"
+                              onClick={() => void handleEndTurnFromRoom()}
+                              disabled={isEndingTurn}
+                              className="rounded-2xl border border-slate-600 bg-slate-900/75 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {isEndingTurn ? "Cerrando..." : "Terminar turno"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div data-cy="terminal-suggest-blocked" className="rounded-[26px] border border-slate-700/80 bg-[linear-gradient(145deg,rgba(15,23,42,0.92),rgba(2,6,23,0.98))] p-5">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Canal bloqueado</p>
+                          <h4 className="mt-2 text-base font-black text-white">Todavia no puedes interactuar con la sugerencia</h4>
+                          <p className="mt-3 text-sm leading-relaxed text-slate-300">{suggestionPanelMessage}</p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -2046,7 +2131,7 @@ export function TerminalView() {
           { id: "map", icon: MapIcon, label: "MAPA" },
           { id: "matrix", icon: Search, label: "MATRIZ" },
           { id: "notes", icon: FileText, label: "NOTAS" },
-          { id: "suggest", icon: MessageSquare, label: "DEDUCIR" }
+          { id: "suggest", icon: MessageSquare, label: "SUGERIR/ACUSAR" }
         ].map(tab => (
           <button
             key={tab.id}
@@ -2064,5 +2149,26 @@ export function TerminalView() {
       </div>
     </div>
   );
+}
+
+function buildAccusationFeedback(verdict: FinalAccusationVerdict, ownTeamId: string | null) {
+  const accusedCards = `${verdict.accusation.subject.name}, ${verdict.accusation.object.name} y ${verdict.accusation.space.name}`;
+  const isOwnVerdict = verdict.accuserTeamId === ownTeamId;
+
+  if (verdict.outcome === "CORRECTA") {
+    return isOwnVerdict
+      ? `Has resuelto el sobre con ${accusedCards}. La partida ha terminado.`
+      : `${verdict.accuserTeamName} ha resuelto el sobre con ${accusedCards}. La partida ha terminado.`;
+  }
+
+  if (isOwnVerdict) {
+    return verdict.sessionFinished
+      ? `Has fallado la acusación con ${accusedCards}. No quedan equipos activos.`
+      : `Has fallado la acusación con ${accusedCards} y tu equipo queda eliminado.`;
+  }
+
+  return verdict.sessionFinished
+    ? `${verdict.accuserTeamName} ha fallado la acusación con ${accusedCards}. La partida termina sin equipos activos.`
+    : `${verdict.accuserTeamName} ha fallado la acusación con ${accusedCards} y queda eliminado.`;
 }
 

@@ -12,6 +12,7 @@ import {
 } from '../lib/sessionAccessCode.js';
 import {
   createSessionSchema,
+  finalAccusationSchema,
   joinSessionSchema,
   moveTeamSchema,
   sessionAccessCodeParamsSchema,
@@ -26,12 +27,13 @@ import {
   loadTeamTerminalStateByAccessCode,
   startSessionByAccessCode,
 } from '../lib/sessionGameplay.js';
+import { resolveFinalAccusationByAccessCode } from '../lib/sessionAccusation.js';
+import { endTeamTurnWithoutSuggestionByAccessCode } from '../lib/sessionSuggestion.js';
 import {
   loadTeamMoveStateByAccessCode,
   moveTeamByAccessCode,
   rollTeamDiceByAccessCode,
 } from '../lib/sessionMovement.js';
-import { endTeamTurnWithoutSuggestionByAccessCode } from '../lib/sessionSuggestion.js';
 import { getTeamSpawnPosition } from '../lib/teamSpawnPositions.js';
 import { verifyToken } from '../middleware/auth.js';
 import { emitGameStarted, emitSessionSnapshotUpdate } from '../socket/socketServer.js';
@@ -232,6 +234,43 @@ router.post('/sessions/:accessCode/teams/:teamId/end-turn', async (req, res) => 
   }
 });
 
+router.post('/sessions/:accessCode/teams/:teamId/accuse', async (req, res) => {
+  const teamParams = parseTeamSessionStateParams(req.params, res);
+  if (!teamParams) {
+    return;
+  }
+
+  const payload = parseBody(finalAccusationSchema, req.body, res);
+  if (!payload) {
+    return;
+  }
+
+  try {
+    const result = await prisma.$transaction(
+      (tx) => resolveFinalAccusationByAccessCode(tx, teamParams.accessCode, teamParams.teamId, payload),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+
+    try {
+      await emitSessionSnapshotUpdate(result.session.id, {
+        id: result.verdict.eventId,
+        type: 'final-accusation-verdict',
+        message: buildFinalAccusationEventMessage(result.verdict),
+        occurredAt: new Date(result.verdict.occurredAt).getTime(),
+        teamColor: result.verdict.accuserTeamColor,
+        teamId: result.verdict.accuserTeamId,
+        accusationVerdict: result.verdict,
+      });
+    } catch {
+      // La acusación ya quedó persistida; un fallo de broadcast no debe revertirla.
+    }
+
+    res.json({ item: result });
+  } catch (error) {
+    respondUnexpectedError(res, error);
+  }
+});
+
 router.post('/sessions/:accessCode/join', async (req, res) => {
   const accessCode = parseAccessCode(req.params, res);
   if (!accessCode) {
@@ -293,6 +332,8 @@ router.post('/sessions/:accessCode/join', async (req, res) => {
             positionX: team.positionX ?? 0,
             positionY: team.positionY ?? 0,
             falseAccusation: team.falseAccusation ?? false,
+            eliminatedAt: team.eliminatedAt?.toISOString() ?? null,
+            eliminationReason: team.eliminationReason ?? null,
           },
         };
       },
@@ -377,6 +418,22 @@ function parseTeamSessionStateParams(value: unknown, res: Response) {
 function parseDurationMinutes(value: string) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
+}
+
+function buildFinalAccusationEventMessage(
+  verdict: Awaited<ReturnType<typeof resolveFinalAccusationByAccessCode>>['verdict']
+) {
+  const accusedCards = [verdict.accusation.subject.name, verdict.accusation.object.name, verdict.accusation.space.name].join(', ');
+
+  if (verdict.outcome === 'CORRECTA') {
+    return `${verdict.accuserTeamName} ha realizado la acusación final (${accusedCards}) y ha acertado.`;
+  }
+
+  if (verdict.sessionFinished) {
+    return `${verdict.accuserTeamName} ha realizado la acusación final (${accusedCards}) y ha fallado. No quedan equipos activos.`;
+  }
+
+  return `${verdict.accuserTeamName} ha realizado la acusación final (${accusedCards}) y ha fallado. Queda eliminado.`;
 }
 
 function isKnownPrismaError(error: unknown, code: string) {

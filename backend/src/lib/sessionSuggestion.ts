@@ -1,5 +1,5 @@
 import { EstadoPartida, TipoElemento, TipoEvento, type ColorEquipo, type Prisma } from '@prisma/client';
-import { BOARD_MOVEMENT_NODES, findBoardMovementNodeByPosition, getBoardRoomSpaceSlotIndex } from './boardGraph.js';
+import { findBoardMovementNodeByPosition, getBoardRoomSpaceSlotIndex } from './boardGraph.js';
 import { HttpError } from './http.js';
 import { prisma } from './prisma.js';
 import { loadSkinConfiguration, type LoadedSkinConfiguration } from './skinConfigs.js';
@@ -21,6 +21,8 @@ type SuggestionManagedTeam = {
   color: ColorEquipo;
   positionX: number | null;
   positionY: number | null;
+  falseAccusation?: boolean | null;
+  eliminatedAt?: Date | null;
 };
 
 type SuggestionManagedSession = {
@@ -238,10 +240,7 @@ export async function createSuggestionBySessionId(
   return {
     sessionId: session.id,
     suggestion,
-    matchingCards: buildCardsFromIds(
-      suggestionCards,
-      matchingCardIdsByTeam.get(refuter.id) ?? []
-    ),
+    matchingCards: buildCardsFromIds(suggestionCards, matchingCardIdsByTeam.get(refuter.id) ?? []),
     refutationRequired: true,
     turnAdvanced: false,
     nextTurnTeamName: null,
@@ -648,6 +647,8 @@ async function loadSuggestionSession(
           color: true,
           positionX: true,
           positionY: true,
+          falseAccusation: true,
+          eliminatedAt: true,
         },
       },
     },
@@ -679,7 +680,10 @@ async function loadSuggestionSkin(client: SessionSuggestionBaseClient, skinId: s
   return loadSkinConfiguration(client, skinId);
 }
 
-async function loadSuggestionEventRecord(client: SessionSuggestionBaseClient, suggestionEventId: string): Promise<SuggestionEventRecord> {
+async function loadSuggestionEventRecord(
+  client: SessionSuggestionBaseClient,
+  suggestionEventId: string
+): Promise<SuggestionEventRecord> {
   const suggestionEvent = await client.evento.findUnique({
     where: { id: suggestionEventId },
     select: {

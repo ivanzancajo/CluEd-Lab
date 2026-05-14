@@ -25,6 +25,8 @@ export const BOARD_MOVEMENT_NODE_PICK_RADIUS = {
   roomHeightPercent: 9.4,
 };
 
+export const BOARD_MOVEMENT_POSITION_TOLERANCE = 0.75;
+
 export const BOARD_ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER = [
   'sala-superior-izquierda',
   'sala-superior-centro',
@@ -795,7 +797,7 @@ function pruneExcludedSquareNodes(
 ) {
   const removedNodeIds = new Set(
     Object.entries(nodes)
-      .filter(([, node]) =>
+      .filter(([_nodeId, node]) =>
         node.kind === 'square' &&
         node.gridPosition &&
         EXCLUDED_SQUARE_GRID_KEYS.has(buildGridCellKey(node.gridPosition))

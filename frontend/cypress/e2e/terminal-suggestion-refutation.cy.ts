@@ -1,13 +1,17 @@
 /// <reference types="cypress" />
 
 import { io, type Socket } from "socket.io-client";
-import { BOARD_MOVEMENT_NODES, BOARD_ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER } from "../../src/lib/boardMovement";
 
 type TeamColor = "ROJO" | "AZUL" | "VERDE" | "AMARILLO" | "MORADO" | "BLANCO";
 type TeamElementKind = "SUJETO" | "OBJETO" | "ESPACIO";
 
 type CreatedSkin = {
   id: string;
+};
+
+type SeededSkin = {
+  skinId: string;
+  skinName: string;
 };
 
 type CreatedSession = {
@@ -19,12 +23,6 @@ type JoinedTeam = {
   id: string;
   name: string;
   color: TeamColor;
-};
-
-type SkinItem = {
-  id: string;
-  name: string;
-  desc: string;
 };
 
 type TeamHandCard = {
@@ -39,35 +37,9 @@ type TeamState = {
     id: string;
     accessCode: string;
     status: "EN_CURSO";
-    skin: {
-      id: string;
-      name: string;
-      gameTitle: string;
-      objective: string;
-      duration: string;
-      centerImage: string;
-      cat1Name: string;
-      cat2Name: string;
-      cat3Name: string;
-      hasMotifs: boolean;
-      subjects: SkinItem[];
-      objects: SkinItem[];
-      spaces: SkinItem[];
-      createdAt: number;
-      updatedAt: number;
-    };
   };
   team: JoinedTeam;
   hand: TeamHandCard[];
-  pendingSuggestion: unknown;
-};
-
-type TeamMoveState = {
-  currentNode: {
-    id: string;
-    kind: "spawn" | "square" | "room";
-    label: string;
-  };
 };
 
 type TeamSocketSubscribeAck =
@@ -80,23 +52,9 @@ type TeamSocketSubscribeAck =
       error: string;
     };
 
-type SuggestionElement = {
-  id: string;
-  kind: TeamElementKind;
-  name: string;
-  desc: string;
+type GameRefuteRequestPayload = {
+  matchingCards: TeamHandCard[];
 };
-
-type GameSuggestAck =
-  | {
-      ok: true;
-      status: "waiting-refutation" | "resolved-without-refutation";
-      occurredAt: number;
-    }
-  | {
-      ok: false;
-      error: string;
-    };
 
 type GameRefuteAck =
   | {
@@ -108,41 +66,25 @@ type GameRefuteAck =
       error: string;
     };
 
-type GameRefuteRequestPayload = {
-  suggestion: {
-    eventId: string;
-    emitterTeamId: string;
-    emitterTeamName: string;
-    receiverTeamId: string | null;
-    receiverTeamName: string | null;
-    subject: SuggestionElement;
-    object: SuggestionElement;
-    space: SuggestionElement;
-  };
-  matchingCards: SuggestionElement[];
-  occurredAt: number;
-};
-
-type GameRefutationResultPayload = {
-  suggestion: {
-    eventId: string;
-    emitterTeamId: string;
-    emitterTeamName: string;
-    subject: SuggestionElement;
-    object: SuggestionElement;
-    space: SuggestionElement;
-  };
-  outcome: "REFUTED" | "UNREFUTED";
-  occurredAt: number;
-  shownCard?: SuggestionElement;
-  shownByTeamId?: string;
-  shownByTeamName?: string;
-};
-
 type CollectionKey = "subjects" | "objects" | "spaces";
 
-const API_BASE_URL = "http://localhost:4000/api";
-const SOCKET_BASE_URL = "http://localhost:4000";
+type NamedItem = {
+  name: string;
+  desc: string;
+  imageUrl: string;
+};
+
+const ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER = [
+  "sala-superior-izquierda",
+  "sala-superior-centro",
+  "sala-superior-derecha",
+  "sala-media-izquierda",
+  "sala-media-izquierda-inferior",
+  "sala-media-derecha",
+  "sala-inferior-izquierda",
+  "sala-inferior-centro",
+  "sala-inferior-derecha",
+] as const;
 
 const REQUIRED_COUNTS: Record<CollectionKey, number> = {
   subjects: 6,
@@ -150,7 +92,7 @@ const REQUIRED_COUNTS: Record<CollectionKey, number> = {
   spaces: 9,
 };
 
-function buildItems(prefix: string, count: number) {
+function buildItems(prefix: string, count: number): NamedItem[] {
   return Array.from({ length: count }, (_value, index) => ({
     name: `${prefix} ${index + 1}`,
     desc: `Descripcion de ${prefix} ${index + 1}`,
@@ -158,11 +100,25 @@ function buildItems(prefix: string, count: number) {
   }));
 }
 
+function buildSpaces() {
+  return [
+    { name: "Camara Anecoica", desc: "Espacio 1", imageUrl: "https://example.com/espacio-1.png" },
+    { name: "Sala Hedy Lamarr", desc: "Espacio 2", imageUrl: "https://example.com/espacio-2.png" },
+    { name: "Central de Conmutacion", desc: "Espacio 3", imageUrl: "https://example.com/espacio-3.png" },
+    { name: "Seminario Haykin", desc: "Espacio 4", imageUrl: "https://example.com/espacio-4.png" },
+    { name: "Club de radio", desc: "Espacio 5", imageUrl: "https://example.com/espacio-5.png" },
+    { name: "Laboratorio de Comunicaciones Opticas", desc: "Espacio 6", imageUrl: "https://example.com/espacio-6.png" },
+    { name: "Lab. Electronica y Electricidad", desc: "Espacio 7", imageUrl: "https://example.com/espacio-7.png" },
+    { name: "Seminario Maxwell", desc: "Espacio 8", imageUrl: "https://example.com/espacio-8.png" },
+    { name: "Seminario Torres Quevedo", desc: "Espacio 9", imageUrl: "https://example.com/espacio-9.png" },
+  ];
+}
+
 function buildSkinPayload(name: string) {
   return {
     name,
-    gameTitle: "SCRUM 84 frontend",
-    objective: "Validar sugerencias, refutaciones y fin de turno en terminal.",
+    gameTitle: "Deduccion realtime",
+    objective: "Validar sugerencia, refutacion y cierre de turno desde el terminal.",
     duration: 45,
     centerImage: "",
     cat1Name: "Sujetos",
@@ -171,37 +127,24 @@ function buildSkinPayload(name: string) {
     hasMotifs: false,
     subjects: buildItems("Sujeto", REQUIRED_COUNTS.subjects),
     objects: buildItems("Objeto", REQUIRED_COUNTS.objects),
-    spaces: buildItems("Espacio", REQUIRED_COUNTS.spaces),
+    spaces: buildSpaces(),
   };
 }
 
 function loginAsAdmin() {
   return cy
-    .request<{ token: string }>("POST", `${API_BASE_URL}/auth/login`, {
+    .request<{ token: string }>("POST", "http://localhost:4000/api/auth/login", {
       username: "admin",
       password: "cluedo2026",
     })
     .its("body.token");
 }
 
-function createSkin(token: string, name: string) {
-  return cy
-    .request<{ item: CreatedSkin }>({
-      method: "POST",
-      url: `${API_BASE_URL}/config/skins`,
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: buildSkinPayload(name),
-    })
-    .its("body.item");
-}
-
 function createSession(token: string, skinId: string) {
   return cy
     .request<{ item: CreatedSession }>({
       method: "POST",
-      url: `${API_BASE_URL}/game/sessions`,
+      url: "http://localhost:4000/api/game/sessions",
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -210,11 +153,28 @@ function createSession(token: string, skinId: string) {
     .its("body.item");
 }
 
+function seedSkin(name: string) {
+  return cy
+    .exec(`cd ../backend && SKIN_NAME=${name} npx tsx src/scripts/createE2ESkin.ts`, {
+      failOnNonZeroExit: true,
+    })
+    .then(({ stdout }) => {
+      const trimmedOutput = stdout.trim();
+      const jsonStart = trimmedOutput.lastIndexOf("{");
+
+      if (jsonStart === -1) {
+        throw new Error(`No se ha encontrado una salida JSON valida al sembrar la skin E2E: ${trimmedOutput}`);
+      }
+
+      return JSON.parse(trimmedOutput.slice(jsonStart)) as SeededSkin;
+    });
+}
+
 function joinTeam(accessCode: string, color: TeamColor) {
   return cy
     .request<{ item: { team: JoinedTeam } }>({
       method: "POST",
-      url: `${API_BASE_URL}/game/sessions/${accessCode}/join`,
+      url: `http://localhost:4000/api/game/sessions/${accessCode}/join`,
       body: { color },
     })
     .its("body.item.team");
@@ -223,34 +183,29 @@ function joinTeam(accessCode: string, color: TeamColor) {
 function startSession(token: string, accessCode: string) {
   return cy.request({
     method: "POST",
-    url: `${API_BASE_URL}/game/sessions/${accessCode}/start`,
+    url: `http://localhost:4000/api/game/sessions/${accessCode}/start`,
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-function getTeamState(accessCode: string, teamId: string) {
+function fetchTeamState(accessCode: string, teamId: string) {
   return cy
-    .request<{ item: TeamState }>({
-      method: "GET",
-      url: `${API_BASE_URL}/game/sessions/${accessCode}/teams/${teamId}/state`,
-    })
+    .request<{ item: TeamState }>(`http://localhost:4000/api/game/sessions/${accessCode}/teams/${teamId}/state`)
     .its("body.item");
 }
 
-function getTeamMoveState(accessCode: string, teamId: string) {
-  return cy
-    .request<{ item: TeamMoveState }>({
-      method: "GET",
-      url: `${API_BASE_URL}/game/sessions/${accessCode}/teams/${teamId}/moves`,
-    })
-    .its("body.item");
+function setTeamRoomTurnState(sessionId: string, teamId: string, roomNodeId: string) {
+  return cy.exec(
+    `cd ../backend && SESSION_ID=${sessionId} TEAM_ID=${teamId} ROOM_NODE_ID=${roomNodeId} npx tsx src/scripts/setTeamRoomTurnState.ts`,
+    { failOnNonZeroExit: true }
+  );
 }
 
 function connectTeamSocket(sessionId: string, teamId: string) {
   return new Cypress.Promise<Socket>((resolve, reject) => {
-    const socket = io(SOCKET_BASE_URL, {
+    const socket = io("http://localhost:4000", {
       path: "/socket.io",
       transports: ["websocket"],
       autoConnect: false,
@@ -258,7 +213,7 @@ function connectTeamSocket(sessionId: string, teamId: string) {
 
     socket.once("connect_error", (error) => {
       socket.disconnect();
-      reject(error instanceof Error ? error : new Error("No se pudo conectar el socket del equipo."));
+      reject(error instanceof Error ? error : new Error("No se pudo conectar el socket del equipo refutador."));
     });
 
     socket.once("connect", () => {
@@ -281,12 +236,16 @@ function connectTeamSocket(sessionId: string, teamId: string) {
   });
 }
 
-function emitSuggestion(
-  socket: Socket,
-  payload: { subjectElementId: string; objectElementId: string; spaceElementId: string }
-) {
-  return new Cypress.Promise<GameSuggestAck>((resolve) => {
-    socket.emit("game:suggest", payload, resolve);
+function waitForRefuteRequest(socket: Socket) {
+  return new Cypress.Promise<GameRefuteRequestPayload>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error("No ha llegado la peticion privada de refutacion."));
+    }, 10000);
+
+    socket.once("game:refute-request", (payload: GameRefuteRequestPayload) => {
+      window.clearTimeout(timeoutId);
+      resolve(payload);
+    });
   });
 }
 
@@ -296,370 +255,167 @@ function emitRefutation(socket: Socket, shownElementId: string) {
   });
 }
 
-function waitForSocketEvent<T>(socket: Socket, eventName: string) {
-  return new Cypress.Promise<T>((resolve) => {
-    socket.once(eventName, (payload: T) => resolve(payload));
-  });
-}
-
-function visitTerminal(state: TeamState, team: JoinedTeam) {
+function visitTerminal(session: CreatedSession, team: JoinedTeam, skinPayload: ReturnType<typeof buildSkinPayload>) {
   cy.visit("/terminal", {
     onBeforeLoad(window) {
-      window.localStorage.setItem("sessionId", state.session.id);
-      window.localStorage.setItem("sessionCode", state.session.accessCode);
-      window.localStorage.setItem("sessionStatus", state.session.status);
+      window.localStorage.setItem("sessionId", session.id);
+      window.localStorage.setItem("sessionCode", session.accessCode);
+      window.localStorage.setItem("sessionStatus", "EN_CURSO");
       window.localStorage.setItem("teamId", team.id);
       window.localStorage.setItem("teamColor", team.color);
       window.localStorage.setItem("teamName", team.name);
-      window.localStorage.setItem("activeConfig", JSON.stringify(state.session.skin));
-      window.localStorage.setItem("centerImage", state.session.skin.centerImage || "");
+      window.localStorage.setItem("activeConfig", JSON.stringify(skinPayload));
+      window.localStorage.setItem("centerImage", skinPayload.centerImage);
     },
   });
 }
 
-function openSuggestTab() {
-  cy.contains("button", "DEDUCIR").click();
-  cy.get('[data-cy="terminal-suggest-panel"]').should("be.visible");
+function openDeductionTab() {
+  cy.contains("button", "SUGERIR/ACUSAR").click();
 }
 
-function openMapTab() {
-  cy.contains("button", "MAPA").click();
-  cy.get('[data-cy="terminal-themed-board"]').should("be.visible");
-}
+function chooseSuggestionPlan(hand: TeamHandCard[]) {
+  const subjects = buildItems("Sujeto", REQUIRED_COUNTS.subjects);
+  const objects = buildItems("Objeto", REQUIRED_COUNTS.objects);
+  const spaces = buildSpaces();
 
-function waitForRoomMoveRequest(alias: string, roomNodeId: string) {
-  cy.wait(alias).then((interception) => {
-    const currentNode = interception.response?.body?.item?.currentNode as TeamMoveState["currentNode"] | undefined;
-
-    expect(currentNode?.id).to.eq(roomNodeId);
-    expect(currentNode?.kind).to.eq("room");
-  });
-}
-
-function getRoomNodeIdForSpace(spaceId: string, state: TeamState) {
-  const roomIndex = state.session.skin.spaces.findIndex((space) => space.id === spaceId);
-
-  if (roomIndex < 0) {
-    throw new Error(`No se ha encontrado la sala asociada al espacio ${spaceId}.`);
+  const matchingSubject = hand.find((card) => card.kind === "SUJETO");
+  if (matchingSubject) {
+    return {
+      roomNodeId: ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER[0],
+      subjectName: matchingSubject.name,
+      objectName: objects[0].name,
+    };
   }
 
-  return BOARD_ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER[roomIndex] as string;
-}
-
-function pickFirstItemOutsideSet(items: SkinItem[], excludedIds: Set<string>, errorMessage: string) {
-  const item = items.find((candidate) => !excludedIds.has(candidate.id));
-
-  if (!item) {
-    throw new Error(errorMessage);
+  const matchingObject = hand.find((card) => card.kind === "OBJETO");
+  if (matchingObject) {
+    return {
+      roomNodeId: ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER[0],
+      subjectName: subjects[0].name,
+      objectName: matchingObject.name,
+    };
   }
 
-  return item;
-}
-
-function seedTeamIntoRoom(sessionId: string, teamId: string, roomNodeId: string) {
-  if (!BOARD_MOVEMENT_NODES[roomNodeId] || BOARD_MOVEMENT_NODES[roomNodeId]?.kind !== "room") {
-    throw new Error(`La sala ${roomNodeId} no existe en el tablero.`);
+  const matchingSpace = hand.find((card) => card.kind === "ESPACIO");
+  if (!matchingSpace) {
+    throw new Error("El equipo refutador no tiene ninguna carta util para el escenario.");
   }
 
-  const command = `cd /home/zancajoivan/Escritorio/TFG/backend && SESSION_ID=${JSON.stringify(sessionId)} TEAM_ID=${JSON.stringify(teamId)} ROOM_NODE_ID=${JSON.stringify(roomNodeId)} npx tsx src/scripts/setTeamRoomTurnState.ts`;
+  const spaceIndex = spaces.findIndex((space) => space.name === matchingSpace.name);
+  if (spaceIndex === -1) {
+    throw new Error(`No se ha podido mapear la carta de espacio ${matchingSpace.name} a una sala del tablero.`);
+  }
 
-  return cy.exec(command, { timeout: 120000 });
+  return {
+    roomNodeId: ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER[spaceIndex],
+    subjectName: subjects[0].name,
+    objectName: objects[0].name,
+  };
 }
 
-describe("SCRUM-84 frontend sugerencia y refutacion", () => {
-  const activeSockets: Socket[] = [];
+describe("SCRUM-84 terminal de sugerencia y refutacion", () => {
+  let refuterSocket: Socket | null = null;
 
   afterEach(() => {
-    activeSockets.splice(0).forEach((socket) => socket.disconnect());
+    refuterSocket?.disconnect();
+    refuterSocket = null;
   });
 
-  it("lanza una sugerencia desde la terminal y muestra el resultado privado cuando otro equipo la refuta", () => {
-    const testName = `Skin Suggest Result ${Date.now()}`;
+  it("permite terminar el turno desde una sala sin lanzar sugerencia", () => {
+    const skinName = `e2e-end-turn-${Date.now()}`;
+    const skinPayload = buildSkinPayload(skinName);
 
     loginAsAdmin().then((token) => {
-      createSkin(token, testName).then((skin) => {
-        createSession(token, skin.id).then((session) => {
+      seedSkin(skinName).then((skin) => {
+        createSession(token, skin.skinId).then((session) => {
           joinTeam(session.accessCode, "ROJO").then((redTeam) => {
             joinTeam(session.accessCode, "AZUL").then((blueTeam) => {
               startSession(token, session.accessCode).then(() => {
-                getTeamState(session.accessCode, redTeam.id).then((redState) => {
-                  getTeamState(session.accessCode, blueTeam.id).then((blueState) => {
-                    const blueHandIds = new Set(blueState.hand.map((card) => card.id));
-                    const blueSpaceCard = blueState.hand.find((card) => card.kind === "ESPACIO");
+                setTeamRoomTurnState(session.id, redTeam.id, ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER[0]).then(() => {
+                  visitTerminal(session, redTeam, skinPayload);
 
-                    if (!blueSpaceCard) {
-                      throw new Error("El equipo azul no tiene cartas de espacio para refutar la sugerencia de prueba.");
-                    }
+                  cy.get('[data-cy="terminal-turn-indicator"]').should("contain", "MI TURNO");
+                  openDeductionTab();
+                  cy.get('[data-cy="terminal-compose-suggestion"]').should("be.visible");
+                  cy.get('[data-cy="terminal-end-turn-submit"]').click();
 
-                    const roomNodeId = getRoomNodeIdForSpace(blueSpaceCard.id, redState);
-                    const subject = pickFirstItemOutsideSet(
-                      redState.session.skin.subjects,
-                      blueHandIds,
-                      "No se ha encontrado un sujeto fuera de la mano azul."
-                    );
-                    const object = pickFirstItemOutsideSet(
-                      redState.session.skin.objects,
-                      blueHandIds,
-                      "No se ha encontrado un objeto fuera de la mano azul."
-                    );
+                  cy.get('[data-cy="terminal-turn-indicator"]').should("contain", "ESPERA");
+                  cy.get('[data-cy="terminal-lobby-status-banner"]').should("contain", blueTeam.name);
+                  cy.get('[data-cy="terminal-suggest-blocked"]').should("contain", `Solo puedes sugerir en tu turno. Ahora juega ${blueTeam.name}.`);
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
 
-                    seedTeamIntoRoom(session.id, redTeam.id, roomNodeId);
-                    getTeamMoveState(session.accessCode, redTeam.id).then((moveState) => {
-                      expect(moveState.currentNode.id).to.eq(roomNodeId);
-                      expect(moveState.currentNode.kind).to.eq("room");
-                    });
+  it("muestra la refutacion privada cuando otro equipo responde a la sugerencia", () => {
+    const skinName = `e2e-suggest-${Date.now()}`;
+    const skinPayload = buildSkinPayload(skinName);
+    let refuteRequestPromise: Promise<GameRefuteRequestPayload> | null = null;
 
-                    let blueSocket: Socket | null = null;
-                    let refuteRequestPromise: Cypress.Promise<GameRefuteRequestPayload> | null = null;
+    loginAsAdmin().then((token) => {
+      seedSkin(skinName).then((skin) => {
+        createSession(token, skin.skinId).then((session) => {
+          joinTeam(session.accessCode, "ROJO").then((redTeam) => {
+            joinTeam(session.accessCode, "AZUL").then((blueTeam) => {
+              startSession(token, session.accessCode).then(() => {
+                fetchTeamState(session.accessCode, blueTeam.id).then((blueState) => {
+                  const suggestionPlan = chooseSuggestionPlan(blueState.hand);
 
+                  setTeamRoomTurnState(session.id, redTeam.id, suggestionPlan.roomNodeId).then(() => {
                     cy.then(() => connectTeamSocket(session.id, blueTeam.id)).then((socket) => {
-                      blueSocket = socket;
-                      activeSockets.push(socket);
+                      refuterSocket = socket;
                     });
 
-                    visitTerminal(redState, redTeam);
-                    cy.get('[data-cy="terminal-turn-indicator"]').should("contain.text", "MI TURNO");
-                    cy.contains("CONECTADO").should("be.visible");
-                    openSuggestTab();
-                    cy.contains('[data-cy="terminal-suggest-subject"]', subject.name).click();
-                    cy.contains('[data-cy="terminal-suggest-object"]', object.name).click();
-                    cy.get('[data-cy="terminal-suggestion-preview"]').should("contain.text", blueSpaceCard.name);
+                    visitTerminal(session, redTeam, skinPayload);
+                    openDeductionTab();
+                    cy.get('[data-cy="terminal-compose-suggestion"]').should("be.visible");
+                    cy.contains('[data-cy="terminal-suggest-subject"]', suggestionPlan.subjectName).click();
+                    cy.contains('[data-cy="terminal-suggest-object"]', suggestionPlan.objectName).click();
+                    cy.get('[data-cy="terminal-suggestion-preview"]').should("contain", suggestionPlan.subjectName);
+                    cy.get('[data-cy="terminal-suggestion-preview"]').should("contain", suggestionPlan.objectName);
 
                     cy.then(() => {
-                      if (!blueSocket) {
-                        throw new Error("El socket azul de prueba no está conectado.");
+                      if (!refuterSocket) {
+                        throw new Error("El socket del equipo refutador no esta conectado.");
                       }
 
-                      refuteRequestPromise = waitForSocketEvent<GameRefuteRequestPayload>(blueSocket, "game:refute-request");
+                      refuteRequestPromise = waitForRefuteRequest(refuterSocket);
                     });
 
                     cy.get('[data-cy="terminal-suggest-submit"]').click();
                     cy.get('[data-cy="terminal-awaiting-refutation"]').should("be.visible");
-                    openMapTab();
-                    cy.get('[data-cy="terminal-map-deduction-activity"]').should("contain.text", "Hipotesis");
-                    cy.get('[data-cy="terminal-map-deduction-activity"]').should("contain.text", "En refutacion");
-                    cy.get('[data-cy="terminal-map-deduction-focus"]').should("be.visible");
-                    openSuggestTab();
 
                     cy.then(() => {
                       if (!refuteRequestPromise) {
-                        throw new Error("No se ha preparado la espera de la solicitud de refutación.");
-                      }
-                    });
-
-                    cy.then(() => {
-                      if (!refuteRequestPromise || !blueSocket) {
-                        throw new Error("No se ha preparado la espera de la solicitud de refutación.");
+                        throw new Error("No se ha registrado la espera de la peticion privada de refutacion.");
                       }
 
-                      return refuteRequestPromise.then((payload) => {
-                        expect(payload.matchingCards).to.have.length(1);
-                        expect(payload.matchingCards[0]?.id).to.eq(blueSpaceCard.id);
-                        return emitRefutation(blueSocket, blueSpaceCard.id);
+                      return refuteRequestPromise;
+                    }).as("refuteRequest");
+
+                    cy.get<GameRefuteRequestPayload>("@refuteRequest").then((payload) => {
+                      const shownCard = payload.matchingCards[0];
+
+                      expect(shownCard, "la peticion privada debe incluir cartas coincidentes").to.exist;
+                      expect(refuterSocket, "el socket del equipo refutador debe seguir conectado").to.not.equal(null);
+
+                      return emitRefutation(refuterSocket as Socket, shownCard.id).then((ack) => {
+                        expect(ack.ok).to.eq(true);
+                        return shownCard;
                       });
-                    }).then((ack) => {
-                      expect(ack.ok).to.eq(true);
-                    });
+                    }).as("shownCard");
 
-                    cy.get('[data-cy="terminal-refutation-result"]').scrollIntoView().should("be.visible");
-                    cy.get('[data-cy="terminal-refutation-result"]').should("contain.text", "Tu sugerencia fue refutada");
-                    cy.get('[data-cy="terminal-refutation-result"]').should("contain.text", blueSpaceCard.name);
-                  });
-                });
-              });
-            });
-          });
-        });
-      });
-    });
-  });
-
-  it("abre el panel de refutacion en la terminal y permite mostrar una carta privada", () => {
-    const testName = `Skin Refute UI ${Date.now()}`;
-
-    loginAsAdmin().then((token) => {
-      createSkin(token, testName).then((skin) => {
-        createSession(token, skin.id).then((session) => {
-          joinTeam(session.accessCode, "ROJO").then((redTeam) => {
-            joinTeam(session.accessCode, "AZUL").then((blueTeam) => {
-              startSession(token, session.accessCode).then(() => {
-                getTeamState(session.accessCode, redTeam.id).then((redState) => {
-                  getTeamState(session.accessCode, blueTeam.id).then((blueState) => {
-                    const blueHandIds = new Set(blueState.hand.map((card) => card.id));
-                    const blueSpaceCard = blueState.hand.find((card) => card.kind === "ESPACIO");
-
-                    if (!blueSpaceCard) {
-                      throw new Error("El equipo azul no tiene cartas de espacio para la prueba de refutación UI.");
-                    }
-
-                    const subject = pickFirstItemOutsideSet(
-                      redState.session.skin.subjects,
-                      blueHandIds,
-                      "No se ha encontrado un sujeto fuera de la mano azul."
-                    );
-                    const object = pickFirstItemOutsideSet(
-                      redState.session.skin.objects,
-                      blueHandIds,
-                      "No se ha encontrado un objeto fuera de la mano azul."
-                    );
-                    const roomNodeId = getRoomNodeIdForSpace(blueSpaceCard.id, redState);
-
-                    seedTeamIntoRoom(session.id, redTeam.id, roomNodeId);
-                    getTeamMoveState(session.accessCode, redTeam.id).then((moveState) => {
-                      expect(moveState.currentNode.id).to.eq(roomNodeId);
-                      expect(moveState.currentNode.kind).to.eq("room");
-                    });
-
-                    let redSocket: Socket | null = null;
-                    let refutationResultPromise: Cypress.Promise<GameRefutationResultPayload> | null = null;
-
-                    cy.then(() => connectTeamSocket(session.id, redTeam.id)).then((socket) => {
-                      redSocket = socket;
-                      activeSockets.push(socket);
-                    });
-
-                    visitTerminal(blueState, blueTeam);
-                    cy.get('[data-cy="terminal-turn-indicator"]').should("contain.text", "ESPERA");
-                    cy.contains("CONECTADO").should("be.visible");
-
-                    cy.then(() => {
-                      if (!redSocket) {
-                        throw new Error("El socket rojo no está conectado.");
-                      }
-
-                      refutationResultPromise = waitForSocketEvent<GameRefutationResultPayload>(redSocket, "game:refutation-result");
-                      return emitSuggestion(redSocket, {
-                        subjectElementId: subject.id,
-                        objectElementId: object.id,
-                        spaceElementId: blueSpaceCard.id,
-                      });
-                    }).then((ack) => {
-                      expect(ack.ok).to.eq(true);
-                      expect(ack.ok && ack.status).to.eq("waiting-refutation");
-                    });
-
-                    cy.get('[data-cy="terminal-refute-panel"]').scrollIntoView().should("be.visible");
-                    openMapTab();
-                    cy.get('[data-cy="terminal-map-deduction-activity"]').should("contain.text", "Refuta");
-                    cy.get('[data-cy="terminal-map-deduction-activity"]').should("contain.text", blueSpaceCard.name);
-                    cy.get('[data-cy="terminal-map-deduction-focus"]').should("be.visible");
-                    openSuggestTab();
-                    cy.get('[data-cy="terminal-refute-panel"]').scrollIntoView().should("be.visible");
-                    cy.get('[data-cy="terminal-refute-card"]').should("have.length", 1);
-                    cy.get('[data-cy="terminal-refute-card"]').should("contain.text", blueSpaceCard.name).click();
-                    cy.get('[data-cy="terminal-refute-submit"]').click();
-
-                    cy.then(() => {
-                      if (!refutationResultPromise) {
-                        throw new Error("No se ha preparado la espera del resultado de refutación." );
-                      }
-
-                      return refutationResultPromise;
-                    }).then((payload) => {
-                      expect(payload.outcome).to.eq("REFUTED");
-                      expect(payload.shownCard?.id).to.eq(blueSpaceCard.id);
-                    });
-
-                    cy.get('[data-cy="terminal-refute-panel"]').should("not.exist");
-                    cy.contains("Carta mostrada. Solo el equipo sugerente verá cuál ha sido.").should("be.visible");
-                  });
-                });
-              });
-            });
-          });
-        });
-      });
-    });
-  });
-
-  it("permite terminar el turno desde la sala sin lanzar una sugerencia", () => {
-    const testName = `Skin End Turn ${Date.now()}`;
-
-    loginAsAdmin().then((token) => {
-      createSkin(token, testName).then((skin) => {
-        createSession(token, skin.id).then((session) => {
-          joinTeam(session.accessCode, "ROJO").then((redTeam) => {
-            joinTeam(session.accessCode, "AZUL").then(() => {
-              startSession(token, session.accessCode).then(() => {
-                const roomNodeId = BOARD_ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER[0] as string;
-                seedTeamIntoRoom(session.id, redTeam.id, roomNodeId);
-                getTeamMoveState(session.accessCode, redTeam.id).then((moveState) => {
-                  expect(moveState.currentNode.id).to.eq(roomNodeId);
-                  expect(moveState.currentNode.kind).to.eq("room");
-                });
-
-                cy.intercept("GET", `${API_BASE_URL}/game/sessions/${session.accessCode}/teams/${redTeam.id}/moves`).as("loadRedMoveStateEndTurn");
-                getTeamState(session.accessCode, redTeam.id).then((seededRedState) => {
-                  visitTerminal(seededRedState, redTeam);
-                  waitForRoomMoveRequest("@loadRedMoveStateEndTurn", roomNodeId);
-                  cy.get('[data-cy="terminal-turn-indicator"]').should("contain.text", "MI TURNO");
-                  openSuggestTab();
-                  cy.get('[data-cy="terminal-compose-suggestion"]').scrollIntoView().should("be.visible");
-                  cy.get('[data-cy="terminal-end-turn-submit"]').click();
-
-                  cy.get('[data-cy="terminal-turn-indicator"]').should("contain.text", "ESPERA");
-                  cy.get('[data-cy="terminal-lobby-status-banner"]').should("contain.text", "Equipo Azul");
-                  cy.contains("Turno cerrado sin lanzar sugerencia.").should("be.visible");
-                });
-              });
-            });
-          });
-        });
-      });
-    });
-  });
-
-  it("muestra el resultado privado cuando nadie puede refutar la sugerencia", () => {
-    const testName = `Skin Unrefuted ${Date.now()}`;
-
-    loginAsAdmin().then((token) => {
-      createSkin(token, testName).then((skin) => {
-        createSession(token, skin.id).then((session) => {
-          joinTeam(session.accessCode, "ROJO").then((redTeam) => {
-            joinTeam(session.accessCode, "AZUL").then((blueTeam) => {
-              startSession(token, session.accessCode).then(() => {
-                getTeamState(session.accessCode, redTeam.id).then((redState) => {
-                  getTeamState(session.accessCode, blueTeam.id).then((blueState) => {
-                    const blueHandIds = new Set(blueState.hand.map((card) => card.id));
-                    const subject = pickFirstItemOutsideSet(
-                      redState.session.skin.subjects,
-                      blueHandIds,
-                      "No se ha encontrado un sujeto fuera de la mano azul."
-                    );
-                    const object = pickFirstItemOutsideSet(
-                      redState.session.skin.objects,
-                      blueHandIds,
-                      "No se ha encontrado un objeto fuera de la mano azul."
-                    );
-                    const space = pickFirstItemOutsideSet(
-                      redState.session.skin.spaces,
-                      blueHandIds,
-                      "No se ha encontrado un espacio fuera de la mano azul."
-                    );
-                    const roomNodeId = getRoomNodeIdForSpace(space.id, redState);
-
-                    seedTeamIntoRoom(session.id, redTeam.id, roomNodeId);
-                    getTeamMoveState(session.accessCode, redTeam.id).then((moveState) => {
-                      expect(moveState.currentNode.id).to.eq(roomNodeId);
-                      expect(moveState.currentNode.kind).to.eq("room");
-                    });
-
-                    cy.intercept("GET", `${API_BASE_URL}/game/sessions/${session.accessCode}/teams/${redTeam.id}/moves`).as("loadRedMoveStateUnrefuted");
-                    getTeamState(session.accessCode, redTeam.id).then((seededRedState) => {
-                      visitTerminal(seededRedState, redTeam);
-                      waitForRoomMoveRequest("@loadRedMoveStateUnrefuted", roomNodeId);
-                      cy.get('[data-cy="terminal-turn-indicator"]').should("contain.text", "MI TURNO");
-                      openSuggestTab();
-                      cy.get('[data-cy="terminal-suggest-panel"]').contains(space.name, { timeout: 10000 }).should("be.visible");
-                      cy.get('[data-cy="terminal-compose-suggestion"]').scrollIntoView().should("be.visible");
-                      cy.contains('[data-cy="terminal-suggest-subject"]', subject.name).click();
-                      cy.contains('[data-cy="terminal-suggest-object"]', object.name).click();
-                      cy.get('[data-cy="terminal-suggestion-preview"]').should("contain.text", space.name);
-                      cy.get('[data-cy="terminal-suggest-submit"]').click();
-
+                    cy.get<TeamHandCard>("@shownCard").then((shownCard) => {
                       cy.get('[data-cy="terminal-refutation-result"]').should("be.visible");
-                      cy.get('[data-cy="terminal-refutation-result"]').should("contain.text", "Nadie pudo refutar tu sugerencia");
-                      cy.get('[data-cy="terminal-awaiting-refutation"]').should("not.exist");
+                      cy.get('[data-cy="terminal-refutation-result"]').should("contain", "Tu sugerencia fue refutada");
+                      cy.get('[data-cy="terminal-refutation-result"]').should("contain", shownCard.name);
+                      cy.get('[data-cy="terminal-turn-indicator"]').should("contain", "ESPERA");
+                      cy.get('[data-cy="terminal-lobby-status-banner"]').should("contain", blueTeam.name);
                     });
                   });
                 });

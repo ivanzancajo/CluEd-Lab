@@ -118,7 +118,7 @@ const prisma = new PrismaClient({
   },
 });
 
-describe('SCRUM-84 sugerencia y refutación', () => {
+describe('SCRUM-84 sugerencia y refutacion', () => {
   let server: Server;
   let baseUrl = '';
   let socketUrl = '';
@@ -141,7 +141,7 @@ describe('SCRUM-84 sugerencia y refutación', () => {
     }
 
     baseUrl = `http://127.0.0.1:${(address as AddressInfo).port}`;
-    socketUrl = `http://127.0.0.1:${(address as AddressInfo).port}`;
+    socketUrl = baseUrl;
   });
 
   beforeEach(async () => {
@@ -208,7 +208,7 @@ describe('SCRUM-84 sugerencia y refutación', () => {
     });
   });
 
-  it('resuelve la refutación en orden circular, rehidrata al refutador y revela la carta solo al equipo sugerente', async () => {
+  it('resuelve la refutacion por socket, bloquea end-turn mientras esta pendiente y pasa el turno al refutador', async () => {
     const seeded = await seedSuggestionSession('SUGR01');
     const redSocket = await connectSocketClient(socketUrl);
     const blueSocket = await connectSocketClient(socketUrl);
@@ -259,6 +259,7 @@ describe('SCRUM-84 sugerencia y refutación', () => {
       const sessionDuringSuggestionResponse = await request('/api/game/sessions/SUGR01');
       const sessionDuringSuggestion = (await sessionDuringSuggestionResponse.json()) as SessionResponse;
 
+      expect(sessionDuringSuggestionResponse.status).toBe(200);
       expect(sessionDuringSuggestion.item.activeSuggestion).toMatchObject({
         emitterTeamId: seeded.redTeamId,
         receiverTeamId: seeded.blueTeamId,
@@ -312,7 +313,7 @@ describe('SCRUM-84 sugerencia y refutación', () => {
 });
 
 async function seedRoomMovementSession(accessCode: string) {
-  const { skin, session } = await seedSkinAndSession(accessCode);
+  const { session } = await seedSkinAndSession(accessCode);
   const roomNodeId = 'sala-superior-izquierda';
   const roomDoorNode = findDoorNodeForRoom(roomNodeId);
   const distanceByNodeId = buildShortestDistances(roomDoorNode.id);
@@ -361,7 +362,6 @@ async function seedRoomMovementSession(accessCode: string) {
   });
 
   return {
-    skinId: skin.id,
     sessionId: session.id,
     redTeamId: redTeam.id,
     blueTeamId: blueTeam.id,
@@ -490,7 +490,7 @@ async function createCollectionItems(skinId: string, kind: TipoElemento, prefix:
       data: {
         skinId,
         elementId: element.id,
-        description: `Descripción de ${prefix} ${index + 1}`,
+        description: `Descripcion de ${prefix} ${index + 1}`,
         motif: kind === TipoElemento.ESPACIO ? `Motivo ${index + 1}` : null,
       },
     });

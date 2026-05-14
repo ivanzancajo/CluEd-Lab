@@ -8,12 +8,12 @@ import {
   type TeamPendingSuggestionState,
 } from './sessionSuggestion.js';
 import {
+  COLOR_SORT_ORDER,
   loadSessionSnapshotById,
   loadSessionSnapshotByAccessCode,
   type SessionSnapshot,
   type SessionTeamSnapshot,
 } from './sessionSnapshots.js';
-import { COLOR_SORT_ORDER } from './teamOrder.js';
 
 type SessionGameplayClient = Pick<
   typeof prisma,
@@ -153,6 +153,7 @@ export async function initializeStartedSession(client: SessionGameplayClient, se
       currentTurnStartedAt: initialTurnTeamId ? startedAt : null,
       activeDiceValueOne: null,
       activeDiceValueTwo: null,
+      activeSuggestionEventId: null,
       solutionId: solution.id,
     },
   });
@@ -292,8 +293,6 @@ export async function loadTeamTerminalStateByAccessCode(
     throw new HttpError(409, 'Las cartas de este equipo todavía no están disponibles.');
   }
 
-  const pendingSuggestion = await loadPendingTeamSuggestionStateByAccessCode(client, accessCode, teamId);
-
   return {
     session,
     team,
@@ -311,7 +310,7 @@ export async function loadTeamTerminalStateByAccessCode(
         } satisfies TeamHandCard;
       })
       .sort(sortHandCards),
-    pendingSuggestion,
+    pendingSuggestion: await loadPendingTeamSuggestionStateByAccessCode(client, accessCode, teamId),
   };
 }
 

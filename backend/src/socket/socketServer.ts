@@ -59,11 +59,12 @@ export type LobbyPresenceState = {
 
 export type LobbyEvent = {
   id: string;
-  type: 'system' | 'team-connected' | 'team-disconnected';
+  type: 'system' | 'team-connected' | 'team-disconnected' | 'final-accusation-verdict';
   message: string;
   occurredAt: number;
   teamColor?: ColorEquipo | undefined;
   teamId?: string | undefined;
+  accusationVerdict?: import('../lib/sessionAccusation.js').FinalAccusationVerdict | undefined;
 };
 
 export type GameStartedPayload = {
@@ -192,6 +193,7 @@ const REALTIME_ENABLED_STATES: ReadonlySet<EstadoPartida> = new Set<EstadoPartid
   EstadoPartida.LOBBY,
   EstadoPartida.EN_CURSO,
   EstadoPartida.PAUSADA,
+  EstadoPartida.FINALIZADA,
 ]);
 
 let activeIo: Server | null = null;

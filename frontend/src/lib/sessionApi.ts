@@ -4,6 +4,13 @@ import type { GameConfig } from './skinApi';
 
 export type SessionStatus = 'LOBBY' | 'REPARTO' | 'EN_CURSO' | 'PAUSADA' | 'FINALIZADA';
 export type TeamColor = 'ROJO' | 'AZUL' | 'VERDE' | 'AMARILLO' | 'MORADO' | 'BLANCO';
+export type TeamEliminationReason = 'ACUSACION_FALSA';
+
+export interface SessionWinner {
+  id: string;
+  name: string;
+  color: TeamColor;
+}
 
 export interface LobbyTeam {
   id: string;
@@ -12,6 +19,8 @@ export interface LobbyTeam {
   positionX: number;
   positionY: number;
   falseAccusation: boolean;
+  eliminatedAt: string | null;
+  eliminationReason: TeamEliminationReason | null;
 }
 
 export interface TeamMoveNode {
@@ -71,6 +80,40 @@ export interface TeamMoveResult {
 
 export type TeamElementKind = 'SUJETO' | 'OBJETO' | 'ESPACIO';
 
+export interface SuggestionElement {
+  id: string;
+  kind: TeamElementKind;
+  name: string;
+  desc: string;
+  imageUrl?: string;
+  motif?: string;
+}
+
+export interface SuggestionSummary {
+  eventId: string;
+  emitterTeamId: string;
+  emitterTeamName: string;
+  emitterTeamColor: TeamColor;
+  receiverTeamId: string | null;
+  receiverTeamName: string | null;
+  receiverTeamColor: TeamColor | null;
+  occurredAt: string;
+  subject: SuggestionElement;
+  object: SuggestionElement;
+  space: SuggestionElement;
+}
+
+export type TeamPendingSuggestionState =
+  | {
+      type: 'AWAITING_REFUTATION';
+      suggestion: SuggestionSummary;
+    }
+  | {
+      type: 'REFUTE_REQUEST';
+      suggestion: SuggestionSummary;
+      matchingCards: SuggestionElement[];
+    };
+
 export interface TeamHandCard {
   id: string;
   kind: TeamElementKind;
@@ -85,11 +128,14 @@ export interface LobbySession {
   accessCode: string;
   status: SessionStatus;
   startedAt: string | null;
+  finishedAt: string | null;
   durationSeconds: number;
   remainingSeconds: number;
   skin: GameConfig;
   teams: LobbyTeam[];
   turn: SessionTurn | null;
+  activeSuggestion: SuggestionSummary | null;
+  winnerTeam: SessionWinner | null;
 }
 
 export interface JoinedLobbySession {
@@ -101,6 +147,29 @@ export interface TeamTerminalState {
   session: LobbySession;
   team: LobbyTeam;
   hand: TeamHandCard[];
+  pendingSuggestion: TeamPendingSuggestionState | null;
+}
+
+export interface FinalAccusationVerdict {
+  eventId: string;
+  occurredAt: string;
+  accuserTeamId: string;
+  accuserTeamName: string;
+  accuserTeamColor: TeamColor;
+  accusation: {
+    subject: { id: string; name: string };
+    object: { id: string; name: string };
+    space: { id: string; name: string };
+  };
+  outcome: 'CORRECTA' | 'INCORRECTA';
+  sessionFinished: boolean;
+  winnerTeamId: string | null;
+  eliminatedTeamId: string | null;
+}
+
+export interface FinalAccusationResult {
+  session: LobbySession;
+  verdict: FinalAccusationVerdict;
 }
 
 interface SessionResponse {
@@ -125,6 +194,16 @@ interface TeamRollResponse {
 
 interface MoveTeamResponse {
   item: TeamMoveResult;
+}
+
+interface TeamEndTurnResponse {
+  item: {
+    session: LobbySession;
+  };
+}
+
+interface FinalAccusationResponse {
+  item: FinalAccusationResult;
 }
 
 interface SessionErrorResponse {
@@ -171,6 +250,27 @@ export async function moveTeam(accessCode: string, teamId: string, targetNodeId:
   const response = await api.post<MoveTeamResponse>(`/game/sessions/${accessCode}/teams/${teamId}/move`, {
     targetNodeId,
   });
+  return response.data.item;
+}
+
+export async function endTeamTurn(accessCode: string, teamId: string) {
+  const response = await api.post<TeamEndTurnResponse>(`/game/sessions/${accessCode}/teams/${teamId}/end-turn`);
+  return response.data.item;
+}
+
+export async function accuseFinalSession(
+  accessCode: string,
+  teamId: string,
+  payload: {
+    subjectElementId: string;
+    objectElementId: string;
+    spaceElementId: string;
+  }
+) {
+  const response = await api.post<FinalAccusationResponse>(
+    `/game/sessions/${accessCode}/teams/${teamId}/accuse`,
+    payload
+  );
   return response.data.item;
 }
 

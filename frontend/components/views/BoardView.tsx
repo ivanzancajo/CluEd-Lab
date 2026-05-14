@@ -87,6 +87,11 @@ export function BoardView() {
       return;
     }
 
+    if (presenceState.status === "FINALIZADA") {
+      setTimeRemaining(presenceState.remainingSeconds);
+      return;
+    }
+
     const updateTimeRemaining = () => {
       setTimeRemaining(calculateRemainingSeconds(presenceState.startedAt, presenceState.durationSeconds));
     };
@@ -267,6 +272,8 @@ export function BoardView() {
             occurredAt: Date.now(),
           },
         ];
+  const latestAccusationEvent =
+    events.find((event) => event.type === "final-accusation-verdict" && event.accusationVerdict) ?? null;
 
   const boardSpaces = mapBoardSpaces(boardConfig);
   const boardCenterImage = getRenderableBoardCenterImage(boardConfig?.centerImage);
@@ -384,7 +391,11 @@ export function BoardView() {
             <div className="flex flex-col gap-1">
               <span className="text-[10px] text-slate-500 uppercase tracking-widest">Turno actual</span>
               <span className="text-sm font-bold text-cyan-100">
-                {currentTurn?.currentTeamName ?? "Pendiente de sincronizar"}
+                {presenceState?.status === "FINALIZADA"
+                  ? latestAccusationEvent?.accusationVerdict?.outcome === "CORRECTA"
+                    ? `Ganador: ${latestAccusationEvent.accusationVerdict.accuserTeamName}`
+                    : "Partida finalizada"
+                  : currentTurn?.currentTeamName ?? "Pendiente de sincronizar"}
               </span>
               <span
                 className={`text-[10px] font-bold uppercase tracking-[0.2em] ${
@@ -397,7 +408,11 @@ export function BoardView() {
             <div className="text-right">
               <span className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">Dados</span>
               <span className="text-lg font-black text-emerald-300">
-                {currentTurn?.dice ? `${currentTurn.dice.valueOne} + ${currentTurn.dice.valueTwo} = ${currentTurn.dice.total}` : "Sin tirar"}
+                {presenceState?.status === "FINALIZADA"
+                  ? "Partida cerrada"
+                  : currentTurn?.dice
+                  ? `${currentTurn.dice.valueOne} + ${currentTurn.dice.valueTwo} = ${currentTurn.dice.total}`
+                  : "Sin tirar"}
               </span>
               <button
                 type="button"
@@ -417,6 +432,14 @@ export function BoardView() {
               </button>
             </div>
           </div>
+          {latestAccusationEvent?.accusationVerdict ? (
+            <div className="col-span-2 rounded-lg border border-red-700/50 bg-red-950/20 px-4 py-3">
+              <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-red-200">
+                Veredicto de acusación final
+              </span>
+              <p className="mt-1 text-sm font-semibold text-red-50">{latestAccusationEvent.message}</p>
+            </div>
+          ) : null}
         </div>
 
         {boardError ? (
@@ -475,6 +498,8 @@ export function BoardView() {
               const eventClass =
                 event.type === "team-disconnected"
                   ? "bg-red-950/20 border-red-900/50 text-red-300"
+                  : event.type === "final-accusation-verdict"
+                  ? "bg-red-950/20 border-red-700/50 text-red-50"
                   : event.type === "team-connected"
                   ? "bg-cyan-950/10 border-cyan-900/30 text-cyan-100"
                   : "bg-slate-900/50 border-slate-800 text-slate-400 font-bold";

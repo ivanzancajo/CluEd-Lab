@@ -1,6 +1,15 @@
 import { io, type Socket } from 'socket.io-client';
 import { getStoredAdminToken } from './auth';
-import type { LobbySession, LobbyTeam, SessionStatus, SessionTurn, TeamColor } from './sessionApi';
+import type {
+  FinalAccusationVerdict,
+  LobbySession,
+  LobbyTeam,
+  SessionStatus,
+  SessionTurn,
+  SuggestionElement,
+  SuggestionSummary,
+  TeamColor,
+} from './sessionApi';
 
 export type LobbyPresenceTeam = LobbyTeam & {
   connected: boolean;
@@ -16,16 +25,18 @@ export type LobbyPresenceState = {
   remainingSeconds: number;
   teams: LobbyPresenceTeam[];
   turn: SessionTurn | null;
+  activeSuggestion: SuggestionSummary | null;
   updatedAt: number;
 };
 
 export type LobbyEventMessage = {
   id: string;
-  type: 'system' | 'team-connected' | 'team-disconnected';
+  type: 'system' | 'team-connected' | 'team-disconnected' | 'final-accusation-verdict';
   message: string;
   occurredAt: number;
   teamColor?: TeamColor | undefined;
   teamId?: string | undefined;
+  accusationVerdict?: FinalAccusationVerdict | undefined;
 };
 
 export type GameStartedPayload = {
@@ -69,6 +80,42 @@ export type TeamSecretPassageAck =
       error: string;
     };
 
+export type GameSuggestAck =
+  | {
+      ok: true;
+      status: 'waiting-refutation' | 'resolved-without-refutation';
+      occurredAt: number;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+export type GameRefuteAck =
+  | {
+      ok: true;
+      occurredAt: number;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+export type GameRefuteRequestPayload = {
+  suggestion: SuggestionSummary;
+  matchingCards: SuggestionElement[];
+  occurredAt: number;
+};
+
+export type GameRefutationResultPayload = {
+  suggestion: SuggestionSummary;
+  outcome: 'REFUTED' | 'UNREFUTED';
+  occurredAt: number;
+  shownCard?: SuggestionElement;
+  shownByTeamId?: string;
+  shownByTeamName?: string;
+};
+
 export type GameStatusChangeAck =
   | {
       ok: true;
@@ -84,6 +131,8 @@ type ServerToClientEvents = {
   'lobby:event': (event: LobbyEventMessage) => void;
   gameStarted: (payload: GameStartedPayload) => void;
   'game:status-changed': (payload: GameStatusChangedPayload) => void;
+  'game:refute-request': (payload: GameRefuteRequestPayload) => void;
+  'game:refutation-result': (payload: GameRefutationResultPayload) => void;
 };
 
 type ClientToServerEvents = {
@@ -96,6 +145,14 @@ type ClientToServerEvents = {
   'turn:use-secret-passage': (
     payload: { fromNodeId: string; toNodeId: string },
     acknowledge: (response: TeamSecretPassageAck) => void
+  ) => void;
+  'game:suggest': (
+    payload: { subjectElementId: string; objectElementId: string; spaceElementId: string },
+    acknowledge: (response: GameSuggestAck) => void
+  ) => void;
+  'game:refute': (
+    payload: { shownElementId: string },
+    acknowledge: (response: GameRefuteAck) => void
   ) => void;
   startGame: (payload: { accessCode: string }, acknowledge: (response: StartGameAck) => void) => void;
   'game:pause': (payload: { sessionId: string }, acknowledge: (response: GameStatusChangeAck) => void) => void;
@@ -153,6 +210,21 @@ export function emitTeamSecretPassage(
 ) {
   return new Promise<TeamSecretPassageAck>((resolve) => {
     socket.emit('turn:use-secret-passage', { fromNodeId, toNodeId }, resolve);
+  });
+}
+
+export function emitTeamSuggestion(
+  socket: LobbySocketClient,
+  payload: { subjectElementId: string; objectElementId: string; spaceElementId: string }
+) {
+  return new Promise<GameSuggestAck>((resolve) => {
+    socket.emit('game:suggest', payload, resolve);
+  });
+}
+
+export function emitTeamRefutation(socket: LobbySocketClient, shownElementId: string) {
+  return new Promise<GameRefuteAck>((resolve) => {
+    socket.emit('game:refute', { shownElementId }, resolve);
   });
 }
 

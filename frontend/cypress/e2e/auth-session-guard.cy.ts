@@ -143,10 +143,15 @@ describe("Proteccion de sesion del Game Master", () => {
     const token = createFakeAdminToken();
 
     mockValidAdminSession();
+    cy.intercept("GET", "**/api/config/skins", {
+      statusCode: 200,
+      body: { items: [] },
+    }).as("listSkinsRequest");
 
     visitWithToken("/host", token);
 
     cy.wait("@sessionRequest");
+    cy.wait("@listSkinsRequest");
     cy.get('[data-cy="session-create-logout-button"]').click();
 
     cy.location("pathname").should("eq", "/");

@@ -6,7 +6,8 @@ import {
   type TeamHandCard,
 } from '../lib/sessionGameplay.js';
 import { createWithUniqueAccessCode } from '../lib/sessionAccessCode.js';
-import { COLOR_LABELS, COLOR_SORT_ORDER } from '../lib/sessionSnapshots.js';
+import { COLOR_LABELS } from '../lib/sessionSnapshots.js';
+import { COLOR_SORT_ORDER } from '../lib/teamOrder.js';
 
 const DEFAULT_TEAM_COUNT = 6;
 const DEFAULT_DURATION_MINUTES = 45;

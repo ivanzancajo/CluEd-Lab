@@ -4,6 +4,8 @@ import { prisma } from './prisma.js';
 import {
   BOARD_MOVEMENT_CONNECTIONS,
   BOARD_MOVEMENT_NODES,
+  BOARD_MOVEMENT_POSITION_TOLERANCE,
+  findBoardMovementNodeByPosition,
   getRoomEntryNodeByDoorNodeId,
   getSecretPassageDestinationNodeByRoomNodeId,
   type BoardMovementNode,
@@ -21,6 +23,7 @@ import {
 
 type TeamMovementClient = Pick<typeof prisma, 'partida' | 'equipo'>;
 export { BOARD_MOVEMENT_CONNECTIONS, BOARD_MOVEMENT_NODES } from './boardGraph.js';
+export { findBoardMovementNodeByPosition } from './boardGraph.js';
 export type { BoardMovementNode } from './boardGraph.js';
 
 export type TeamMoveState = {
@@ -60,8 +63,7 @@ export type TeamDiceRollResult = {
   turnAdvanced: boolean;
 };
 
-const MOVEMENT_POSITION_TOLERANCE = 0.75;
-const SPAWN_SNAP_TOLERANCE = MOVEMENT_POSITION_TOLERANCE * 2;
+const SPAWN_SNAP_TOLERANCE = BOARD_MOVEMENT_POSITION_TOLERANCE * 2;
 
 const TEAM_COLOR_SPAWN_NODE_ID: Record<ColorEquipo, string> = {
   [ColorEquipo.ROJO]: 'spawn-rojo',
@@ -166,54 +168,6 @@ export function getReachableMoveNodes(currentNodeId: string, occupiedNodeIds: It
 
     return left.label.localeCompare(right.label, 'es');
   });
-}
-
-export function findBoardMovementNodeByPosition(positionX: number | null, positionY: number | null) {
-  if (typeof positionX !== 'number' || typeof positionY !== 'number') {
-    return null;
-  }
-
-  const candidates = Object.values(BOARD_MOVEMENT_NODES).filter(
-    (node) =>
-      Math.abs(node.positionX - positionX) <= MOVEMENT_POSITION_TOLERANCE &&
-      Math.abs(node.positionY - positionY) <= MOVEMENT_POSITION_TOLERANCE
-  );
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const getKindPriority = (kind: BoardMovementNode['kind']) => {
-    if (kind === 'spawn') {
-      return 0;
-    }
-
-    if (kind === 'square') {
-      return 1;
-    }
-
-    return 2;
-  };
-
-  return candidates
-    .map((node) => ({
-      node,
-      distance: Math.hypot(node.positionX - positionX, node.positionY - positionY),
-      kindPriority: getKindPriority(node.kind),
-    }))
-    .sort((left, right) => {
-      const distanceDelta = left.distance - right.distance;
-      if (distanceDelta !== 0) {
-        return distanceDelta;
-      }
-
-      const kindDelta = left.kindPriority - right.kindPriority;
-      if (kindDelta !== 0) {
-        return kindDelta;
-      }
-
-      return left.node.id.localeCompare(right.node.id, 'es');
-    })[0]?.node ?? null;
 }
 
 export function resolveCommittedMoveTargetNode(currentNode: BoardMovementNode, targetNode: BoardMovementNode) {

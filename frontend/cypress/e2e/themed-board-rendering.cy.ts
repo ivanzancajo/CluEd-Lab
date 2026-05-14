@@ -131,7 +131,7 @@ describe("SCRUM-48 renderizado dinamico del tablero tematico", () => {
     cy.get('[data-cy="board-space-8"]').should("contain", "Lab. Electronica y Electricidad").and("contain", "Panel abierto");
     cy.get('[data-cy="board-space-9"]').should("contain", "Seminario Maxwell").and("contain", "Nota de despedida");
     cy.get('[data-cy="board-pawn-rojo"]').should("be.visible");
-    cy.get('[data-cy="board-pawn-azul"]').should("be.visible");
+    cy.get('[data-cy="board-pawn-azul"]').should("not.exist");
     cy.get('img[alt="Imagen central del tablero"], img[alt="Imagen central de la skin"]').should("exist");
   });
 

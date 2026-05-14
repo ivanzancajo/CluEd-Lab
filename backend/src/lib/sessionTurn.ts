@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { Prisma, type ColorEquipo } from '@prisma/client';
 import { HttpError } from './http.js';
-import { COLOR_SORT_ORDER } from './sessionSnapshots.js';
+import { COLOR_SORT_ORDER } from './teamOrder.js';
 
 export type SessionTurnManagedTeam = {
   id: string;

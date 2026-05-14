@@ -111,7 +111,7 @@ export function getNextTurnTeam<T extends SessionTurnManagedTeam>(
   for (let offset = 1; offset <= orderedTeams.length; offset += 1) {
     const candidate = orderedTeams[(currentTeamIndex + offset) % orderedTeams.length];
 
-    if (!isTeamEliminated(candidate)) {
+    if (candidate && !isTeamEliminated(candidate)) {
       return candidate;
     }
   }

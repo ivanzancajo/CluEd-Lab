@@ -2,6 +2,7 @@ import { ColorEquipo, EstadoPartida, RazonEliminacionEquipo } from '@prisma/clie
 import { HttpError } from './http.js';
 import { prisma } from './prisma.js';
 import { loadSkinConfiguration, type LoadedSkinConfiguration } from './skinConfigs.js';
+import { getSessionResolutionSnapshot, type SessionResolutionSnapshot } from './sessionResolution.js';
 import { loadActiveSuggestionSummaryById, type SuggestionSummary } from './sessionSuggestion.js';
 
 export const COLOR_SORT_ORDER: ColorEquipo[] = [
@@ -69,6 +70,7 @@ export type SessionSnapshot = {
   turn: SessionTurnSnapshot | null;
   activeSuggestion: SuggestionSummary | null;
   winnerTeam: SessionWinnerSnapshot | null;
+  resolution: SessionResolutionSnapshot | null;
 };
 
 export async function loadSessionSnapshotByAccessCode(
@@ -203,6 +205,7 @@ async function loadSessionSnapshot(
           color: session.winnerTeam.color,
         }
       : null,
+    resolution: getSessionResolutionSnapshot(session.id),
   };
 }
 

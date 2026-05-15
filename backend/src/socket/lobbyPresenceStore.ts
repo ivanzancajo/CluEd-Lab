@@ -59,6 +59,10 @@ class LobbyPresenceStore {
       .map(([teamId]) => teamId);
   }
 
+  clearSession(sessionId: string) {
+    this.sessions.delete(sessionId);
+  }
+
   private getOrCreateSession(sessionId: string) {
     const existing = this.sessions.get(sessionId);
     if (existing) {

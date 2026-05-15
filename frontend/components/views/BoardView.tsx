@@ -4,12 +4,15 @@ import { motion } from "motion/react";
 import {
   Activity,
   ArrowLeft,
+  Box,
   Clock,
   History,
   KeyRound,
   LoaderCircle,
+  MapPin,
   MonitorPlay,
   RefreshCw,
+  User,
   Users,
 } from "lucide-react";
 import {
@@ -17,6 +20,7 @@ import {
   pauseGameFromBoard,
   resumeGameFromBoard,
   subscribeHostToLobby,
+  triggerResolutionFromBoard,
   type LobbySocketClient,
   type LobbyEventMessage,
   type LobbyPresenceState,
@@ -33,12 +37,33 @@ import {
   getStoredSessionDurationSeconds,
   getStoredSessionId,
   getStoredSessionStartedAt,
+  setStoredSessionStatus,
   storeHostLobbySession,
 } from "../../src/lib/lobbyStorage";
-import { mapBoardSpaces, readStoredActiveBoardConfig } from "../../src/lib/boardTheme";
+import {
+  mapBoardSpaces,
+  readStoredActiveBoardConfig,
+  type StoredBoardConfig,
+  type StoredBoardItem,
+} from "../../src/lib/boardTheme";
 import { getTeamMonitoringLabel, getTeamMonitoringStatus } from "../../src/lib/teamMonitoring";
 import { TEAM_METADATA } from "../../src/lib/teamMeta";
-import { getGameSession, getSessionErrorMessage } from "../../src/lib/sessionApi";
+import {
+  getGameSession,
+  getSessionErrorMessage,
+  type GameResolutionMode,
+  type LobbySession,
+  type ResolutionCard,
+} from "../../src/lib/sessionApi";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 import { ThemedBoard } from "../game/ThemedBoard";
 
 type BoardConnectionStatus = "idle" | "connecting" | "connected" | "error";
@@ -55,6 +80,8 @@ export function BoardView() {
   const [connectionStatus, setConnectionStatus] = useState<BoardConnectionStatus>("idle");
   const [boardError, setBoardError] = useState<string | null>(null);
   const [isChangingGameStatus, setIsChangingGameStatus] = useState(false);
+  const [isResolutionDialogOpen, setIsResolutionDialogOpen] = useState(false);
+  const [isTriggeringResolution, setIsTriggeringResolution] = useState(false);
   const [isBoardDebugEnabled, setIsBoardDebugEnabled] = useState(() => getStoredBoardDebugMode());
   const [boardDebugProbe, setBoardDebugProbe] = useState<BoardDebugProbe | null>(null);
   const [monitoringNow, setMonitoringNow] = useState(() => Date.now());
@@ -118,6 +145,7 @@ export function BoardView() {
 
       setPresenceState(state);
       setSessionCode(state.accessCode);
+      setStoredSessionStatus(state.status);
       setBoardError(null);
       setConnectionStatus("connected");
     };
@@ -151,30 +179,24 @@ export function BoardView() {
           }
 
           const updatedSession = payload.session;
-          setPresenceState((currentState) => {
-            if (!currentState || currentState.sessionId !== updatedSession.id) {
-              return currentState;
-            }
+          storeHostLobbySession(updatedSession);
+          setPresenceState((currentState) => mergeLobbySessionIntoPresence(currentState, updatedSession, payload.occurredAt));
+        });
+        socket.on("game:final-chance-start", (payload) => {
+          if (!active) {
+            return;
+          }
 
-            return {
-              ...currentState,
-              status: updatedSession.status,
-              startedAt: updatedSession.startedAt,
-              durationSeconds: updatedSession.durationSeconds,
-              remainingSeconds: updatedSession.remainingSeconds,
-              turn: updatedSession.turn,
-              teams: updatedSession.teams.map((team) => {
-                const previousTeam = currentState.teams.find((currentTeam) => currentTeam.id === team.id);
+          storeHostLobbySession(payload.session);
+          setPresenceState((currentState) => mergeLobbySessionIntoPresence(currentState, payload.session, payload.occurredAt));
+        });
+        socket.on("game:show-solution", (payload) => {
+          if (!active) {
+            return;
+          }
 
-                return {
-                  ...team,
-                  connected: previousTeam?.connected ?? false,
-                  lastSeenAt: previousTeam?.lastSeenAt ?? null,
-                };
-              }),
-              updatedAt: payload.occurredAt,
-            };
-          });
+          storeHostLobbySession(payload.session);
+          setPresenceState((currentState) => mergeLobbySessionIntoPresence(currentState, payload.session, payload.occurredAt));
         });
         socket.on("disconnect", () => {
           if (!active) {
@@ -274,6 +296,19 @@ export function BoardView() {
         ];
   const latestAccusationEvent =
     events.find((event) => event.type === "final-accusation-verdict" && event.accusationVerdict) ?? null;
+  const activeResolution = presenceState?.resolution ?? null;
+  const resolutionSubmittedCount = activeResolution?.submittedTeamIds.length ?? 0;
+  const resolutionEligibleCount = activeResolution?.eligibleTeamIds.length ?? 0;
+  const resolutionCountdownSeconds = getResolutionCountdownSeconds(activeResolution?.deadlineAt, monitoringNow);
+  const isBoardSolutionVisible = activeResolution?.phase === "MOSTRANDO_SOLUCION" && Boolean(activeResolution.solution);
+  const boardSolutionCards = activeResolution?.solution
+    ? buildBoardResolutionCards(activeResolution.solution, boardConfig)
+    : [];
+  const canManageGameControls = presenceState?.status === "EN_CURSO" || presenceState?.status === "PAUSADA";
+  const canOpenResolutionDialog =
+    connectionStatus === "connected" &&
+    presenceState?.status === "EN_CURSO" &&
+    !presenceState?.resolution;
 
   const boardSpaces = mapBoardSpaces(boardConfig);
   const boardCenterImage = getRenderableBoardCenterImage(boardConfig?.centerImage);
@@ -329,6 +364,11 @@ export function BoardView() {
       return;
     }
 
+    if (presenceState.resolution) {
+      setBoardError("La partida está en fase de resolución y no admite cambios de pausa o reanudación.");
+      return;
+    }
+
     setIsChangingGameStatus(true);
     setBoardError(null);
 
@@ -344,19 +384,49 @@ export function BoardView() {
       }
 
       setPresenceState((currentState) => {
-        if (!currentState || currentState.sessionId !== response.payload.session.id) {
-          return currentState;
-        }
-
-        return {
-          ...currentState,
-          status: response.payload.status,
-          turn: response.payload.session.turn,
-          updatedAt: response.payload.occurredAt,
-        };
+        return mergeLobbySessionIntoPresence(currentState, response.payload.session, response.payload.occurredAt);
       });
     } finally {
       setIsChangingGameStatus(false);
+    }
+  };
+
+  const handleTriggerResolution = async (mode: GameResolutionMode) => {
+    if (!presenceState) {
+      return;
+    }
+
+    const socket = socketRef.current;
+    if (!socket || !socket.connected) {
+      setBoardError("No hay conexión realtime para abrir la fase de resolución.");
+      return;
+    }
+
+    if (presenceState.status !== "EN_CURSO") {
+      setBoardError("La resolución solo puede activarse mientras la partida siga en curso.");
+      return;
+    }
+
+    if (presenceState.resolution) {
+      setBoardError("La sesión ya tiene una fase de resolución activa.");
+      return;
+    }
+
+    setIsTriggeringResolution(true);
+    setBoardError(null);
+
+    try {
+      const response = await triggerResolutionFromBoard(socket, presenceState.sessionId, mode);
+
+      if (!response.ok) {
+        setBoardError(response.error);
+        return;
+      }
+
+      setPresenceState((currentState) => mergeLobbySessionIntoPresence(currentState, response.payload.session, response.payload.occurredAt));
+      setIsResolutionDialogOpen(false);
+    } finally {
+      setIsTriggeringResolution(false);
     }
   };
 
@@ -370,7 +440,7 @@ export function BoardView() {
           <MonitorPlay className="w-6 h-6 text-emerald-400" />
           <div className="flex-1">
             <h1 className="text-sm font-bold tracking-widest text-emerald-400">PANTALLA CENTRAL</h1>
-            <p className="text-[10px] text-slate-500">PARTIDA EN CURSO</p>
+            <p className="text-[10px] text-slate-500">{formatBoardHeaderSubtitle(presenceState?.status ?? null)}</p>
           </div>
           {connectionStatus === "connecting" ? <LoaderCircle className="w-4 h-4 animate-spin text-cyan-300" /> : null}
         </div>
@@ -414,24 +484,87 @@ export function BoardView() {
                   ? `${currentTurn.dice.valueOne} + ${currentTurn.dice.valueTwo} = ${currentTurn.dice.total}`
                   : "Sin tirar"}
               </span>
-              <button
-                type="button"
-                onClick={() => void handleToggleGameStatus()}
-                disabled={
-                  connectionStatus !== "connected" ||
-                  isChangingGameStatus ||
-                  (presenceState?.status !== "EN_CURSO" && presenceState?.status !== "PAUSADA")
-                }
-                className="mt-2 rounded-md border border-cyan-500/70 bg-cyan-500 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isChangingGameStatus
-                  ? "Actualizando..."
-                  : presenceState?.status === "PAUSADA"
-                  ? "Reanudar"
-                  : "Pausar"}
-              </button>
+              {canManageGameControls ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleToggleGameStatus()}
+                    disabled={connectionStatus !== "connected" || isChangingGameStatus || Boolean(activeResolution)}
+                    className="mt-2 rounded-md border border-cyan-500/70 bg-cyan-500 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isChangingGameStatus
+                      ? "Actualizando..."
+                      : presenceState?.status === "PAUSADA"
+                      ? "Reanudar"
+                      : "Pausar"}
+                  </button>
+                  <button
+                    type="button"
+                    data-cy="board-resolution-open"
+                    onClick={() => setIsResolutionDialogOpen(true)}
+                    disabled={!canOpenResolutionDialog || isTriggeringResolution}
+                    className="mt-2 w-full rounded-md border border-red-500/70 bg-red-500 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isTriggeringResolution ? "Abriendo resolución..." : "Finalizar partida"}
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
+          {activeResolution ? (
+            <div data-cy="board-resolution-summary" className="col-span-2 rounded-lg border border-amber-700/50 bg-amber-950/20 px-4 py-3">
+              <span data-cy="board-resolution-phase" className="block text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200">
+                {formatResolutionPhaseLabel(activeResolution.phase)}
+              </span>
+              <p data-cy="board-resolution-detail" className="mt-1 text-sm font-semibold text-amber-50">
+                {activeResolution.phase === "ESPERANDO_RESOLUCION"
+                  ? `${formatResolutionModeLabel(activeResolution.mode)} activa. ${resolutionSubmittedCount}/${resolutionEligibleCount} acusaciones recibidas.`
+                  : buildCompletedResolutionSummary(activeResolution.mode)}
+              </p>
+              {activeResolution.phase === "ESPERANDO_RESOLUCION" && resolutionCountdownSeconds !== null ? (
+                <div
+                  data-cy="board-resolution-countdown"
+                  className={`mt-3 rounded-2xl border px-4 py-3 ${
+                    resolutionCountdownSeconds === 0
+                      ? "border-red-700/60 bg-red-950/25"
+                      : "border-amber-700/60 bg-amber-950/25"
+                  }`}
+                >
+                  <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200/80">
+                    Tiempo restante para la acusación final
+                  </span>
+                  <div className="mt-2 flex items-end justify-between gap-4">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-amber-100/80">
+                      {resolutionCountdownSeconds === 0 ? "Cerrando la fase de resolución..." : "La solución se mostrará al agotarse el reloj."}
+                    </p>
+                    <span
+                      className={`text-3xl font-black font-mono tracking-[0.18em] ${
+                        resolutionCountdownSeconds === 0 ? "text-red-300" : "text-amber-50"
+                      }`}
+                    >
+                      {formatTime(resolutionCountdownSeconds)}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+              {activeResolution.solution ? (
+                <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-amber-50">
+                  <div data-cy="board-resolution-solution-subject" className="rounded-md border border-amber-800/50 bg-amber-950/30 px-3 py-2">
+                    <span className="block text-[9px] uppercase tracking-[0.18em] text-amber-200/70">Sujeto</span>
+                    {activeResolution.solution.subject.name}
+                  </div>
+                  <div data-cy="board-resolution-solution-object" className="rounded-md border border-amber-800/50 bg-amber-950/30 px-3 py-2">
+                    <span className="block text-[9px] uppercase tracking-[0.18em] text-amber-200/70">Objeto</span>
+                    {activeResolution.solution.object.name}
+                  </div>
+                  <div data-cy="board-resolution-solution-space" className="rounded-md border border-amber-800/50 bg-amber-950/30 px-3 py-2">
+                    <span className="block text-[9px] uppercase tracking-[0.18em] text-amber-200/70">Espacio</span>
+                    {activeResolution.solution.space.name}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {latestAccusationEvent?.accusationVerdict ? (
             <div className="col-span-2 rounded-lg border border-red-700/50 bg-red-950/20 px-4 py-3">
               <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-red-200">
@@ -547,15 +680,116 @@ export function BoardView() {
             ) : null}
           </ThemedBoard>
 
-          <button
-            type="button"
-            data-cy="host-board-debug-toggle"
-            onClick={handleBoardDebugToggle}
-            className={`absolute right-4 top-4 z-30 rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] shadow-[0_0_10px_rgba(0,0,0,0.35)] ${isBoardDebugEnabled ? 'border-fuchsia-400/70 bg-fuchsia-950/75 text-fuchsia-100' : 'border-cyan-900/60 bg-slate-950/85 text-cyan-200'}`}
-            title="Activa la rejilla y los nodos del tablero para ajustar el mapa"
-          >
-            {isBoardDebugEnabled ? 'Debug on' : 'Debug off'}
-          </button>
+          {isBoardSolutionVisible && activeResolution?.solution ? (
+            <motion.div
+              key={`board-solution-${activeResolution.mode}`}
+              data-cy="board-solution-reveal"
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute inset-0 z-40 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(2,6,23,0.7),rgba(2,6,23,0.95)_70%)] p-6 backdrop-blur-[5px]"
+            >
+              <div className="w-full max-w-[40rem] rounded-[28px] border border-amber-400/50 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] p-6 shadow-[0_30px_100px_rgba(2,6,23,0.82)]">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span
+                    data-cy="board-solution-session-status"
+                    className="rounded-full border border-amber-400/40 bg-amber-950/35 px-4 py-2 text-[10px] font-black uppercase tracking-[0.24em] text-amber-100"
+                  >
+                    Sesión cerrada · FINALIZADA
+                  </span>
+                  <div className="rounded-full border border-cyan-400/25 bg-cyan-950/30 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-100">
+                    {activeResolution.winningTeams.length === 0
+                      ? "Sin ganadores"
+                      : activeResolution.winningTeams.length === 1
+                      ? `Ganador: ${activeResolution.winningTeams[0]?.name ?? "Sin determinar"}`
+                      : `Ganadores: ${activeResolution.winningTeams.map((team) => team.name).join(", ")}`}
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.32em] text-amber-300">
+                      {activeResolution.mode === "FINAL_CHANCE" ? "Resolución final" : "Solución revelada"}
+                    </p>
+                    <h3 className="mt-2 text-3xl font-black uppercase tracking-[0.14em] text-white">
+                      Caso cerrado
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-200">
+                      La sesión ha quedado cerrada. Estas son las tres cartas que resuelven el sobre final.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                  {boardSolutionCards.map((item, index) => (
+                    <motion.div
+                      key={item.key}
+                      data-cy={`board-solution-card-${item.key}`}
+                      initial={{ opacity: 0, y: 28, rotateX: -12 }}
+                      animate={{ opacity: 1, y: 0, rotateX: 0 }}
+                      transition={{ delay: index * 0.12, duration: 0.38 }}
+                      className={`overflow-hidden rounded-[22px] border bg-slate-900/96 ${item.tone}`}
+                    >
+                      <div className="relative aspect-[4/5] w-full overflow-hidden border-b border-white/10 bg-slate-950/90">
+                        <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(15,23,42,0.92),rgba(2,6,23,1))]">
+                          {item.key === "subject" ? (
+                            <User className="h-12 w-12 text-cyan-200/70" />
+                          ) : item.key === "object" ? (
+                            <Box className="h-12 w-12 text-emerald-200/70" />
+                          ) : (
+                            <MapPin className="h-12 w-12 text-rose-200/70" />
+                          )}
+                        </div>
+                        {item.imageUrl ? (
+                          <>
+                            <img
+                              data-cy={`board-solution-card-image-${item.key}`}
+                              src={item.imageUrl}
+                              alt=""
+                              aria-hidden="true"
+                              onError={(event) => {
+                                event.currentTarget.style.display = "none";
+                              }}
+                              className="h-full w-full object-cover opacity-95"
+                            />
+                            <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
+                          </>
+                        ) : (
+                          <div
+                            data-cy={`board-solution-card-fallback-${item.key}`}
+                            className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_center,rgba(15,23,42,0.98),rgba(2,6,23,1))]"
+                          >
+                            {item.key === "subject" ? (
+                              <User className="h-12 w-12 text-cyan-200/80" />
+                            ) : item.key === "object" ? (
+                              <Box className="h-12 w-12 text-emerald-200/80" />
+                            ) : (
+                              <MapPin className="h-12 w-12 text-rose-200/80" />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="px-4 py-4 text-left">
+                        <span className="block text-[10px] font-bold uppercase tracking-[0.26em] opacity-75">{item.label}</span>
+                        <p className="mt-3 text-2xl font-black leading-[1.05] text-white break-words">{item.name}</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          ) : null}
+
+          {!isBoardSolutionVisible ? (
+            <button
+              type="button"
+              data-cy="host-board-debug-toggle"
+              onClick={handleBoardDebugToggle}
+              className={`absolute right-4 top-4 z-30 rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] shadow-[0_0_10px_rgba(0,0,0,0.35)] ${isBoardDebugEnabled ? 'border-fuchsia-400/70 bg-fuchsia-950/75 text-fuchsia-100' : 'border-cyan-900/60 bg-slate-950/85 text-cyan-200'}`}
+              title="Activa la rejilla y los nodos del tablero para ajustar el mapa"
+            >
+              {isBoardDebugEnabled ? 'Debug on' : 'Debug off'}
+            </button>
+          ) : null}
 
           <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-cyan-800 -translate-x-4 -translate-y-4"></div>
           <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-cyan-800 translate-x-4 -translate-y-4"></div>
@@ -563,8 +797,78 @@ export function BoardView() {
           <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-cyan-800 translate-x-4 translate-y-4"></div>
         </div>
       </div>
+
+      <AlertDialog open={isResolutionDialogOpen} onOpenChange={setIsResolutionDialogOpen}>
+        <AlertDialogContent data-cy="board-resolution-dialog" className="max-w-md border-cyan-900/60 bg-slate-950 text-cyan-100">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm font-black uppercase tracking-[0.18em] text-cyan-300">
+              Panel de decisión de resolución
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-slate-300">
+              Elige si quieres revelar inmediatamente la solución o abrir la última oportunidad para todos los equipos activos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid gap-3">
+            <button
+              type="button"
+              data-cy="board-resolution-direct"
+              onClick={() => void handleTriggerResolution("DIRECT_REVEAL")}
+              disabled={isTriggeringResolution}
+              className="rounded-md border border-red-500/70 bg-red-500 px-4 py-3 text-left text-sm font-black uppercase tracking-[0.14em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Revelar solución directamente
+            </button>
+            <button
+              type="button"
+              data-cy="board-resolution-final-chance"
+              onClick={() => void handleTriggerResolution("FINAL_CHANCE")}
+              disabled={isTriggeringResolution}
+              className="rounded-md border border-amber-500/70 bg-amber-500 px-4 py-3 text-left text-sm font-black uppercase tracking-[0.14em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Habilitar acusación final
+            </button>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 hover:text-white">
+              Cancelar
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
+}
+
+function mergeLobbySessionIntoPresence(
+  currentState: LobbyPresenceState | null,
+  session: LobbySession,
+  occurredAt: number
+) {
+  if (!currentState || currentState.sessionId !== session.id) {
+    return currentState;
+  }
+
+  return {
+    ...currentState,
+    accessCode: session.accessCode,
+    status: session.status,
+    startedAt: session.startedAt,
+    durationSeconds: session.durationSeconds,
+    remainingSeconds: session.remainingSeconds,
+    turn: session.turn,
+    activeSuggestion: session.activeSuggestion,
+    resolution: session.resolution,
+    teams: session.teams.map((team) => {
+      const previousTeam = currentState.teams.find((currentTeam) => currentTeam.id === team.id);
+
+      return {
+        ...team,
+        connected: previousTeam?.connected ?? false,
+        lastSeenAt: previousTeam?.lastSeenAt ?? null,
+      };
+    }),
+    updatedAt: occurredAt,
+  };
 }
 
 async function resolveSessionId() {
@@ -610,8 +914,97 @@ function formatEventTime(timestamp: number) {
   });
 }
 
+function getResolutionCountdownSeconds(deadlineAt: string | null | undefined, currentTimestamp: number) {
+  if (!deadlineAt) {
+    return null;
+  }
+
+  const deadlineTimestamp = new Date(deadlineAt).getTime();
+
+  if (Number.isNaN(deadlineTimestamp)) {
+    return null;
+  }
+
+  return Math.max(0, Math.ceil((deadlineTimestamp - currentTimestamp) / 1000));
+}
+
 function formatSessionStatusLabel(status: string) {
   return status.replaceAll("_", " ");
+}
+
+function formatBoardHeaderSubtitle(status: string | null) {
+  if (!status) {
+    return "SINCRONIZANDO PARTIDA";
+  }
+
+  return `PARTIDA ${formatSessionStatusLabel(status)}`;
+}
+
+function formatResolutionModeLabel(mode: GameResolutionMode) {
+  return mode === "FINAL_CHANCE" ? "Última oportunidad" : "Revelado directo";
+}
+
+function buildCompletedResolutionSummary(mode: GameResolutionMode) {
+  return mode === "DIRECT_REVEAL"
+    ? "Revelado directo completado. La solución ya está visible para toda la mesa."
+    : "Última oportunidad completada. La solución ya está visible para toda la mesa.";
+}
+
+function buildBoardResolutionCards(
+  solution: NonNullable<NonNullable<LobbySession["resolution"]>["solution"]>,
+  boardConfig: StoredBoardConfig | null
+) {
+  return [
+    {
+      key: "subject" as const,
+      label: boardConfig?.cat1Name?.trim() || "Sujeto",
+      card: solution.subject,
+      item: findStoredBoardResolutionItem(boardConfig?.subjects, solution.subject),
+      tone: "border-cyan-400/45 text-cyan-100 shadow-[0_0_26px_rgba(34,211,238,0.14)]",
+    },
+    {
+      key: "object" as const,
+      label: boardConfig?.cat2Name?.trim() || "Objeto",
+      card: solution.object,
+      item: findStoredBoardResolutionItem(boardConfig?.objects, solution.object),
+      tone: "border-emerald-400/45 text-emerald-100 shadow-[0_0_26px_rgba(16,185,129,0.14)]",
+    },
+    {
+      key: "space" as const,
+      label: boardConfig?.cat3Name?.trim() || "Espacio",
+      card: solution.space,
+      item: findStoredBoardResolutionItem(boardConfig?.spaces, solution.space),
+      tone: "border-rose-400/45 text-rose-100 shadow-[0_0_26px_rgba(244,63,94,0.14)]",
+    },
+  ].map((item) => ({
+    key: item.key,
+    label: item.label,
+    name: item.item?.name ?? item.card.name,
+    imageUrl: item.item?.imageUrl,
+    tone: item.tone,
+  }));
+}
+
+function findStoredBoardResolutionItem(items: StoredBoardItem[] | undefined, card: ResolutionCard) {
+  if (!items?.length) {
+    return null;
+  }
+
+  const normalizedCardName = normalizeBoardResolutionLookup(card.name);
+
+  return (
+    items.find((item) => item.id === card.id) ??
+    items.find((item) => normalizeBoardResolutionLookup(item.name) === normalizedCardName) ??
+    null
+  );
+}
+
+function normalizeBoardResolutionLookup(value: string) {
+  return value.trim().toLocaleLowerCase("es-ES");
+}
+
+function formatResolutionPhaseLabel(phase: "ESPERANDO_RESOLUCION" | "MOSTRANDO_SOLUCION") {
+  return phase === "ESPERANDO_RESOLUCION" ? "Resolución en curso" : "Solución proyectada";
 }
 
 function getRenderableBoardCenterImage(centerImage: string | null | undefined) {

@@ -28,9 +28,11 @@ import {
   emitTeamRefutation,
   emitTeamSecretPassage,
   emitTeamSuggestion,
+  submitFinalChanceAccusation,
   subscribeTeamToLobby,
   type GameRefuteRequestPayload,
   type GameRefutationResultPayload,
+  type GameResolutionPayload,
   type GameStatusChangedPayload,
   type GameStartedPayload,
   type LobbyEventMessage,
@@ -285,6 +287,8 @@ export function TerminalView() {
   const [accusationFeedback, setAccusationFeedback] = useState<string | null>(null);
   const [latestAccusationVerdict, setLatestAccusationVerdict] = useState<FinalAccusationVerdict | null>(null);
   const [refutationResult, setRefutationResult] = useState<GameRefutationResultPayload | null>(null);
+  const [resolutionState, setResolutionState] = useState<LobbySession["resolution"]>(null);
+  const [resolutionNow, setResolutionNow] = useState(() => Date.now());
   
   const [categories, setCategories] = useState<{
     c1: ElementoItem[];
@@ -302,6 +306,15 @@ export function TerminalView() {
   const currentTurnRemainingMoves = sessionTurn?.remainingMoves ?? null;
   const currentTeamState = boardTeams.find((team) => team.id === storedTeamId) ?? null;
   const isTeamEliminated = Boolean(currentTeamState?.falseAccusation || currentTeamState?.eliminatedAt);
+  const activeResolution = resolutionState;
+  const isResolutionAwaitingInputs = activeResolution?.phase === "ESPERANDO_RESOLUCION";
+  const isResolutionShowingSolution = activeResolution?.phase === "MOSTRANDO_SOLUCION";
+  const isResolutionEligible = Boolean(storedTeamId && activeResolution?.eligibleTeamIds.includes(storedTeamId));
+  const hasSubmittedResolution = Boolean(storedTeamId && activeResolution?.submittedTeamIds.includes(storedTeamId));
+  const shouldForceFinalChanceModal = Boolean(activeResolution?.mode === "FINAL_CHANCE" && isResolutionAwaitingInputs);
+  const isResolutionBlockingGameplay = Boolean(activeResolution);
+  const resolutionCountdownSeconds = getResolutionCountdownSeconds(activeResolution?.deadlineAt, resolutionNow);
+  const resolutionCountdownLabel = resolutionCountdownSeconds === null ? null : formatCountdownClock(resolutionCountdownSeconds);
 
   const [selectedCard, setSelectedCard] = useState<TerminalCard | null>(null);
   const [cardFlipped, setCardFlipped] = useState(false);
@@ -309,6 +322,11 @@ export function TerminalView() {
   
   // Mock room for locking hypothesis
   const currentRoomMock = "Cámara Anecoica";
+
+  React.useEffect(() => {
+    const intervalId = window.setInterval(() => setResolutionNow(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const applyRealtimeSession = (session: LobbySession, currentTeam: LobbySession["teams"][number]) => {
     storeJoinedLobbySession({ session, team: currentTeam });
@@ -318,6 +336,7 @@ export function TerminalView() {
     setBoardTeams(session.teams);
     setSessionTurn(session.turn);
     setActiveSuggestion(session.activeSuggestion);
+    setResolutionState(session.resolution);
     setCurrentMoveNode((previousNode) => mergePublicCurrentMoveNode(previousNode, session.teams, currentTeam.id));
     setLobbyError(null);
   };
@@ -333,6 +352,7 @@ export function TerminalView() {
     setSessionStatus(state.session.status);
     setSessionTurn(state.session.turn);
     setActiveSuggestion(state.session.activeSuggestion);
+    setResolutionState(state.session.resolution);
     setPendingSuggestion(state.pendingSuggestion);
     setCurrentMoveNode((previousNode) => mergePublicCurrentMoveNode(previousNode, state.session.teams, state.team.id));
     setTeamHand(state.hand.map((card) => mapHandCardToTerminalCard(card, sessionConfig)));
@@ -355,7 +375,15 @@ export function TerminalView() {
     const accessCode = getStoredSessionCode();
     const teamId = getStoredTeamId();
 
-    if (!accessCode || !teamId || sessionStatus !== "EN_CURSO" || !isMyTurn || activeSuggestion || pendingSuggestion) {
+    if (
+      !accessCode ||
+      !teamId ||
+      sessionStatus !== "EN_CURSO" ||
+      !isMyTurn ||
+      activeSuggestion ||
+      pendingSuggestion ||
+      isResolutionBlockingGameplay
+    ) {
       setDestinationNodes([]);
       setSelectedDestinationNodeId("");
       setIsMoveConfirmOpen(false);
@@ -577,6 +605,11 @@ export function TerminalView() {
       return;
     }
 
+    if (isResolutionBlockingGameplay) {
+      setMoveError("La partida está en fase de resolución y el movimiento queda bloqueado.");
+      return;
+    }
+
     const selectedDestinationNode = destinationNodes.find((node) => node.id === targetNodeId) ?? null;
     setIsMoveConfirmOpen(false);
     setIsMovingPawn(true);
@@ -607,6 +640,11 @@ export function TerminalView() {
   };
 
   const handleEmitSecretPassage = async () => {
+    if (isResolutionBlockingGameplay) {
+      setMoveError("La partida está en fase de resolución y el pasadizo queda bloqueado.");
+      return;
+    }
+
     const activeTerminalNode = currentMoveNode ?? resolveCurrentTeamBoardNode(boardTeams, storedTeamId);
 
     if (!activeTerminalNode || activeTerminalNode.kind !== "room") {
@@ -641,6 +679,11 @@ export function TerminalView() {
   };
 
   const handleSubmitSuggestion = async () => {
+    if (isResolutionBlockingGameplay) {
+      setSuggestionError("La fase de resolución bloquea temporalmente el canal de deducción.");
+      return;
+    }
+
     const socket = lobbySocketRef.current;
     const currentRoomNode = currentMoveNode ?? resolveCurrentTeamBoardNode(boardTeams, storedTeamId);
 
@@ -726,6 +769,11 @@ export function TerminalView() {
     const teamId = getStoredTeamId();
 
     if (!accessCode || !teamId) {
+      return;
+    }
+
+    if (isResolutionBlockingGameplay) {
+      setSuggestionError("La partida está en fase de resolución y no puedes cerrar turno manualmente.");
       return;
     }
 
@@ -894,6 +942,7 @@ export function TerminalView() {
       setSessionStatus(state.status);
       setSessionTurn(state.turn);
       setActiveSuggestion(state.activeSuggestion);
+      setResolutionState(state.resolution);
       setCurrentMoveNode((previousNode) => mergePublicCurrentMoveNode(previousNode, state.teams, currentTeam.id));
       setLobbyConnectionStatus(currentTeam.connected ? "connected" : "disconnected");
     };
@@ -950,6 +999,27 @@ export function TerminalView() {
       setMoveError(payload.status === "PAUSADA" ? "La partida esta pausada por el Game Master." : null);
     };
 
+    const applyResolutionPayload = (payload: GameResolutionPayload) => {
+      const currentTeam = payload.session.teams.find((team) => team.id === teamId) ?? null;
+
+      if (!currentTeam) {
+        setLobbyConnectionStatus("error");
+        setLobbyError("El equipo seleccionado ya no pertenece a la partida actual.");
+        return;
+      }
+
+      applyRealtimeSession(payload.session, currentTeam);
+      setLobbyConnectionStatus("connected");
+      setActiveTab("suggest");
+      setSuggestMode("acusacion");
+      setAccusationError(null);
+      setAccusationFeedback(
+        payload.resolution.phase === "ESPERANDO_RESOLUCION" && payload.resolution.submittedTeamIds.includes(teamId)
+          ? "Esperando al resto de equipos..."
+          : null
+      );
+    };
+
     socket.on("connect", async () => {
       setLobbyConnectionStatus("connecting");
 
@@ -970,6 +1040,8 @@ export function TerminalView() {
     socket.on("lobby:event", applyLobbyEvent);
     socket.on("gameStarted", applyGameStarted);
     socket.on("game:status-changed", applyGameStatusChanged);
+    socket.on("game:final-chance-start", applyResolutionPayload);
+    socket.on("game:show-solution", applyResolutionPayload);
     socket.on("game:refute-request", handleRefuteRequest);
     socket.on("game:refutation-result", handleRefutationResult);
     socket.on("disconnect", () => {
@@ -992,7 +1064,14 @@ export function TerminalView() {
   }, [navigate]);
 
   React.useEffect(() => {
-    if (!isMyTurn || activeSuggestion || pendingSuggestion || activeTab !== "map" || sessionStatus !== "EN_CURSO") {
+    if (
+      !isMyTurn ||
+      activeSuggestion ||
+      pendingSuggestion ||
+      isResolutionBlockingGameplay ||
+      activeTab !== "map" ||
+      sessionStatus !== "EN_CURSO"
+    ) {
       setDestinationNodes([]);
       setSelectedDestinationNodeId("");
       setIsMoveConfirmOpen(false);
@@ -1013,16 +1092,23 @@ export function TerminalView() {
       setIsLoadingMoves(false);
       setDiceResetSignal((previousValue) => previousValue + 1);
     }
-  }, [activeSuggestion, activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, pendingSuggestion, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
+  }, [activeSuggestion, activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, isResolutionBlockingGameplay, pendingSuggestion, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
 
   // Carga la posición actual del equipo al inicio del turno (dado=null) para detectar sala esquina
   React.useEffect(() => {
-    if (!isMyTurn || activeSuggestion || pendingSuggestion || sessionStatus !== "EN_CURSO" || sessionTurn?.dice !== null) {
+    if (
+      !isMyTurn ||
+      activeSuggestion ||
+      pendingSuggestion ||
+      isResolutionBlockingGameplay ||
+      sessionStatus !== "EN_CURSO" ||
+      sessionTurn?.dice !== null
+    ) {
       return;
     }
     void refreshMoveState();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSuggestion, isMyTurn, pendingSuggestion, sessionStatus, sessionTurn?.currentTeamId]);
+  }, [activeSuggestion, isMyTurn, isResolutionBlockingGameplay, pendingSuggestion, sessionStatus, sessionTurn?.currentTeamId]);
 
   React.useEffect(() => {
     if (pendingSuggestion?.type === "REFUTE_REQUEST") {
@@ -1112,6 +1198,7 @@ export function TerminalView() {
     sessionStatus === "EN_CURSO" &&
     isMyTurn &&
     !isTeamEliminated &&
+    !isResolutionBlockingGameplay &&
     sessionTurn?.dice === null &&
     resolvedCurrentMoveNode?.kind === "room" &&
     !activeSuggestion &&
@@ -1147,6 +1234,7 @@ export function TerminalView() {
     sessionStatus === "EN_CURSO" &&
     isMyTurn &&
     !isTeamEliminated &&
+    !isResolutionBlockingGameplay &&
     resolvedCurrentMoveNode?.kind === "room" &&
     sessionTurn?.dice === null &&
     !activeSuggestion &&
@@ -1158,6 +1246,14 @@ export function TerminalView() {
     ? isTeamEliminated
       ? eliminatedRefuteMessage
       : "Selecciona una carta para refutar en privado la sugerencia activa."
+    : isResolutionAwaitingInputs
+    ? hasSubmittedResolution
+      ? "Tu acusación final ya se ha enviado. Esperando al resto de equipos."
+      : isResolutionEligible
+      ? "Última oportunidad activa. Debes enviar tu acusación final antes del cierre de la fase."
+      : "Última oportunidad en curso. Tu equipo ya estaba eliminado y no participa en esta fase."
+    : isResolutionShowingSolution
+    ? "La solución ya ha sido revelada. La partida está cerrada."
     : isTeamEliminated
     ? eliminatedSuggestionMessage
     : activeSuggestion
@@ -1171,7 +1267,15 @@ export function TerminalView() {
     : resolvedCurrentMoveNode?.kind !== "room"
     ? "Debes terminar tu movimiento dentro de una sala para poder lanzar una sugerencia."
     : "La sala está lista. Puedes sugerir o cerrar el turno sin sugerencia.";
-  const topStatusMessage = activeSuggestion
+  const topStatusMessage = isResolutionAwaitingInputs
+    ? hasSubmittedResolution
+      ? `Última oportunidad activa. Tu acusación final ya está enviada y el terminal queda bloqueado hasta el cierre.${resolutionCountdownLabel ? ` Tiempo restante ${resolutionCountdownLabel}.` : ""}`
+      : isResolutionEligible
+      ? `Última oportunidad activa. Completa ahora tu acusación final, aunque no tengas el turno.${resolutionCountdownLabel ? ` Tiempo restante ${resolutionCountdownLabel}.` : ""}`
+      : `Última oportunidad activa. Tu equipo no participa porque ya estaba eliminado.${resolutionCountdownLabel ? ` Tiempo restante ${resolutionCountdownLabel}.` : ""}`
+    : isResolutionShowingSolution
+    ? "La solución del crimen ha sido revelada. La partida ha terminado."
+    : activeSuggestion
     ? `Sugerencia activa: ${buildSuggestionSentence(activeSuggestion)}.`
     : sessionStatus === "EN_CURSO"
     ? `Turno actual: ${currentTurnLabel}. ${sessionTurn?.dice ? `Dados ${currentTurnDiceLabel}. ${currentTurnRemainingLabel}.` : "Sin tirada activa."}`
@@ -1186,9 +1290,11 @@ export function TerminalView() {
     ? accusationFeedback ?? buildAccusationFeedback(latestAccusationVerdict, storedTeamId)
     : null;
 
-  const handleFinalAccusation = async () => {
+  const handleFinalAccusation = async (options?: { resolutionMode?: boolean }) => {
     const accessCode = getStoredSessionCode();
     const teamId = getStoredTeamId();
+    const socket = lobbySocketRef.current;
+    const isResolutionMode = options?.resolutionMode ?? false;
 
     if (!accessCode || !teamId) {
       return;
@@ -1204,14 +1310,36 @@ export function TerminalView() {
       return;
     }
 
-    if (!isMyTurn) {
+    if (!isResolutionMode && !isMyTurn) {
       setAccusationError("Solo puedes realizar la acusación final durante tu turno.");
       return;
     }
 
-    if (isTeamEliminated) {
+    if (!isResolutionMode && isTeamEliminated) {
       setAccusationError("Tu equipo ya está eliminado y no puede volver a acusar.");
       return;
+    }
+
+    if (isResolutionMode) {
+      if (!activeResolution || activeResolution.mode !== "FINAL_CHANCE" || activeResolution.phase !== "ESPERANDO_RESOLUCION") {
+        setAccusationError("La última oportunidad ya no está disponible para este terminal.");
+        return;
+      }
+
+      if (!isResolutionEligible) {
+        setAccusationError("Tu equipo no puede participar en la última oportunidad porque ya estaba eliminado.");
+        return;
+      }
+
+      if (hasSubmittedResolution) {
+        setAccusationError("Tu equipo ya ha enviado su acusación final y debe esperar al resto.");
+        return;
+      }
+
+      if (!socket || !socket.connected) {
+        setAccusationError("No hay conexión realtime para enviar la acusación final de resolución.");
+        return;
+      }
     }
 
     if (!selectedSubjectId || !selectedObjectId || !selectedSpaceId) {
@@ -1223,6 +1351,33 @@ export function TerminalView() {
     setAccusationError(null);
 
     try {
+      if (isResolutionMode && socket) {
+        const response = await submitFinalChanceAccusation(socket, {
+          subjectElementId: selectedSubjectId,
+          objectElementId: selectedObjectId,
+          spaceElementId: selectedSpaceId,
+        });
+
+        if (!response.ok) {
+          setAccusationError(response.error);
+          return;
+        }
+
+        const currentTeam = response.payload.session.teams.find((team) => team.id === teamId) ?? null;
+
+        if (currentTeam) {
+          applyRealtimeSession(response.payload.session, currentTeam);
+        }
+
+        setResolutionState(response.payload.session.resolution);
+        setAccusationFeedback(
+          response.payload.resolution.phase === "ESPERANDO_RESOLUCION"
+            ? "Esperando al resto de equipos..."
+            : null
+        );
+        return;
+      }
+
       const result = await accuseFinalSession(accessCode, teamId, {
         subjectElementId: selectedSubjectId,
         objectElementId: selectedObjectId,
@@ -1237,7 +1392,14 @@ export function TerminalView() {
       setLatestAccusationVerdict(result.verdict);
       setAccusationFeedback(buildAccusationFeedback(result.verdict, teamId));
     } catch (error) {
-      setAccusationError(getSessionErrorMessage(error, "No se ha podido resolver la acusación final."));
+      setAccusationError(
+        getSessionErrorMessage(
+          error,
+          isResolutionMode
+            ? "No se ha podido enviar la acusación final de resolución."
+            : "No se ha podido resolver la acusación final."
+        )
+      );
     } finally {
       setIsSubmittingAccusation(false);
     }
@@ -1293,6 +1455,144 @@ export function TerminalView() {
           {accusationBannerMessage}
         </div>
       ) : null}
+
+      <AlertDialog open={shouldForceFinalChanceModal} onOpenChange={() => undefined}>
+        <AlertDialogContent data-cy="terminal-final-chance-modal" className="max-w-md border-amber-700/60 bg-slate-950 text-amber-50">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm font-black uppercase tracking-[0.18em] text-amber-300">
+              {hasSubmittedResolution ? "Esperando al resto de equipos" : "Última oportunidad"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-amber-50/80">
+              {hasSubmittedResolution
+                ? "Tu acusación final ya está registrada. El terminal permanecerá bloqueado hasta que se cierre la fase de resolución."
+                : isResolutionEligible
+                ? "Todos los equipos activos deben enviar ahora una acusación final, aunque no tengan el turno."
+                : "La fase de última oportunidad está en curso, pero tu equipo ya estaba eliminado y no participa en esta votación final."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {resolutionCountdownLabel ? (
+            <div
+              data-cy="terminal-final-chance-countdown"
+              className={`rounded-2xl border px-4 py-4 ${
+                resolutionCountdownSeconds === 0
+                  ? "border-red-700/60 bg-red-950/25"
+                  : "border-amber-700/60 bg-amber-950/20"
+              }`}
+            >
+              <span className="block text-[10px] font-bold uppercase tracking-[0.22em] text-amber-200/90">
+                Tiempo restante para la acusación final
+              </span>
+              <div className="mt-3 flex items-end justify-between gap-3">
+                <p className="text-xs text-amber-100/80">
+                  {resolutionCountdownSeconds === 0
+                    ? "Cerrando la fase de resolución..."
+                    : "El envío se cerrará automáticamente cuando el reloj llegue a cero."}
+                </p>
+                <span
+                  className={`text-3xl font-black font-mono tracking-[0.18em] ${
+                    resolutionCountdownSeconds === 0 ? "text-red-300" : "text-amber-50"
+                  }`}
+                >
+                  {resolutionCountdownLabel}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          {isResolutionEligible && !hasSubmittedResolution ? (
+            <div className="grid gap-3">
+              <div className="rounded-2xl border border-rose-800/60 bg-slate-900/70 p-4">
+                <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-rose-200">
+                  <MapPin className="h-3.5 w-3.5" />
+                  {catNames.c3}
+                </label>
+                <select
+                  data-cy="terminal-final-chance-space"
+                  value={selectedSpaceId}
+                  onChange={(event) => setSelectedSpaceId(event.target.value)}
+                  className="mt-3 w-full rounded-xl border border-rose-800/70 bg-slate-900/80 p-3 text-sm text-rose-100 outline-none focus:border-rose-400"
+                >
+                  <option value="" disabled>Selecciona...</option>
+                  {BOARD_SPACE_SLOTS.map((slot, index) => {
+                    const space = categories.c3[index];
+                    const optionLabel = space?.name ?? `Sala ${index + 1}`;
+                    const optionValue = space?.id ?? slot.id;
+
+                    return (
+                      <option key={optionValue} value={optionValue}>
+                        {optionLabel}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div className="rounded-2xl border border-cyan-800/60 bg-slate-900/70 p-4">
+                <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
+                  <User className="h-3.5 w-3.5" />
+                  {catNames.c1}
+                </label>
+                <select
+                  data-cy="terminal-final-chance-subject"
+                  value={selectedSubjectId}
+                  onChange={(event) => setSelectedSubjectId(event.target.value)}
+                  className="mt-3 w-full rounded-xl border border-cyan-800/70 bg-slate-900/80 p-3 text-sm text-cyan-100 outline-none focus:border-cyan-400"
+                >
+                  <option value="" disabled>Selecciona...</option>
+                  {categories.c1.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="rounded-2xl border border-emerald-800/60 bg-slate-900/70 p-4">
+                <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">
+                  <Box className="h-3.5 w-3.5" />
+                  {catNames.c2}
+                </label>
+                <select
+                  data-cy="terminal-final-chance-object"
+                  value={selectedObjectId}
+                  onChange={(event) => setSelectedObjectId(event.target.value)}
+                  className="mt-3 w-full rounded-xl border border-emerald-800/70 bg-slate-900/80 p-3 text-sm text-emerald-100 outline-none focus:border-emerald-400"
+                >
+                  <option value="" disabled>Selecciona...</option>
+                  {categories.c2.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {accusationError ? (
+                <div className="rounded-2xl border border-red-900/60 bg-red-950/20 px-4 py-3 text-[11px] text-red-100">
+                  {accusationError}
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                data-cy="terminal-final-chance-submit"
+                onClick={() => void handleFinalAccusation({ resolutionMode: true })}
+                disabled={isSubmittingAccusation || !selectedSubjectId || !selectedObjectId || !selectedSpaceId}
+                className="w-full rounded-2xl bg-amber-500 px-4 py-4 text-sm font-black uppercase tracking-[0.22em] text-slate-950 shadow-[0_0_24px_rgba(245,158,11,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmittingAccusation ? "Enviando acusacion..." : "Enviar acusacion final"}
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-amber-700/60 bg-amber-950/25 px-4 py-4 text-sm text-amber-50">
+              {hasSubmittedResolution
+                ? accusationFeedback ?? "Esperando al resto de equipos..."
+                : "Permanece atento al revelado final de la solución."}
+            </div>
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel className="hidden" />
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden relative bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900/50 to-[#020617]">
@@ -1351,7 +1651,7 @@ export function TerminalView() {
                        <div className="scale-[0.28] sm:scale-[0.34] md:scale-[0.42] origin-center">
                          <DiceAnimation
                            dataCy="terminal-dice-roll"
-                           disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || sessionTurn?.dice !== null || isLoadingMoves || isMovingPawn}
+                          disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || isResolutionBlockingGameplay || sessionTurn?.dice !== null || isLoadingMoves || isMovingPawn}
                            resetSignal={diceResetSignal}
                             onRollRequest={handleDiceRoll}
                          />
@@ -1464,7 +1764,7 @@ export function TerminalView() {
                           type="button"
                           data-cy="terminal-secret-passage-emit"
                           onClick={() => void handleEmitSecretPassage()}
-                          disabled={isEmittingSecretPassage}
+                          disabled={isEmittingSecretPassage || isResolutionBlockingGameplay}
                           className="rounded-md border border-amber-500/70 bg-amber-500 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {isEmittingSecretPassage ? "Usando..." : `Usar pasadizo → ${secretPassageDestinationNode.label}`}
@@ -1495,7 +1795,7 @@ export function TerminalView() {
                     <AlertDialogAction
                       data-cy="terminal-move-confirm"
                       className="bg-emerald-600 text-slate-950 hover:bg-emerald-500"
-                      disabled={isMovingPawn || !selectedDestinationNode}
+                      disabled={isMovingPawn || isResolutionBlockingGameplay || !selectedDestinationNode}
                       onClick={() => void handleMovePawn(selectedDestinationNode?.id)}
                     >
                       Confirmar movimiento
@@ -1766,6 +2066,12 @@ export function TerminalView() {
                       <div data-cy="terminal-final-accusation-guard" className="mt-5 rounded-2xl border border-red-900/60 bg-red-950/15 px-4 py-3 text-[11px] text-red-100">
                         {isTeamEliminated
                           ? "Tu equipo ya ha sido eliminado y no puede realizar otra acusacion final."
+                          : isResolutionAwaitingInputs
+                          ? hasSubmittedResolution
+                            ? "Tu acusación final ya está registrada. Debes esperar al resto de equipos."
+                            : isResolutionEligible
+                            ? "La última oportunidad está activa. Puedes acusar desde el modal aunque no tengas el turno."
+                            : "Tu equipo ya estaba eliminado y no participa en la última oportunidad."
                           : activeSuggestion || pendingSuggestion
                           ? "La mesa sigue resolviendo una sugerencia. Espera a que termine la refutacion antes de acusar."
                           : !isMyTurn
@@ -1850,6 +2156,7 @@ export function TerminalView() {
                         disabled={
                           isSubmittingAccusation ||
                           sessionStatus !== "EN_CURSO" ||
+                          isResolutionBlockingGameplay ||
                           activeSuggestion !== null ||
                           pendingSuggestion !== null ||
                           !isMyTurn ||
@@ -2092,7 +2399,7 @@ export function TerminalView() {
                               data-cy="terminal-suggest-submit"
                               type="button"
                               onClick={() => void handleSubmitSuggestion()}
-                              disabled={!suggestionPreview || isSubmittingSuggestion || !canUseRealtimeSuggestion}
+                              disabled={!suggestionPreview || isSubmittingSuggestion || isResolutionBlockingGameplay || !canUseRealtimeSuggestion}
                               className="rounded-2xl bg-cyan-500 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.3)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {isSubmittingSuggestion ? "Enviando sugerencia..." : "Lanzar sugerencia"}
@@ -2101,7 +2408,7 @@ export function TerminalView() {
                               data-cy="terminal-end-turn-submit"
                               type="button"
                               onClick={() => void handleEndTurnFromRoom()}
-                              disabled={isEndingTurn}
+                              disabled={isEndingTurn || isResolutionBlockingGameplay}
                               className="rounded-2xl border border-slate-600 bg-slate-900/75 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {isEndingTurn ? "Cerrando..." : "Terminar turno"}
@@ -2124,6 +2431,65 @@ export function TerminalView() {
 
         </AnimatePresence>
       </div>
+
+      <AnimatePresence>
+        {isResolutionShowingSolution && activeResolution?.solution ? (
+          <motion.div
+            key="terminal-solution-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[70] flex flex-col items-center justify-center gap-6 bg-slate-950/95 px-6 text-center"
+            data-cy="terminal-solution-reveal"
+          >
+            <motion.div
+              initial={{ y: 24, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="space-y-2"
+            >
+              <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-amber-300">
+                {activeResolution.mode === "FINAL_CHANCE" ? "Resolución final" : "Solución revelada"}
+              </p>
+              <h3 className="text-2xl font-black uppercase tracking-[0.14em] text-white">
+                Caso cerrado
+              </h3>
+            </motion.div>
+
+            <div className="grid w-full max-w-xl gap-4 sm:grid-cols-3">
+              {[
+                { key: "subject", label: catNames.c1, card: activeResolution.solution.subject, tone: "border-cyan-700/70 bg-cyan-950/25 text-cyan-100" },
+                { key: "object", label: catNames.c2, card: activeResolution.solution.object, tone: "border-emerald-700/70 bg-emerald-950/25 text-emerald-100" },
+                { key: "space", label: catNames.c3, card: activeResolution.solution.space, tone: "border-rose-700/70 bg-rose-950/25 text-rose-100" },
+              ].map((item, index) => (
+                <motion.div
+                  key={item.key}
+                  data-cy={`terminal-solution-${item.key}`}
+                  initial={{ opacity: 0, rotateY: -90, scale: 0.85 }}
+                  animate={{ opacity: 1, rotateY: 0, scale: 1 }}
+                  transition={{ delay: index * 0.14, duration: 0.4, type: "spring" }}
+                  className={`rounded-3xl border px-4 py-6 shadow-[0_10px_30px_rgba(15,23,42,0.45)] ${item.tone}`}
+                >
+                  <span className="block text-[10px] font-bold uppercase tracking-[0.22em] opacity-70">{item.label}</span>
+                  <p className="mt-3 text-lg font-black text-white">{item.card.name}</p>
+                </motion.div>
+              ))}
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.45, duration: 0.3 }}
+              className="max-w-lg rounded-3xl border border-amber-700/60 bg-amber-950/20 px-5 py-4 text-sm text-amber-50"
+            >
+              {activeResolution.winningTeams.length === 0
+                ? "Ningún equipo ha acertado la solución en la fase final."
+                : activeResolution.winningTeams.length === 1
+                ? `Equipo ganador: ${activeResolution.winningTeams[0]?.name ?? "Sin determinar"}.`
+                : `Equipos ganadores: ${activeResolution.winningTeams.map((team) => team.name).join(", ")}.`}
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {/* Bottom Navigation */}
       <div className="bg-slate-950 border-t border-cyan-900/50 flex justify-around p-2 pb-6 absolute bottom-0 w-full z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
@@ -2170,5 +2536,27 @@ function buildAccusationFeedback(verdict: FinalAccusationVerdict, ownTeamId: str
   return verdict.sessionFinished
     ? `${verdict.accuserTeamName} ha fallado la acusación con ${accusedCards}. La partida termina sin equipos activos.`
     : `${verdict.accuserTeamName} ha fallado la acusación con ${accusedCards} y queda eliminado.`;
+}
+
+function getResolutionCountdownSeconds(deadlineAt: string | null | undefined, currentTimestamp: number) {
+  if (!deadlineAt) {
+    return null;
+  }
+
+  const deadlineTimestamp = new Date(deadlineAt).getTime();
+
+  if (Number.isNaN(deadlineTimestamp)) {
+    return null;
+  }
+
+  return Math.max(0, Math.ceil((deadlineTimestamp - currentTimestamp) / 1000));
+}
+
+function formatCountdownClock(seconds: number) {
+  const safeSeconds = Math.max(0, seconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+
+  return `${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
 

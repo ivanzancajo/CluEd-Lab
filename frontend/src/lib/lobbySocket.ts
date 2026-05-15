@@ -2,8 +2,10 @@ import { io, type Socket } from 'socket.io-client';
 import { getStoredAdminToken } from './auth';
 import type {
   FinalAccusationVerdict,
+  GameResolutionMode,
   LobbySession,
   LobbyTeam,
+  SessionResolutionState,
   SessionStatus,
   SessionTurn,
   SuggestionElement,
@@ -26,6 +28,7 @@ export type LobbyPresenceState = {
   teams: LobbyPresenceTeam[];
   turn: SessionTurn | null;
   activeSuggestion: SuggestionSummary | null;
+  resolution: SessionResolutionState | null;
   updatedAt: number;
 };
 
@@ -47,6 +50,12 @@ export type GameStartedPayload = {
 export type GameStatusChangedPayload = {
   session: LobbySession;
   status: SessionStatus;
+  occurredAt: number;
+};
+
+export type GameResolutionPayload = {
+  session: LobbySession;
+  resolution: SessionResolutionState;
   occurredAt: number;
 };
 
@@ -126,11 +135,33 @@ export type GameStatusChangeAck =
       error: string;
     };
 
+export type GameTriggerResolutionAck =
+  | {
+      ok: true;
+      payload: GameResolutionPayload;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+export type GameFinalChanceSubmissionAck =
+  | {
+      ok: true;
+      payload: GameResolutionPayload;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 type ServerToClientEvents = {
   'lobby:presence-updated': (state: LobbyPresenceState) => void;
   'lobby:event': (event: LobbyEventMessage) => void;
   gameStarted: (payload: GameStartedPayload) => void;
   'game:status-changed': (payload: GameStatusChangedPayload) => void;
+  'game:final-chance-start': (payload: GameResolutionPayload) => void;
+  'game:show-solution': (payload: GameResolutionPayload) => void;
   'game:refute-request': (payload: GameRefuteRequestPayload) => void;
   'game:refutation-result': (payload: GameRefutationResultPayload) => void;
 };
@@ -157,6 +188,14 @@ type ClientToServerEvents = {
   startGame: (payload: { accessCode: string }, acknowledge: (response: StartGameAck) => void) => void;
   'game:pause': (payload: { sessionId: string }, acknowledge: (response: GameStatusChangeAck) => void) => void;
   'game:resume': (payload: { sessionId: string }, acknowledge: (response: GameStatusChangeAck) => void) => void;
+  'game:trigger-resolution': (
+    payload: { sessionId: string; mode: GameResolutionMode },
+    acknowledge: (response: GameTriggerResolutionAck) => void
+  ) => void;
+  'game:submit-final-chance': (
+    payload: { subjectElementId: string; objectElementId: string; spaceElementId: string },
+    acknowledge: (response: GameFinalChanceSubmissionAck) => void
+  ) => void;
 };
 
 export type LobbySocketClient = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -203,6 +242,12 @@ export function resumeGameFromBoard(socket: LobbySocketClient, sessionId: string
   });
 }
 
+export function triggerResolutionFromBoard(socket: LobbySocketClient, sessionId: string, mode: GameResolutionMode) {
+  return new Promise<GameTriggerResolutionAck>((resolve) => {
+    socket.emit('game:trigger-resolution', { sessionId, mode }, resolve);
+  });
+}
+
 export function emitTeamSecretPassage(
   socket: LobbySocketClient,
   fromNodeId: string,
@@ -225,6 +270,15 @@ export function emitTeamSuggestion(
 export function emitTeamRefutation(socket: LobbySocketClient, shownElementId: string) {
   return new Promise<GameRefuteAck>((resolve) => {
     socket.emit('game:refute', { shownElementId }, resolve);
+  });
+}
+
+export function submitFinalChanceAccusation(
+  socket: LobbySocketClient,
+  payload: { subjectElementId: string; objectElementId: string; spaceElementId: string }
+) {
+  return new Promise<GameFinalChanceSubmissionAck>((resolve) => {
+    socket.emit('game:submit-final-chance', payload, resolve);
   });
 }
 

@@ -154,8 +154,7 @@ has_pending_failed_prisma_migration() {
   table_exists="$(
     PGPASSWORD="$DB_PASSWORD" "$PSQL_BIN" \
       -h 127.0.0.1 -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
-      -v schema_name="$database_schema" \
-      -tAc "SELECT 1 FROM information_schema.tables WHERE table_schema = :'schema_name' AND table_name = '_prisma_migrations' LIMIT 1;"
+      -tAc "SELECT 1 FROM information_schema.tables WHERE table_schema = '${database_schema}' AND table_name = '_prisma_migrations' LIMIT 1;"
   )"
 
   [[ "$(trim_whitespace "$table_exists")" == '1' ]] || return 1
@@ -163,8 +162,7 @@ has_pending_failed_prisma_migration() {
   failed_marker="$(
     PGPASSWORD="$DB_PASSWORD" "$PSQL_BIN" \
       -h 127.0.0.1 -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
-      -v migration_name="$migration_name" \
-      -tAc "SELECT 1 FROM \"_prisma_migrations\" WHERE migration_name = :'migration_name' AND finished_at IS NULL AND rolled_back_at IS NULL LIMIT 1;"
+      -tAc "SELECT 1 FROM \"_prisma_migrations\" WHERE migration_name = '${migration_name}' AND finished_at IS NULL AND rolled_back_at IS NULL LIMIT 1;"
   )"
 
   [[ "$(trim_whitespace "$failed_marker")" == '1' ]]

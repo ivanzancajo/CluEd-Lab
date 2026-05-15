@@ -140,6 +140,10 @@ done
 [[ -n "$REPO_PATH" ]] || fail 'Falta --repo-path o MANUAL_MV_DEPLOY_REPO_PATH.'
 [[ -n "$DEPLOY_REF" ]] || fail 'Falta --ref o MANUAL_MV_DEPLOY_REF.'
 
+if [[ -n "$IDENTITY" && ! -f "$IDENTITY" ]]; then
+  fail "No existe la clave SSH indicada: $IDENTITY"
+fi
+
 require_command ssh
 
 SSH_ARGS=(ssh -tt -p "$PORT")
@@ -164,13 +168,8 @@ cd "$REPO_PATH"
 git fetch origin --prune
 
 if git ls-remote --exit-code --heads origin "$DEPLOY_REF" >/dev/null 2>&1; then
-  if git show-ref --verify --quiet "refs/heads/$DEPLOY_REF"; then
-    git checkout "$DEPLOY_REF"
-  else
-    git checkout -b "$DEPLOY_REF" "origin/$DEPLOY_REF"
-  fi
-
-  git pull --ff-only origin "$DEPLOY_REF"
+  git fetch origin "$DEPLOY_REF"
+  git checkout --detach "origin/$DEPLOY_REF"
 else
   git checkout --detach "$DEPLOY_REF"
 fi

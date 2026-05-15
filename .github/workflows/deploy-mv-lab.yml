@@ -123,13 +123,8 @@ jobs:
           git fetch origin --prune
 
           if git ls-remote --exit-code --heads origin "$DEPLOY_REF" >/dev/null 2>&1; then
-            if git show-ref --verify --quiet "refs/heads/$DEPLOY_REF"; then
-              git checkout "$DEPLOY_REF"
-            else
-              git checkout -b "$DEPLOY_REF" "origin/$DEPLOY_REF"
-            fi
-
-            git pull --ff-only origin "$DEPLOY_REF"
+            git fetch origin "$DEPLOY_REF"
+            git checkout --detach "origin/$DEPLOY_REF"
           else
             git checkout --detach "$DEPLOY_REF"
           fi

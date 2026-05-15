@@ -152,7 +152,8 @@ has_pending_failed_prisma_migration() {
   local failed_marker
 
   table_exists="$(
-    PGPASSWORD="$DB_PASSWORD" "$PSQL_BIN" "$HOST_DATABASE_URL" \
+    PGPASSWORD="$DB_PASSWORD" "$PSQL_BIN" \
+      -h 127.0.0.1 -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
       -v schema_name="$database_schema" \
       -tAc "SELECT 1 FROM information_schema.tables WHERE table_schema = :'schema_name' AND table_name = '_prisma_migrations' LIMIT 1;"
   )"
@@ -160,7 +161,8 @@ has_pending_failed_prisma_migration() {
   [[ "$(trim_whitespace "$table_exists")" == '1' ]] || return 1
 
   failed_marker="$(
-    PGPASSWORD="$DB_PASSWORD" "$PSQL_BIN" "$HOST_DATABASE_URL" \
+    PGPASSWORD="$DB_PASSWORD" "$PSQL_BIN" \
+      -h 127.0.0.1 -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
       -v migration_name="$migration_name" \
       -tAc "SELECT 1 FROM \"_prisma_migrations\" WHERE migration_name = :'migration_name' AND finished_at IS NULL AND rolled_back_at IS NULL LIMIT 1;"
   )"
@@ -282,6 +284,7 @@ require_env SOCKET_IO_CORS_ORIGIN
 DB_USER="$(parse_database_url_field username)"
 DB_NAME="$(parse_database_url_field database)"
 DB_PASSWORD="$(parse_database_url_field password)"
+DB_PORT="$(parse_database_url_field port)"
 DB_SCHEMA="$(parse_database_url_field schema)"
 HOST_DATABASE_URL="$(rewrite_database_url_host 127.0.0.1)"
 KNOWN_RECOVERY_MIGRATION='20260514_scrum89_final_accusation_state'

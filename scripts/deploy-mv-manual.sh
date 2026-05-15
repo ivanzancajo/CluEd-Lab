@@ -156,6 +156,16 @@ log "Conectando con $USER_NAME@$HOST para desplegar $DEPLOY_REF en $REPO_PATH"
 "${SSH_ARGS[@]}" bash -s -- "$DEPLOY_REF" "$REPO_PATH" <<'EOF'
 set -euo pipefail
 
+GIT_SSH_FALLBACK_COMMAND='ssh -o Hostname=ssh.github.com -p 443 -o StrictHostKeyChecking=accept-new'
+
+git_with_fallback() {
+  if "$@"; then
+    return 0
+  fi
+
+  GIT_SSH_COMMAND="$GIT_SSH_FALLBACK_COMMAND" "$@"
+}
+
 DEPLOY_REF="$1"
 REPO_PATH="$2"
 
@@ -165,10 +175,10 @@ if [[ ! -d "$REPO_PATH/.git" ]]; then
 fi
 
 cd "$REPO_PATH"
-git fetch origin --prune
+git_with_fallback git fetch origin --prune
 
-if git ls-remote --exit-code --heads origin "$DEPLOY_REF" >/dev/null 2>&1; then
-  git fetch origin "$DEPLOY_REF"
+if git_with_fallback git ls-remote --exit-code --heads origin "$DEPLOY_REF" >/dev/null 2>&1; then
+  git_with_fallback git fetch origin "$DEPLOY_REF"
   git checkout --detach "origin/$DEPLOY_REF"
 else
   git checkout --detach "$DEPLOY_REF"

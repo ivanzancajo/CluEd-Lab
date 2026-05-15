@@ -145,6 +145,29 @@ rewrite_database_url_host() {
   ' "$DATABASE_URL" "$replacement_host"
 }
 
+has_pending_failed_prisma_migration() {
+  local migration_name="$1"
+  local database_schema="$2"
+  local table_exists
+  local failed_marker
+
+  table_exists="$(
+    PGPASSWORD="$DB_PASSWORD" "$PSQL_BIN" "$HOST_DATABASE_URL" \
+      -v schema_name="$database_schema" \
+      -tAc "SELECT 1 FROM information_schema.tables WHERE table_schema = :'schema_name' AND table_name = '_prisma_migrations' LIMIT 1;"
+  )"
+
+  [[ "$(trim_whitespace "$table_exists")" == '1' ]] || return 1
+
+  failed_marker="$(
+    PGPASSWORD="$DB_PASSWORD" "$PSQL_BIN" "$HOST_DATABASE_URL" \
+      -v migration_name="$migration_name" \
+      -tAc "SELECT 1 FROM \"_prisma_migrations\" WHERE migration_name = :'migration_name' AND finished_at IS NULL AND rolled_back_at IS NULL LIMIT 1;"
+  )"
+
+  [[ "$(trim_whitespace "$failed_marker")" == '1' ]]
+}
+
 write_backend_env() {
   cat > "$BACKEND_ENV_FILE" <<EOF
 PORT=$PORT
@@ -258,7 +281,12 @@ require_env SOCKET_IO_CORS_ORIGIN
 
 DB_USER="$(parse_database_url_field username)"
 DB_NAME="$(parse_database_url_field database)"
+DB_PASSWORD="$(parse_database_url_field password)"
+DB_SCHEMA="$(parse_database_url_field schema)"
 HOST_DATABASE_URL="$(rewrite_database_url_host 127.0.0.1)"
+KNOWN_RECOVERY_MIGRATION='20260514_scrum89_final_accusation_state'
+KNOWN_RECOVERY_SQL_MARKER='id_evento_sugerencia_activa'
+KNOWN_RECOVERY_MIGRATION_FILE="$BACKEND_DIR/prisma/migrations/$KNOWN_RECOVERY_MIGRATION/migration.sql"
 
 [[ -n "$DB_USER" ]] || fail 'No se pudo derivar el usuario de base de datos desde DATABASE_URL'
 [[ -n "$DB_NAME" ]] || fail 'No se pudo derivar la base de datos desde DATABASE_URL'
@@ -301,6 +329,16 @@ npm ci
 export DATABASE_URL="$HOST_DATABASE_URL"
 npm run prisma:generate
 npm run prisma:validate
+
+if [[ -f "$KNOWN_RECOVERY_MIGRATION_FILE" ]]; then
+  migration_sql_contents="$(< "$KNOWN_RECOVERY_MIGRATION_FILE")"
+
+  if [[ "$migration_sql_contents" != *"$KNOWN_RECOVERY_SQL_MARKER"* ]] && has_pending_failed_prisma_migration "$KNOWN_RECOVERY_MIGRATION" "$DB_SCHEMA"; then
+    log "Recuperando migracion fallida heredada: $KNOWN_RECOVERY_MIGRATION"
+    npm run prisma:migrate:resolve -- --rolled-back "$KNOWN_RECOVERY_MIGRATION"
+  fi
+fi
+
 npm run prisma:migrate:deploy
 unset DATABASE_URL
 popd >/dev/null

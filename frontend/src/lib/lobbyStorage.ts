@@ -52,6 +52,10 @@ export function getStoredSessionStatus(): SessionStatus | null {
   return value as SessionStatus | null;
 }
 
+export function setStoredSessionStatus(status: SessionStatus) {
+  setStoredValue(SESSION_STATUS_KEY, status);
+}
+
 export function getStoredSessionStartedAt() {
   return getStoredValue(SESSION_STARTED_AT_KEY);
 }

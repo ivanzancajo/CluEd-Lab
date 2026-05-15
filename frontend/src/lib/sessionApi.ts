@@ -5,11 +5,33 @@ import type { GameConfig } from './skinApi';
 export type SessionStatus = 'LOBBY' | 'REPARTO' | 'EN_CURSO' | 'PAUSADA' | 'FINALIZADA';
 export type TeamColor = 'ROJO' | 'AZUL' | 'VERDE' | 'AMARILLO' | 'MORADO' | 'BLANCO';
 export type TeamEliminationReason = 'ACUSACION_FALSA';
+export type GameResolutionMode = 'DIRECT_REVEAL' | 'FINAL_CHANCE';
+export type GameResolutionPhase = 'ESPERANDO_RESOLUCION' | 'MOSTRANDO_SOLUCION';
 
 export interface SessionWinner {
   id: string;
   name: string;
   color: TeamColor;
+}
+
+export interface ResolutionCard {
+  id: string;
+  name: string;
+}
+
+export interface SessionResolutionState {
+  phase: GameResolutionPhase;
+  mode: GameResolutionMode;
+  startedAt: string;
+  deadlineAt: string | null;
+  eligibleTeamIds: string[];
+  submittedTeamIds: string[];
+  solution: {
+    subject: ResolutionCard;
+    object: ResolutionCard;
+    space: ResolutionCard;
+  } | null;
+  winningTeams: SessionWinner[];
 }
 
 export interface LobbyTeam {
@@ -136,6 +158,7 @@ export interface LobbySession {
   turn: SessionTurn | null;
   activeSuggestion: SuggestionSummary | null;
   winnerTeam: SessionWinner | null;
+  resolution: SessionResolutionState | null;
 }
 
 export interface JoinedLobbySession {

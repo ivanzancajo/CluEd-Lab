@@ -6,11 +6,14 @@ import {
   ArrowLeft,
   Box,
   Clock,
+  Flag,
   History,
   KeyRound,
   LoaderCircle,
   MapPin,
   MonitorPlay,
+  Pause,
+  Play,
   RefreshCw,
   User,
   Users,
@@ -305,10 +308,41 @@ export function BoardView() {
     ? buildBoardResolutionCards(activeResolution.solution, boardConfig)
     : [];
   const canManageGameControls = presenceState?.status === "EN_CURSO" || presenceState?.status === "PAUSADA";
+  const shouldShowGameControlButtons = canManageGameControls || Boolean(activeResolution);
   const canOpenResolutionDialog =
     connectionStatus === "connected" &&
     presenceState?.status === "EN_CURSO" &&
     !presenceState?.resolution;
+  const boardControlStatusTone =
+    presenceState?.status === "PAUSADA"
+      ? "border-amber-600/50 bg-amber-950/25 text-amber-100"
+      : presenceState?.status === "FINALIZADA"
+      ? "border-red-700/50 bg-red-950/25 text-red-100"
+      : "border-emerald-600/50 bg-emerald-950/25 text-emerald-100";
+  const boardTurnStatusLabel =
+    presenceState?.status === "FINALIZADA"
+      ? "Sin turnos"
+      : currentTurn?.dice
+      ? "Tirada lista"
+      : "Esperando tirada";
+  const boardTurnStatusTone =
+    presenceState?.status === "FINALIZADA"
+      ? "border-red-700/50 bg-red-950/25 text-red-100"
+      : currentTurn?.dice
+      ? "border-emerald-600/50 bg-emerald-950/25 text-emerald-100"
+      : "border-cyan-600/50 bg-cyan-950/25 text-cyan-100";
+  const boardControlQuickLabel = activeResolution
+    ? "Resolución activa"
+    : presenceState?.status === "PAUSADA"
+    ? "Reanudación lista"
+    : presenceState?.status === "FINALIZADA"
+    ? "Sin acciones"
+    : "Acciones rápidas";
+  const boardControlQuickTone = activeResolution
+    ? "border-amber-600/50 bg-amber-950/25 text-amber-100"
+    : presenceState?.status === "FINALIZADA"
+    ? "border-slate-700/60 bg-slate-950/60 text-slate-300"
+    : "border-cyan-600/50 bg-cyan-950/25 text-cyan-100";
 
   const boardSpaces = mapBoardSpaces(boardConfig);
   const boardCenterImage = getRenderableBoardCenterImage(boardConfig?.centerImage);
@@ -457,59 +491,80 @@ export function BoardView() {
               {formatTime(timeRemaining)}
             </span>
           </div>
-          <div className="col-span-2 flex items-center justify-between gap-3 rounded-lg border border-cyan-800/40 bg-cyan-950/10 px-4 py-3">
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] text-slate-500 uppercase tracking-widest">Turno actual</span>
-              <span className="text-sm font-bold text-cyan-100">
-                {presenceState?.status === "FINALIZADA"
-                  ? latestAccusationEvent?.accusationVerdict?.outcome === "CORRECTA"
-                    ? `Ganador: ${latestAccusationEvent.accusationVerdict.accuserTeamName}`
-                    : "Partida finalizada"
-                  : currentTurn?.currentTeamName ?? "Pendiente de sincronizar"}
-              </span>
-              <span
-                className={`text-[10px] font-bold uppercase tracking-[0.2em] ${
-                  presenceState?.status === "PAUSADA" ? "text-amber-300" : "text-emerald-300"
-                }`}
-              >
-                Estado: {formatSessionStatusLabel(presenceState?.status ?? "EN_CURSO")}
+          <div className="col-span-2 rounded-lg border border-cyan-800/40 bg-cyan-950/10 px-4 py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-[10px] text-slate-500 uppercase tracking-widest">Turno actual</span>
+                <p className="mt-2 text-xl font-black leading-tight text-cyan-100">
+                  {presenceState?.status === "FINALIZADA"
+                    ? latestAccusationEvent?.accusationVerdict?.outcome === "CORRECTA"
+                      ? `Ganador: ${latestAccusationEvent.accusationVerdict.accuserTeamName}`
+                      : "Partida finalizada"
+                    : currentTurn?.currentTeamName ?? "Pendiente de sincronizar"}
+                </p>
+              </div>
+              <span className={`shrink-0 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] ${boardTurnStatusTone}`}>
+                {boardTurnStatusLabel}
               </span>
             </div>
-            <div className="text-right">
-              <span className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">Dados</span>
-              <span className="text-lg font-black text-emerald-300">
-                {presenceState?.status === "FINALIZADA"
-                  ? "Partida cerrada"
-                  : currentTurn?.dice
-                  ? `${currentTurn.dice.valueOne} + ${currentTurn.dice.valueTwo} = ${currentTurn.dice.total}`
-                  : "Sin tirar"}
-              </span>
-              {canManageGameControls ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => void handleToggleGameStatus()}
-                    disabled={connectionStatus !== "connected" || isChangingGameStatus || Boolean(activeResolution)}
-                    className="mt-2 rounded-md border border-cyan-500/70 bg-cyan-500 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isChangingGameStatus
-                      ? "Actualizando..."
-                      : presenceState?.status === "PAUSADA"
-                      ? "Reanudar"
-                      : "Pausar"}
-                  </button>
-                  <button
-                    type="button"
-                    data-cy="board-resolution-open"
-                    onClick={() => setIsResolutionDialogOpen(true)}
-                    disabled={!canOpenResolutionDialog || isTriggeringResolution}
-                    className="mt-2 w-full rounded-md border border-red-500/70 bg-red-500 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isTriggeringResolution ? "Abriendo resolución..." : "Finalizar partida"}
-                  </button>
-                </>
-              ) : null}
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/60 px-3 py-3">
+                <span className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">Estado</span>
+                <span className="mt-2 block text-sm font-black text-cyan-100">
+                  {formatSessionStatusLabel(presenceState?.status ?? "EN_CURSO")}
+                </span>
+              </div>
+              <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/60 px-3 py-3 text-right">
+                <span className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">Dados</span>
+                <span className="mt-2 block text-lg font-black text-emerald-300">
+                  {presenceState?.status === "FINALIZADA"
+                    ? "Partida cerrada"
+                    : currentTurn?.dice
+                    ? `${currentTurn.dice.valueOne} + ${currentTurn.dice.valueTwo} = ${currentTurn.dice.total}`
+                    : "Sin tirar"}
+                </span>
+              </div>
             </div>
+          </div>
+          <div data-cy="board-session-controls" className="col-span-2 rounded-lg border border-cyan-800/40 bg-cyan-950/10 px-4 py-4">
+            <div className="flex items-start justify-between gap-3">
+              <span className="text-[10px] text-slate-500 uppercase tracking-widest">Control de partida</span>
+              <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] ${boardControlStatusTone}`}>
+                {formatSessionStatusLabel(presenceState?.status ?? "EN_CURSO")}
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${boardControlQuickTone}`}>
+                {boardControlQuickLabel}
+              </span>
+            </div>
+            {shouldShowGameControlButtons ? (
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleToggleGameStatus()}
+                  disabled={connectionStatus !== "connected" || isChangingGameStatus || Boolean(activeResolution) || !canManageGameControls}
+                  className="flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/70 bg-cyan-500 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {presenceState?.status === "PAUSADA" ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                  {isChangingGameStatus
+                    ? "Actualizando"
+                    : presenceState?.status === "PAUSADA"
+                    ? "Reanudar"
+                    : "Pausar"}
+                </button>
+                <button
+                  type="button"
+                  data-cy="board-resolution-open"
+                  onClick={() => setIsResolutionDialogOpen(true)}
+                  disabled={!canOpenResolutionDialog || isTriggeringResolution}
+                  className="flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border border-red-500/70 bg-red-500 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Flag className="h-4 w-4" />
+                  {isTriggeringResolution ? "Abriendo..." : "Finalizar"}
+                </button>
+              </div>
+            ) : null}
           </div>
           {activeResolution ? (
             <div data-cy="board-resolution-summary" className="col-span-2 rounded-lg border border-amber-700/50 bg-amber-950/20 px-4 py-3">

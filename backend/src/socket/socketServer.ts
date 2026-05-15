@@ -3,6 +3,8 @@ import type { Server as HttpServer } from 'node:http';
 import { EstadoPartida, type ColorEquipo } from '@prisma/client';
 import { Server, type Socket } from 'socket.io';
 import {
+  gameFinalChanceAccusationCommandSchema,
+  gameTriggerResolutionCommandSchema,
   gameRefuteCommandSchema,
   gameSuggestCommandSchema,
   gameStatusCommandSchema,
@@ -10,6 +12,8 @@ import {
   startGameCommandSchema,
   teamSecretPassageCommandSchema,
   teamLobbySubscriptionSchema,
+  type GameFinalChanceAccusationCommandInput,
+  type GameTriggerResolutionCommandInput,
   type GameRefuteCommandInput,
   type GameSuggestCommandInput,
   type GameStatusCommandInput,
@@ -33,6 +37,16 @@ import { pauseSession, resumeSession, startSessionByAccessCode } from '../lib/se
 import { findBoardMovementNodeByPosition, isSecretPassageMoveValid } from '../lib/sessionMovement.js';
 import { BOARD_MOVEMENT_NODES } from '../lib/boardGraph.js';
 import {
+  finalizeActiveSessionResolution,
+  loadResolutionSolutionBySessionId,
+  recordResolutionSubmission,
+  scheduleSessionResolutionCleanup,
+  showSessionSolution,
+  startFinalChanceResolution,
+  type ResolutionMode,
+  type SessionResolutionSnapshot,
+} from '../lib/sessionResolution.js';
+import {
   createSuggestionBySessionId,
   refuteActiveSuggestionBySessionId,
   type SuggestionElementSnapshot,
@@ -54,6 +68,7 @@ export type LobbyPresenceState = {
   teams: LobbyPresenceTeam[];
   turn: SessionTurnSnapshot | null;
   activeSuggestion: SuggestionSummary | null;
+  resolution: SessionResolutionSnapshot | null;
   updatedAt: number;
 };
 
@@ -75,6 +90,12 @@ export type GameStartedPayload = {
 export type GameStatusChangedPayload = {
   session: SessionSnapshot;
   status: EstadoPartida;
+  occurredAt: number;
+};
+
+export type GameResolutionPayload = {
+  session: SessionSnapshot;
+  resolution: SessionResolutionSnapshot;
   occurredAt: number;
 };
 
@@ -154,16 +175,38 @@ type GameStatusChangeAck =
       error: string;
     };
 
+type GameTriggerResolutionAck =
+  | {
+      ok: true;
+      payload: GameResolutionPayload;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+type GameFinalChanceSubmissionAck =
+  | {
+      ok: true;
+      payload: GameResolutionPayload;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 type LobbyClientToServerEvents = {
   'lobby:host-subscribe': (payload: unknown, acknowledge?: (response: LobbySubscribeAck) => void) => void;
   'lobby:team-subscribe': (payload: unknown, acknowledge?: (response: LobbySubscribeAck) => void) => void;
   startGame: (payload: unknown, acknowledge?: (response: StartGameAck) => void) => void;
   'game:pause': (payload: unknown, acknowledge?: (response: GameStatusChangeAck) => void) => void;
   'game:resume': (payload: unknown, acknowledge?: (response: GameStatusChangeAck) => void) => void;
+  'game:trigger-resolution': (payload: unknown, acknowledge?: (response: GameTriggerResolutionAck) => void) => void;
   'lobby:team-heartbeat': () => void;
   'turn:use-secret-passage': (payload: unknown, acknowledge?: (response: TeamSecretPassageAck) => void) => void;
   'game:suggest': (payload: unknown, acknowledge?: (response: GameSuggestAck) => void) => void;
   'game:refute': (payload: unknown, acknowledge?: (response: GameRefuteAck) => void) => void;
+  'game:submit-final-chance': (payload: unknown, acknowledge?: (response: GameFinalChanceSubmissionAck) => void) => void;
 };
 
 type LobbySocketData = {
@@ -180,6 +223,8 @@ type LobbySocket = Socket<
     'lobby:event': (event: LobbyEvent) => void;
     gameStarted: (payload: GameStartedPayload) => void;
     'game:status-changed': (payload: GameStatusChangedPayload) => void;
+    'game:final-chance-start': (payload: GameResolutionPayload) => void;
+    'game:show-solution': (payload: GameResolutionPayload) => void;
     'game:refute-request': (payload: GameRefuteRequestPayload) => void;
     'game:refutation-result': (payload: GameRefutationResultPayload) => void;
   },
@@ -189,6 +234,9 @@ type LobbySocket = Socket<
 
 const LOBBY_ROOM_PREFIX = 'lobby:session:';
 const TEAM_ROOM_PREFIX = 'lobby:session-team:';
+const FINAL_CHANCE_DURATION_MS = 90 * 1000;
+const CLOSED_SESSION_REALTIME_CLEANUP_DELAY_MS = 250;
+const CLOSED_SESSION_RESOLUTION_RETENTION_MS = 2 * 60 * 1000;
 const REALTIME_ENABLED_STATES: ReadonlySet<EstadoPartida> = new Set<EstadoPartida>([
   EstadoPartida.LOBBY,
   EstadoPartida.EN_CURSO,
@@ -356,6 +404,118 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
       broadcastGameStatusChanged(io, session.id, statusPayload);
 
       acknowledge?.({ ok: true, payload: statusPayload });
+    } catch (error) {
+      acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });
+    }
+  });
+
+  socket.on('game:trigger-resolution', async (payload: unknown, acknowledge?: (response: GameTriggerResolutionAck) => void) => {
+    try {
+      const input = parseGameTriggerResolutionCommand(payload);
+      requireAdminUser(socket);
+
+      const session = await prisma.partida.findUnique({
+        where: { id: input.sessionId },
+        select: {
+          id: true,
+          status: true,
+          activeSuggestionEventId: true,
+          teams: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+              falseAccusation: true,
+              eliminatedAt: true,
+            },
+          },
+        },
+      });
+
+      if (!session) {
+        throw new HttpError(404, 'La sesión solicitada no existe.');
+      }
+
+      if (session.status !== EstadoPartida.EN_CURSO) {
+        throw new HttpError(409, 'La resolución solo puede activarse cuando la partida está en curso.');
+      }
+
+      if (session.activeSuggestionEventId) {
+        throw new HttpError(409, 'No se puede abrir la resolución mientras exista una sugerencia pendiente de refutación.');
+      }
+
+      const occurredAt = Date.now();
+      const eligibleTeams = session.teams.filter((team) => !team.falseAccusation && !team.eliminatedAt);
+      let resolution: SessionResolutionSnapshot;
+
+      if (input.mode === 'FINAL_CHANCE') {
+        if (eligibleTeams.length === 0) {
+          throw new HttpError(409, 'No hay equipos activos disponibles para la última oportunidad.');
+        }
+
+        resolution = startFinalChanceResolution({
+          sessionId: session.id,
+          eligibleTeamIds: eligibleTeams.map((team) => team.id),
+          durationMs: FINAL_CHANCE_DURATION_MS,
+          onDeadline: (expiredSessionId) => {
+            void finalizeResolutionFlow(io, expiredSessionId).catch(() => {
+              // El timeout no debe dejar errores sin controlar en el loop de socket.
+            });
+          },
+        });
+
+        const resolutionPayload = await emitResolutionUpdate(session.id, resolution, occurredAt, {
+          id: randomUUID(),
+          type: 'system',
+          message: `El Game Master ha activado la última oportunidad para ${eligibleTeams.length} equipo${eligibleTeams.length === 1 ? '' : 's'}.`,
+          occurredAt,
+        });
+
+        broadcastFinalChanceStart(io, session.id, resolutionPayload);
+        acknowledge?.({ ok: true, payload: resolutionPayload });
+        return;
+      }
+
+      const solution = await loadResolutionSolutionBySessionId(prisma, session.id);
+      showSessionSolution({
+        sessionId: session.id,
+        mode: input.mode,
+        solution,
+        winningTeams: [],
+      });
+
+      const resolutionPayload = await finalizeResolutionFlow(io, session.id, occurredAt);
+      acknowledge?.({ ok: true, payload: resolutionPayload });
+    } catch (error) {
+      acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });
+    }
+  });
+
+  socket.on('game:submit-final-chance', async (payload: unknown, acknowledge?: (response: GameFinalChanceSubmissionAck) => void) => {
+    try {
+      if (socket.data.role !== 'team' || !socket.data.sessionId || !socket.data.teamId) {
+        throw new HttpError(403, 'Solo un terminal de equipo puede enviar una acusación final de resolución.');
+      }
+
+      const input = parseGameFinalChanceAccusationCommand(payload);
+      const resolution = recordResolutionSubmission(socket.data.sessionId, socket.data.teamId, input);
+      const occurredAt = Date.now();
+
+      if (resolution.submittedTeamIds.length >= resolution.eligibleTeamIds.length) {
+        const resolutionPayload = await finalizeResolutionFlow(io, socket.data.sessionId, occurredAt);
+        acknowledge?.({ ok: true, payload: resolutionPayload });
+        return;
+      }
+
+      const pendingTeams = resolution.eligibleTeamIds.length - resolution.submittedTeamIds.length;
+      const resolutionPayload = await emitResolutionUpdate(socket.data.sessionId, resolution, occurredAt, {
+        id: randomUUID(),
+        type: 'system',
+        message: `Se ha recibido una acusación final. Quedan ${pendingTeams} equipo${pendingTeams === 1 ? '' : 's'} pendientes.`,
+        occurredAt,
+      });
+
+      acknowledge?.({ ok: true, payload: resolutionPayload });
     } catch (error) {
       acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });
     }
@@ -649,6 +809,15 @@ function parseGameStatusCommand(payload: unknown): GameStatusCommandInput {
   return parsed.data;
 }
 
+function parseGameTriggerResolutionCommand(payload: unknown): GameTriggerResolutionCommandInput {
+  const parsed = gameTriggerResolutionCommandSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new HttpError(400, 'La orden de resolución no es válida.', parsed.error.issues.map((issue) => issue.message));
+  }
+
+  return parsed.data;
+}
+
 function parseTeamSecretPassageCommand(payload: unknown): TeamSecretPassageCommandInput {
   const parsed = teamSecretPassageCommandSchema.safeParse(payload);
   if (!parsed.success) {
@@ -671,6 +840,15 @@ function parseGameRefuteCommand(payload: unknown): GameRefuteCommandInput {
   const parsed = gameRefuteCommandSchema.safeParse(payload);
   if (!parsed.success) {
     throw new HttpError(400, 'La refutación indicada no es válida.', parsed.error.issues.map((issue) => issue.message));
+  }
+
+  return parsed.data;
+}
+
+function parseGameFinalChanceAccusationCommand(payload: unknown): GameFinalChanceAccusationCommandInput {
+  const parsed = gameFinalChanceAccusationCommandSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new HttpError(400, 'La acusación final de resolución no es válida.', parsed.error.issues.map((issue) => issue.message));
   }
 
   return parsed.data;
@@ -717,6 +895,7 @@ async function buildLobbyPresenceState(sessionId: string): Promise<LobbyPresence
     })),
     turn: snapshot.turn,
     activeSuggestion: snapshot.activeSuggestion,
+    resolution: snapshot.resolution,
     updatedAt: Date.now(),
   };
 }
@@ -735,6 +914,14 @@ function broadcastGameStarted(io: Server, sessionId: string, payload: GameStarte
 
 function broadcastGameStatusChanged(io: Server, sessionId: string, payload: GameStatusChangedPayload) {
   io.to(getLobbyRoom(sessionId)).emit('game:status-changed', payload);
+}
+
+function broadcastFinalChanceStart(io: Server, sessionId: string, payload: GameResolutionPayload) {
+  io.to(getLobbyRoom(sessionId)).emit('game:final-chance-start', payload);
+}
+
+function broadcastShowSolution(io: Server, sessionId: string, payload: GameResolutionPayload) {
+  io.to(getLobbyRoom(sessionId)).emit('game:show-solution', payload);
 }
 
 function emitRefuteRequest(io: Server, sessionId: string, teamId: string, payload: GameRefuteRequestPayload) {
@@ -790,6 +977,97 @@ function buildGameStatusChangedPayload(session: SessionSnapshot): GameStatusChan
     status: session.status,
     occurredAt: Date.now(),
   };
+}
+
+function buildGameResolutionPayload(
+  session: SessionSnapshot,
+  resolution: SessionResolutionSnapshot,
+  occurredAt: number
+): GameResolutionPayload {
+  return {
+    session,
+    resolution,
+    occurredAt,
+  };
+}
+
+async function emitResolutionUpdate(
+  sessionId: string,
+  resolution: SessionResolutionSnapshot,
+  occurredAt: number,
+  event: LobbyEvent
+) {
+  await emitSessionSnapshotUpdate(sessionId, event);
+  const session = await loadSessionSnapshotById(prisma, sessionId);
+  return buildGameResolutionPayload(session, resolution, occurredAt);
+}
+
+async function finalizeResolutionFlow(io: Server, sessionId: string, occurredAt = Date.now()) {
+  const result = await prisma.$transaction(
+    (tx) => finalizeActiveSessionResolution(tx, sessionId),
+    { isolationLevel: 'Serializable' }
+  );
+
+  const resolutionPayload = await emitResolutionUpdate(sessionId, result.resolution, occurredAt, {
+    id: randomUUID(),
+    type: 'system',
+    message: buildResolutionCompletionMessage(result.mode, result.winningTeams.length),
+    occurredAt,
+  });
+
+  broadcastShowSolution(io, sessionId, resolutionPayload);
+  scheduleSessionResolutionCleanup(sessionId, CLOSED_SESSION_RESOLUTION_RETENTION_MS);
+  scheduleRealtimeSessionCleanup(io, sessionId);
+  return resolutionPayload;
+}
+
+function scheduleRealtimeSessionCleanup(io: Server, sessionId: string) {
+  const timeoutId = setTimeout(() => {
+    void cleanupRealtimeSession(io, sessionId).catch(() => {
+      // La limpieza tardía no debe afectar al cierre persistido de la partida.
+    });
+  }, CLOSED_SESSION_REALTIME_CLEANUP_DELAY_MS);
+
+  timeoutId.unref?.();
+}
+
+async function cleanupRealtimeSession(io: Server, sessionId: string) {
+  const roomSockets = await io.in(getLobbyRoom(sessionId)).fetchSockets();
+
+  for (const socket of roomSockets) {
+    if (socket.data.sessionId !== sessionId) {
+      continue;
+    }
+
+    const joinedTeamId = socket.data.teamId;
+
+    socket.leave(getLobbyRoom(sessionId));
+    if (joinedTeamId) {
+      socket.leave(getTeamRoom(sessionId, joinedTeamId));
+    }
+
+    socket.data.sessionId = undefined;
+    socket.data.teamId = undefined;
+    socket.data.role = undefined;
+  }
+
+  lobbyPresenceStore.clearSession(sessionId);
+}
+
+function buildResolutionCompletionMessage(mode: ResolutionMode, winnerCount: number) {
+  if (mode === 'DIRECT_REVEAL') {
+    return 'El Game Master ha cerrado la partida y ha revelado la solución final.';
+  }
+
+  if (winnerCount === 0) {
+    return 'La fase de resolución ha terminado. Ningún equipo ha acertado la solución final.';
+  }
+
+  if (winnerCount === 1) {
+    return 'La fase de resolución ha terminado. Un equipo ha acertado la solución final.';
+  }
+
+  return `La fase de resolución ha terminado. ${winnerCount} equipos han acertado la solución final.`;
 }
 
 export async function emitSessionSnapshotUpdate(sessionId: string, event?: LobbyEvent) {

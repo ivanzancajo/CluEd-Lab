@@ -3,6 +3,7 @@
 Esta guia describe la automatizacion del despliegue validado en la MV del laboratorio usando dos capas:
 
 - un script reproducible dentro del repositorio: [scripts/deploy-mv.sh](../scripts/deploy-mv.sh)
+- un lanzador local opcional para ejecutar ese mismo flujo por SSH: [scripts/deploy-mv-manual.sh](../scripts/deploy-mv-manual.sh)
 - un workflow de GitHub Actions: [.github/workflows/deploy-mv-lab.yml](../.github/workflows/deploy-mv-lab.yml)
 
 La automatizacion asume el mismo escenario que [docs/despliegue-mv-pruebas.md](./despliegue-mv-pruebas.md): frontend y backend en Docker Compose, PostgreSQL en el host Linux y punto de entrada publico en `http://virtual.lab.inf.uva.es:20382`.
@@ -117,6 +118,50 @@ Con el script actual, ese `sudoers` restringido ya es suficiente tambien para CI
 cd /home/usuario/TFG
 bash scripts/deploy-mv.sh
 ```
+
+## Despliegue manual desde tu maquina local
+
+Si GitHub Actions queda bloqueado, puedes lanzar exactamente el mismo flujo remoto desde tu equipo con [scripts/deploy-mv-manual.sh](../scripts/deploy-mv-manual.sh). Este script entra por SSH en la MV, actualiza el checkout al ref indicado y ejecuta `scripts/deploy-mv.sh` alli.
+
+Para no repetir host, puerto, usuario y ruta del repo en cada ejecucion, prepara un archivo local ignorado por Git:
+
+```bash
+mkdir -p .deploy
+cp deploy/mv.manual-deploy.env.example .deploy/mv.manual-deploy.env
+chmod 600 .deploy/mv.manual-deploy.env
+```
+
+Ejemplo minimo:
+
+```dotenv
+MANUAL_MV_DEPLOY_HOST=virtual.lab.inf.uva.es
+MANUAL_MV_DEPLOY_PORT=20381
+MANUAL_MV_DEPLOY_USER=usuario
+MANUAL_MV_DEPLOY_REPO_PATH=/home/usuario/TFG
+MANUAL_MV_DEPLOY_REF=develop
+MANUAL_MV_DEPLOY_IDENTITY=~/.ssh/id_ed25519_tfg_mv_actions
+```
+
+Uso habitual:
+
+```bash
+./scripts/deploy-mv-manual.sh
+```
+
+Si prefieres no usar archivo de configuracion local:
+
+```bash
+./scripts/deploy-mv-manual.sh \
+  --no-config \
+  --host virtual.lab.inf.uva.es \
+  --port 20381 \
+  --user usuario \
+  --repo-path /home/usuario/TFG \
+  --ref develop \
+  --identity ~/.ssh/id_ed25519_tfg_mv_actions
+```
+
+El script fuerza `ssh -tt` para que el despliegue pueda pedir `sudo` de forma interactiva en la MV cuando haga falta.
 
 ## Clave SSH para GitHub Actions
 

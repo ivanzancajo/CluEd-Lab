@@ -68,6 +68,8 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog";
 import { ThemedBoard } from "../game/ThemedBoard";
+import { EnvelopeAnimation } from "../game/EnvelopeAnimation";
+import { EvidenciasComunes } from "../game/EvidenciasComunes";
 
 type BoardConnectionStatus = "idle" | "connecting" | "connected" | "error";
 type TeamSlotStatus = "free" | "connected" | "inactive" | "disconnected";
@@ -75,6 +77,8 @@ type TeamSlotStatus = "free" | "connected" | "inactive" | "disconnected";
 export function BoardView() {
   const navigate = useNavigate();
   const socketRef = useRef<LobbySocketClient | null>(null);
+  const hasAnimatedRef = useRef(false);
+  const [showEnvelopeAnimation, setShowEnvelopeAnimation] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [sessionCode, setSessionCode] = useState("");
   const [boardConfig, setBoardConfig] = useState(() => readStoredActiveBoardConfig());
@@ -200,6 +204,19 @@ export function BoardView() {
 
           storeHostLobbySession(payload.session);
           setPresenceState((currentState) => mergeLobbySessionIntoPresence(currentState, payload.session, payload.occurredAt));
+        });
+        socket.on("gameStarted", (payload) => {
+          if (!active) {
+            return;
+          }
+
+          storeHostLobbySession(payload.session);
+          setPresenceState((currentState) => mergeLobbySessionIntoPresence(currentState, payload.session, payload.occurredAt));
+
+          if (!hasAnimatedRef.current && payload.session.status === "EN_CURSO") {
+            hasAnimatedRef.current = true;
+            setShowEnvelopeAnimation(true);
+          }
         });
         socket.on("disconnect", () => {
           if (!active) {
@@ -674,6 +691,12 @@ export function BoardView() {
           </div>
         </div>
 
+        {presenceState && presenceState.publicCards.length > 0 ? (
+          <div className="px-6 py-4 border-b border-cyan-800/30">
+            <EvidenciasComunes publicCards={presenceState.publicCards} />
+          </div>
+        ) : null}
+
         <div className="flex-1 flex flex-col p-6 overflow-hidden bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-slate-900 to-[#020617]">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xs uppercase text-cyan-600 flex items-center gap-2 font-bold tracking-widest">
@@ -851,6 +874,10 @@ export function BoardView() {
           <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-cyan-800 -translate-x-4 translate-y-4"></div>
           <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-cyan-800 translate-x-4 translate-y-4"></div>
         </div>
+
+        {showEnvelopeAnimation ? (
+          <EnvelopeAnimation onComplete={() => setShowEnvelopeAnimation(false)} />
+        ) : null}
       </div>
 
       <AlertDialog open={isResolutionDialogOpen} onOpenChange={setIsResolutionDialogOpen}>
@@ -913,6 +940,7 @@ function mergeLobbySessionIntoPresence(
     turn: session.turn,
     activeSuggestion: session.activeSuggestion,
     resolution: session.resolution,
+    publicCards: session.publicCards,
     teams: session.teams.map((team) => {
       const previousTeam = currentState.teams.find((currentTeam) => currentTeam.id === team.id);
 

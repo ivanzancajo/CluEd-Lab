@@ -81,6 +81,7 @@ model Elemento {
 
   skinDescriptions DescripcionElemento[]
   teamCards        CartaEquipo[]
+  publicCards      CartaPublica[]
   reasoningCells   CeldaRazonamiento[]
   subjectSolutions Solucion[]            @relation("SolutionSubject")
   objectSolutions  Solucion[]            @relation("SolutionObject")
@@ -138,8 +139,9 @@ model Partida {
   solution   Solucion?   @relation(fields: [solutionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   currentTurnTeam Equipo? @relation("CurrentSessionTurn", fields: [currentTurnTeamId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   winnerTeam Equipo? @relation("WinningSession", fields: [winnerTeamId], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  teams      Equipo[]
-  events     Evento[]
+  teams       Equipo[]
+  events      Evento[]
+  publicCards CartaPublica[]
 
   @@unique([accessCode], map: "partida_codigo_acceso_key")
   @@index([currentTurnTeamId], map: "partida_id_equipo_turno_actual_idx")
@@ -182,6 +184,19 @@ model CartaEquipo {
   @@id([equipoId, elementId])
   @@index([elementId], map: "carta_equipo_id_elem_idx")
   @@map("carta_equipo")
+}
+
+model CartaPublica {
+  partidaId  String    @db.Uuid @map("id_partida")
+  elementId  String    @db.Uuid @map("id_elem")
+  revealedAt DateTime? @default(now()) @map("revelada_en") @db.Timestamp(6)
+
+  partida    Partida   @relation(fields: [partidaId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  element    Elemento  @relation(fields: [elementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([partidaId, elementId])
+  @@index([partidaId], map: "carta_publica_id_partida_idx")
+  @@map("carta_publica")
 }
 
 model TablaRazonamiento {

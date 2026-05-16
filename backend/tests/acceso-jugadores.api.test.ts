@@ -514,8 +514,9 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     expect(body.item.team.id).toBe(seeded.teamIds[0]);
     expect(body.item.hand).toHaveLength(assignedCards.length);
     expect(new Set(body.item.hand.map((card) => card.id)).size).toBe(body.item.hand.length);
-    expect(cardCounts.reduce((sum, current) => sum + current, 0)).toBe(18);
-    expect(Math.max(...cardCounts) - Math.min(...cardCounts)).toBeLessThanOrEqual(1);
+    // Con el reparto cíclico: 18 no-solución, 4 equipos → 4/equipo + 2 sobrantes (CartaPublica)
+    expect(cardCounts.reduce((sum, current) => sum + current, 0)).toBe(16);
+    expect(Math.max(...cardCounts) - Math.min(...cardCounts)).toBe(0);
   });
 
   it('devuelve el contexto de movimiento del equipo activo cuando ya existe una tirada persistida', async () => {
@@ -893,7 +894,7 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     });
   });
 
-  it('equilibra el reparto por colección cuando participan cuatro equipos', async () => {
+  it('reparte cíclicamente 4 cartas por equipo dejando 2 sobrantes cuando participan cuatro equipos', async () => {
     const seeded = await seedPlayableSession('BAL404', PLAYABLE_TEAM_COLORS);
 
     await request('/api/game/sessions/BAL404/start', {
@@ -905,24 +906,13 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
 
     const distributions = await getTeamCardDistributions(seeded.teamIds);
 
+    // 18 no-solución, 4 equipos: floor(18/4)=4/equipo, 2 sobrantes
     expect(distributions).toHaveLength(PLAYABLE_TEAM_COLORS.length);
-    expect(distributions.every((distribution) => distribution.total >= 4 && distribution.total <= 5)).toBe(true);
-    expect(distributions.every((distribution) => distribution[TipoElemento.SUJETO] >= 1)).toBe(true);
-    expect(distributions.every((distribution) => distribution[TipoElemento.OBJETO] >= 1)).toBe(true);
-    expect(distributions.every((distribution) => distribution[TipoElemento.ESPACIO] === 2)).toBe(true);
-    expect(getDistributionSpread(distributions.map((distribution) => distribution.total))).toBeLessThanOrEqual(1);
-    expect(
-      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.SUJETO]))
-    ).toBeLessThanOrEqual(1);
-    expect(
-      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.OBJETO]))
-    ).toBeLessThanOrEqual(1);
-    expect(
-      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.ESPACIO]))
-    ).toBeLessThanOrEqual(1);
+    expect(distributions.every((distribution) => distribution.total === 4)).toBe(true);
+    expect(getDistributionSpread(distributions.map((distribution) => distribution.total))).toBe(0);
   });
 
-  it('mantiene el reparto equilibrado cuando participan cinco equipos', async () => {
+  it('reparte cíclicamente 3 cartas por equipo dejando 3 sobrantes cuando participan cinco equipos', async () => {
     const seeded = await seedPlayableSession('BAL505', FIVE_TEAM_COLORS);
 
     await request('/api/game/sessions/BAL505/start', {
@@ -934,19 +924,13 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
 
     const distributions = await getTeamCardDistributions(seeded.teamIds);
 
+    // 18 no-solución, 5 equipos: floor(18/5)=3/equipo, 3 sobrantes
     expect(distributions).toHaveLength(FIVE_TEAM_COLORS.length);
-    expect(distributions.every((distribution) => distribution.total >= 3 && distribution.total <= 4)).toBe(true);
-    expect(distributions.every((distribution) => distribution[TipoElemento.SUJETO] === 1)).toBe(true);
-    expect(distributions.every((distribution) => distribution[TipoElemento.OBJETO] === 1)).toBe(true);
-    expect(distributions.every((distribution) => distribution[TipoElemento.ESPACIO] >= 1)).toBe(true);
-    expect(distributions.every((distribution) => distribution[TipoElemento.ESPACIO] <= 2)).toBe(true);
-    expect(getDistributionSpread(distributions.map((distribution) => distribution.total))).toBeLessThanOrEqual(1);
-    expect(
-      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.ESPACIO]))
-    ).toBeLessThanOrEqual(1);
+    expect(distributions.every((distribution) => distribution.total === 3)).toBe(true);
+    expect(getDistributionSpread(distributions.map((distribution) => distribution.total))).toBe(0);
   });
 
-  it('mantiene tres cartas por equipo cuando se inicia una partida con seis equipos', async () => {
+  it('mantiene tres cartas por equipo sin sobrantes cuando se inicia una partida con seis equipos', async () => {
     const seeded = await seedPlayableSession('BAL606', SIX_TEAM_COLORS);
 
     await request('/api/game/sessions/BAL606/start', {
@@ -958,17 +942,10 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
 
     const distributions = await getTeamCardDistributions(seeded.teamIds);
 
+    // 18 no-solución, 6 equipos: floor(18/6)=3/equipo, 0 sobrantes (división exacta)
     expect(distributions).toHaveLength(SIX_TEAM_COLORS.length);
     expect(distributions.every((distribution) => distribution.total === 3)).toBe(true);
-    expect(
-      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.SUJETO]))
-    ).toBeLessThanOrEqual(1);
-    expect(
-      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.OBJETO]))
-    ).toBeLessThanOrEqual(1);
-    expect(
-      getDistributionSpread(distributions.map((distribution) => distribution[TipoElemento.ESPACIO]))
-    ).toBeLessThanOrEqual(1);
+    expect(getDistributionSpread(distributions.map((distribution) => distribution.total))).toBe(0);
   });
 
   it('emite gameStarted cuando el admin inicia la partida por socket', async () => {

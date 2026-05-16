@@ -33,7 +33,7 @@ import { prisma } from '../lib/prisma.js';
 import { env } from '../config/env.js';
 import { verifyAdminToken, type AuthTokenPayload } from '../middleware/auth.js';
 import { lobbyPresenceStore } from './lobbyPresenceStore.js';
-import { pauseSession, resumeSession, startSessionByAccessCode } from '../lib/sessionGameplay.js';
+import { loadTeamTerminalStateByAccessCode, pauseSession, resumeSession, startSessionByAccessCode } from '../lib/sessionGameplay.js';
 import { findBoardMovementNodeByPosition, isSecretPassageMoveValid } from '../lib/sessionMovement.js';
 import { BOARD_MOVEMENT_NODES } from '../lib/boardGraph.js';
 import {
@@ -69,6 +69,7 @@ export type LobbyPresenceState = {
   turn: SessionTurnSnapshot | null;
   activeSuggestion: SuggestionSummary | null;
   resolution: SessionResolutionSnapshot | null;
+  publicCards: import('../lib/sessionCards.js').TeamHandCard[];
   updatedAt: number;
 };
 
@@ -84,6 +85,11 @@ export type LobbyEvent = {
 
 export type GameStartedPayload = {
   session: SessionSnapshot;
+  occurredAt: number;
+};
+
+export type GameSetupCardsPayload = {
+  hand: import('../lib/sessionCards.js').TeamHandCard[];
   occurredAt: number;
 };
 
@@ -227,6 +233,7 @@ type LobbySocket = Socket<
     'game:show-solution': (payload: GameResolutionPayload) => void;
     'game:refute-request': (payload: GameRefuteRequestPayload) => void;
     'game:refutation-result': (payload: GameRefutationResultPayload) => void;
+    'game:setup-cards': (payload: GameSetupCardsPayload) => void;
   },
   Record<string, never>,
   LobbySocketData
@@ -341,6 +348,14 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
         { isolationLevel: 'Serializable' }
       );
       const gameStartedPayload = buildGameStartedPayload(session);
+
+      for (const team of session.teams) {
+        const terminalState = await loadTeamTerminalStateByAccessCode(prisma, input.accessCode, team.id);
+        io.to(getTeamRoom(session.id, team.id)).emit('game:setup-cards', {
+          hand: terminalState.hand,
+          occurredAt: gameStartedPayload.occurredAt,
+        });
+      }
 
       broadcastLobbyUpdate(io, await buildLobbyPresenceState(session.id));
       broadcastLobbyEvent(io, session.id, {
@@ -896,6 +911,7 @@ async function buildLobbyPresenceState(sessionId: string): Promise<LobbyPresence
     turn: snapshot.turn,
     activeSuggestion: snapshot.activeSuggestion,
     resolution: snapshot.resolution,
+    publicCards: snapshot.publicCards,
     updatedAt: Date.now(),
   };
 }

@@ -3,6 +3,7 @@ import { getStoredAdminToken } from './auth';
 import type {
   FinalAccusationVerdict,
   GameResolutionMode,
+  GameSetupCardsPayload,
   LobbySession,
   LobbyTeam,
   SessionResolutionState,
@@ -11,7 +12,10 @@ import type {
   SuggestionElement,
   SuggestionSummary,
   TeamColor,
+  TeamHandCard,
 } from './sessionApi';
+
+export type { GameSetupCardsPayload };
 
 export type LobbyPresenceTeam = LobbyTeam & {
   connected: boolean;
@@ -29,6 +33,7 @@ export type LobbyPresenceState = {
   turn: SessionTurn | null;
   activeSuggestion: SuggestionSummary | null;
   resolution: SessionResolutionState | null;
+  publicCards: TeamHandCard[];
   updatedAt: number;
 };
 
@@ -164,6 +169,7 @@ type ServerToClientEvents = {
   'game:show-solution': (payload: GameResolutionPayload) => void;
   'game:refute-request': (payload: GameRefuteRequestPayload) => void;
   'game:refutation-result': (payload: GameRefutationResultPayload) => void;
+  'game:setup-cards': (payload: GameSetupCardsPayload) => void;
 };
 
 type ClientToServerEvents = {

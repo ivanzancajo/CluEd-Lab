@@ -2519,7 +2519,7 @@ export function TerminalView() {
       </AnimatePresence>
 
       {showEnvelopeAnimation ? (
-        <div className="fixed inset-0 z-[60]">
+        <div className="fixed inset-0 z-[60] pointer-events-none">
           <EnvelopeAnimation onComplete={() => setShowEnvelopeAnimation(false)} />
         </div>
       ) : null}

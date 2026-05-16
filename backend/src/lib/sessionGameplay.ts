@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto';
-import { EstadoPartida, TipoElemento, type ColorEquipo } from '@prisma/client';
+import { EstadoPartida, type ColorEquipo } from '@prisma/client';
 import { HttpError } from './http.js';
 import { prisma } from './prisma.js';
 import { loadSkinConfiguration, type LoadedSkinConfiguration } from './skinConfigs.js';
@@ -14,13 +14,20 @@ import {
   type SessionSnapshot,
   type SessionTeamSnapshot,
 } from './sessionSnapshots.js';
+import {
+  buildSkinItemLookup,
+  sortHandCards,
+  type TeamHandCard,
+} from './sessionCards.js';
+
+export type { TeamHandCard };
 
 type SessionGameplayClient = Pick<
   typeof prisma,
-  'partida' | 'solucion' | 'tablaRazonamiento' | 'celdaRazonamiento' | 'cartaEquipo' | 'cluedoSkin' | 'evento'
+  'partida' | 'solucion' | 'tablaRazonamiento' | 'celdaRazonamiento' | 'cartaEquipo' | 'cartaPublica' | 'cluedoSkin' | 'evento'
 >;
 
-type TeamTerminalStateClient = Pick<typeof prisma, 'partida' | 'cartaEquipo' | 'cluedoSkin' | 'evento'>;
+type TeamTerminalStateClient = Pick<typeof prisma, 'partida' | 'cartaEquipo' | 'cartaPublica' | 'cluedoSkin' | 'evento'>;
 
 type SessionTeamRecord = {
   id: string;
@@ -40,20 +47,10 @@ type DistributedGameSetup = {
   };
   allElementIds: string[];
   cardsByTeam: TeamCardAssignment[];
+  sobrantes: string[];
 };
-
-type SkinConfigItem = LoadedSkinConfiguration['subjects'][number];
 
 export const MINIMUM_TEAMS_TO_START = 2;
-
-export type TeamHandCard = {
-  id: string;
-  kind: TipoElemento;
-  name: string;
-  desc: string;
-  imageUrl?: string | undefined;
-  motif?: string | undefined;
-};
 
 export type TeamTerminalState = {
   session: SessionSnapshot;
@@ -139,6 +136,15 @@ export async function initializeStartedSession(client: SessionGameplayClient, se
     if (cards.length > 0) {
       await client.cartaEquipo.createMany({
         data: cards,
+      });
+    }
+
+    if (setup.sobrantes.length > 0) {
+      await client.cartaPublica.createMany({
+        data: setup.sobrantes.map((elementId) => ({
+          partidaId: session.id,
+          elementId,
+        })),
       });
     }
   }
@@ -318,6 +324,21 @@ function shiftDateByMilliseconds(sourceDate: Date, deltaMs: number) {
   return new Date(sourceDate.getTime() + deltaMs);
 }
 
+export function cyclicDeal(
+  deck: string[],
+  teamCount: number
+): { cardsByTeam: string[][]; sobrantes: string[] } {
+  const completeRounds = teamCount > 0 ? Math.floor(deck.length / teamCount) : 0;
+  const dealCount = completeRounds * teamCount;
+  const cardsByTeam: string[][] = Array.from({ length: teamCount }, () => []);
+
+  for (let i = 0; i < dealCount; i++) {
+    cardsByTeam[i % teamCount]!.push(deck[i]!);
+  }
+
+  return { cardsByTeam, sobrantes: deck.slice(dealCount) };
+}
+
 function buildDistributedGameSetup(skin: LoadedSkinConfiguration, teamIds: string[]): DistributedGameSetup {
   ensurePlayableCollections(skin);
 
@@ -325,20 +346,18 @@ function buildDistributedGameSetup(skin: LoadedSkinConfiguration, teamIds: strin
   const object = pickRandomItem(skin.objects);
   const space = pickRandomItem(skin.spaces);
   const allElementIds = [...skin.subjects, ...skin.objects, ...skin.spaces].map((item) => item.id);
-  const cardsByTeam = teamIds.map((teamId) => ({ teamId, elementIds: [] as string[] }));
 
-  distributeDeckByCurrentLoad(
-    cardsByTeam,
-    shuffleArray(skin.subjects.filter((item) => item.id !== subject.id).map((item) => item.id))
-  );
-  distributeDeckByCurrentLoad(
-    cardsByTeam,
-    shuffleArray(skin.objects.filter((item) => item.id !== object.id).map((item) => item.id))
-  );
-  distributeDeckByCurrentLoad(
-    cardsByTeam,
-    shuffleArray(skin.spaces.filter((item) => item.id !== space.id).map((item) => item.id))
-  );
+  const deck = shuffleArray([
+    ...skin.subjects.filter((item) => item.id !== subject.id).map((item) => item.id),
+    ...skin.objects.filter((item) => item.id !== object.id).map((item) => item.id),
+    ...skin.spaces.filter((item) => item.id !== space.id).map((item) => item.id),
+  ]);
+
+  const { cardsByTeam: rawCardsByTeam, sobrantes } = cyclicDeal(deck, teamIds.length);
+  const cardsByTeam: TeamCardAssignment[] = teamIds.map((teamId, i) => ({
+    teamId,
+    elementIds: rawCardsByTeam[i] ?? [],
+  }));
 
   return {
     solution: {
@@ -348,6 +367,7 @@ function buildDistributedGameSetup(skin: LoadedSkinConfiguration, teamIds: strin
     },
     allElementIds,
     cardsByTeam,
+    sobrantes,
   };
 }
 
@@ -355,12 +375,6 @@ function ensurePlayableCollections(skin: LoadedSkinConfiguration) {
   if (skin.subjects.length === 0 || skin.objects.length === 0 || skin.spaces.length === 0) {
     throw new HttpError(409, 'La configuración de la sesión no contiene suficientes elementos para iniciar la partida.');
   }
-}
-
-function buildSkinItemLookup(skin: LoadedSkinConfiguration) {
-  return new Map<string, SkinConfigItem>(
-    [...skin.subjects, ...skin.objects, ...skin.spaces].map((item) => [item.id, item])
-  );
 }
 
 function pickRandomItem<T>(items: T[]) {
@@ -392,44 +406,6 @@ function shuffleArray<T>(items: T[]) {
   return shuffled;
 }
 
-function distributeDeckByCurrentLoad(cardsByTeam: TeamCardAssignment[], deckElementIds: string[]) {
-  if (cardsByTeam.length === 0 || deckElementIds.length === 0) {
-    return;
-  }
-
-  const distributionOrder = [...cardsByTeam]
-    .map((assignment, index) => ({
-      assignment,
-      index,
-      cardCount: assignment.elementIds.length,
-    }))
-    .sort((left, right) => {
-      const cardCountDifference = left.cardCount - right.cardCount;
-
-      if (cardCountDifference !== 0) {
-        return cardCountDifference;
-      }
-
-      return left.index - right.index;
-    })
-    .map((entry) => entry.assignment);
-
-  deckElementIds.forEach((elementId, index) => {
-    distributionOrder[index % distributionOrder.length]?.elementIds.push(elementId);
-  });
-}
-
 function sortTeamsByColor(left: SessionTeamRecord, right: SessionTeamRecord) {
   return COLOR_SORT_ORDER.indexOf(left.color) - COLOR_SORT_ORDER.indexOf(right.color);
-}
-
-function sortHandCards(left: TeamHandCard, right: TeamHandCard) {
-  const kindOrder = [TipoElemento.SUJETO, TipoElemento.OBJETO, TipoElemento.ESPACIO];
-  const kindDifference = kindOrder.indexOf(left.kind) - kindOrder.indexOf(right.kind);
-
-  if (kindDifference !== 0) {
-    return kindDifference;
-  }
-
-  return left.name.localeCompare(right.name, 'es');
 }

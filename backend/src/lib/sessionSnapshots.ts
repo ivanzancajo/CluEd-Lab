@@ -4,6 +4,7 @@ import { prisma } from './prisma.js';
 import { loadSkinConfiguration, type LoadedSkinConfiguration } from './skinConfigs.js';
 import { getSessionResolutionSnapshot, type SessionResolutionSnapshot } from './sessionResolution.js';
 import { loadActiveSuggestionSummaryById, type SuggestionSummary } from './sessionSuggestion.js';
+import { buildSkinItemLookup, sortHandCards, type TeamHandCard } from './sessionCards.js';
 
 export const COLOR_SORT_ORDER: ColorEquipo[] = [
   ColorEquipo.ROJO,
@@ -23,7 +24,7 @@ export const COLOR_LABELS: Record<ColorEquipo, string> = {
   [ColorEquipo.BLANCO]: 'Equipo Blanco',
 };
 
-export type SessionReader = Pick<typeof prisma, 'partida' | 'cluedoSkin' | 'evento'>;
+export type SessionReader = Pick<typeof prisma, 'partida' | 'cluedoSkin' | 'evento' | 'cartaPublica'>;
 
 export type SessionTeamSnapshot = {
   id: string;
@@ -71,6 +72,7 @@ export type SessionSnapshot = {
   activeSuggestion: SuggestionSummary | null;
   winnerTeam: SessionWinnerSnapshot | null;
   resolution: SessionResolutionSnapshot | null;
+  publicCards: TeamHandCard[];
 };
 
 export async function loadSessionSnapshotByAccessCode(
@@ -180,6 +182,27 @@ async function loadSessionSnapshot(
     ? await loadActiveSuggestionSummaryById(client, session.activeSuggestionEventId)
     : null;
 
+  const rawPublicCards = await client.cartaPublica.findMany({
+    where: { partidaId: session.id },
+    include: {
+      element: { select: { id: true, kind: true, name: true, imageUrl: true } },
+    },
+  });
+  const skinItems = buildSkinItemLookup(skin);
+  const publicCards: TeamHandCard[] = rawPublicCards
+    .map((pc) => {
+      const skinItem = skinItems.get(pc.elementId);
+      return {
+        id: pc.elementId,
+        kind: pc.element.kind,
+        name: pc.element.name,
+        desc: skinItem?.desc ?? '',
+        imageUrl: pc.element.imageUrl ?? skinItem?.imageUrl,
+        motif: skinItem?.motif,
+      } satisfies TeamHandCard;
+    })
+    .sort(sortHandCards);
+
   return {
     id: session.id,
     accessCode: session.accessCode,
@@ -206,6 +229,7 @@ async function loadSessionSnapshot(
         }
       : null,
     resolution: getSessionResolutionSnapshot(session.id),
+    publicCards,
   };
 }
 

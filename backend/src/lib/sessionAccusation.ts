@@ -14,7 +14,7 @@ import {
   isTeamEliminated,
 } from './sessionTurn.js';
 
-type SessionAccusationClient = Pick<typeof prisma, 'partida' | 'equipo' | 'evento' | 'cluedoSkin' | 'elemento'>;
+type SessionAccusationClient = Pick<typeof prisma, 'partida' | 'equipo' | 'evento' | 'cluedoSkin' | 'elemento' | 'cartaPublica'>;
 
 export type FinalAccusationInput = {
   subjectElementId: string;

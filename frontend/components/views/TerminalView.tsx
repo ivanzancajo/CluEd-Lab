@@ -85,6 +85,7 @@ import {
   type TeamMoveNode,
 } from "../../src/lib/sessionApi";
 import { ThemedBoard } from "../game/ThemedBoard";
+import { EvidenciasComunes } from "../game/EvidenciasComunes";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -247,6 +248,7 @@ function buildSuggestionSentence(suggestion: SuggestionSummary) {
 export function TerminalView() {
   const navigate = useNavigate();
   const lobbySocketRef = React.useRef<LobbySocketClient | null>(null);
+  const activeGameConfigRef = React.useRef<GameConfig | null>(null);
   const [activeTab, setActiveTab] = useState("map");
   const [centerImage, setCenterImage] = useState("");
   const [boardTheme, setBoardTheme] = useState<StoredBoardTheme | null>(() => readStoredBoardTheme());
@@ -259,6 +261,7 @@ export function TerminalView() {
   const [handError, setHandError] = useState<string | null>(null);
   const [isLoadingHand, setIsLoadingHand] = useState(false);
   const [teamHand, setTeamHand] = useState<TerminalCard[]>([]);
+  const [publicCards, setPublicCards] = useState<TeamHandCard[]>([]);
   const [destinationNodes, setDestinationNodes] = useState<TeamMoveNode[]>([]);
   const [selectedDestinationNodeId, setSelectedDestinationNodeId] = useState("");
   const [isMoveConfirmOpen, setIsMoveConfirmOpen] = useState(false);
@@ -337,6 +340,7 @@ export function TerminalView() {
     setSessionTurn(session.turn);
     setActiveSuggestion(session.activeSuggestion);
     setResolutionState(session.resolution);
+    setPublicCards(session.publicCards ?? []);
     setCurrentMoveNode((previousNode) => mergePublicCurrentMoveNode(previousNode, session.teams, currentTeam.id));
     setLobbyError(null);
   };
@@ -356,6 +360,7 @@ export function TerminalView() {
     setPendingSuggestion(state.pendingSuggestion);
     setCurrentMoveNode((previousNode) => mergePublicCurrentMoveNode(previousNode, state.session.teams, state.team.id));
     setTeamHand(state.hand.map((card) => mapHandCardToTerminalCard(card, sessionConfig)));
+    setPublicCards(state.session.publicCards ?? []);
   };
 
   const refreshTerminalState = React.useEffectEvent(async () => {
@@ -804,6 +809,7 @@ export function TerminalView() {
   };
 
   const applyGameConfig = (config: GameConfig) => {
+    activeGameConfigRef.current = config;
     setBoardTheme(config);
     setCatNames({
       c1: config.cat1Name || "Sujetos",
@@ -943,6 +949,7 @@ export function TerminalView() {
       setSessionTurn(state.turn);
       setActiveSuggestion(state.activeSuggestion);
       setResolutionState(state.resolution);
+      setPublicCards(state.publicCards ?? []);
       setCurrentMoveNode((previousNode) => mergePublicCurrentMoveNode(previousNode, state.teams, currentTeam.id));
       setLobbyConnectionStatus(currentTeam.connected ? "connected" : "disconnected");
     };
@@ -1036,6 +1043,14 @@ export function TerminalView() {
       sendHeartbeat();
     });
 
+    socket.on("game:setup-cards", (payload) => {
+      const config = activeGameConfigRef.current;
+      if (config) {
+        setTeamHand(payload.hand.map((card) => mapHandCardToTerminalCard(card, config)));
+      }
+      setHandError(null);
+      setIsLoadingHand(false);
+    });
     socket.on("lobby:presence-updated", applyPresenceState);
     socket.on("lobby:event", applyLobbyEvent);
     socket.on("gameStarted", applyGameStarted);
@@ -1855,6 +1870,10 @@ export function TerminalView() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              <div className="mt-4">
+                <EvidenciasComunes publicCards={publicCards} />
               </div>
             </motion.div>
           )}

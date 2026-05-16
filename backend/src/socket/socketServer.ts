@@ -69,6 +69,7 @@ export type LobbyPresenceState = {
   turn: SessionTurnSnapshot | null;
   activeSuggestion: SuggestionSummary | null;
   resolution: SessionResolutionSnapshot | null;
+  publicCards: import('../lib/sessionCards.js').TeamHandCard[];
   updatedAt: number;
 };
 
@@ -910,6 +911,7 @@ async function buildLobbyPresenceState(sessionId: string): Promise<LobbyPresence
     turn: snapshot.turn,
     activeSuggestion: snapshot.activeSuggestion,
     resolution: snapshot.resolution,
+    publicCards: snapshot.publicCards,
     updatedAt: Date.now(),
   };
 }

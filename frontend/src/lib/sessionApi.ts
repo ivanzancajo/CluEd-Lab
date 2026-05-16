@@ -159,6 +159,12 @@ export interface LobbySession {
   activeSuggestion: SuggestionSummary | null;
   winnerTeam: SessionWinner | null;
   resolution: SessionResolutionState | null;
+  publicCards: TeamHandCard[];
+}
+
+export interface GameSetupCardsPayload {
+  hand: TeamHandCard[];
+  occurredAt: number;
 }
 
 export interface JoinedLobbySession {

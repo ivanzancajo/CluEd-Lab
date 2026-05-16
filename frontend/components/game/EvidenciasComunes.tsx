@@ -13,7 +13,7 @@ const KIND_STYLES: Record<TeamElementKind, { border: string; bg: string; icon: t
 
 export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
   return (
-    <div className="w-full">
+    <div data-cy="evidencias-comunes-panel" className="w-full">
       <div className="flex items-center gap-2 mb-2">
         <Database className="w-4 h-4 text-slate-400 flex-shrink-0" />
         <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -22,7 +22,7 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
       </div>
 
       {publicCards.length === 0 ? (
-        <p className="text-slate-500 text-xs italic px-1">
+        <p data-cy="evidencias-comunes-empty" className="text-slate-500 text-xs italic px-1">
           No hay cartas sobrantes en esta partida.
         </p>
       ) : (
@@ -33,6 +33,7 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
             return (
               <div
                 key={card.id}
+                data-cy="evidencias-comunes-card"
                 className={`w-28 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${styles.border} ${styles.bg} flex flex-col overflow-hidden relative`}
               >
                 <div className="h-1/2 relative flex items-center justify-center border-b border-white/10">

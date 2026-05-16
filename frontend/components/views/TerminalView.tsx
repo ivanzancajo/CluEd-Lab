@@ -843,6 +843,12 @@ export function TerminalView() {
     }
   };
 
+  React.useEffect(() => {
+    if (!showEnvelopeAnimation) return;
+    const timer = setTimeout(() => setShowEnvelopeAnimation(false), 3500);
+    return () => clearTimeout(timer);
+  }, [showEnvelopeAnimation]);
+
   // Fetch active config and map to Terminal's internal state
   React.useEffect(() => {
     const storedTheme = readStoredBoardTheme();

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -86,6 +86,7 @@ import {
 } from "../../src/lib/sessionApi";
 import { ThemedBoard } from "../game/ThemedBoard";
 import { EvidenciasComunes } from "../game/EvidenciasComunes";
+import { EnvelopeAnimation } from "../game/EnvelopeAnimation";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -292,6 +293,8 @@ export function TerminalView() {
   const [refutationResult, setRefutationResult] = useState<GameRefutationResultPayload | null>(null);
   const [resolutionState, setResolutionState] = useState<LobbySession["resolution"]>(null);
   const [resolutionNow, setResolutionNow] = useState(() => Date.now());
+  const [showEnvelopeAnimation, setShowEnvelopeAnimation] = useState(false);
+  const hasEnvelopeAnimatedRef = useRef(false);
   
   const [categories, setCategories] = useState<{
     c1: ElementoItem[];
@@ -931,6 +934,11 @@ export function TerminalView() {
       applyRealtimeSession(payload.session, currentTeam);
       setLobbyConnectionStatus("connected");
       setHandError(null);
+
+      if (!hasEnvelopeAnimatedRef.current) {
+        hasEnvelopeAnimatedRef.current = true;
+        setShowEnvelopeAnimation(true);
+      }
     };
 
     const applyPresenceState = (state: LobbyPresenceState) => {
@@ -2509,6 +2517,12 @@ export function TerminalView() {
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      {showEnvelopeAnimation ? (
+        <div className="fixed inset-0 z-[60]">
+          <EnvelopeAnimation onComplete={() => setShowEnvelopeAnimation(false)} />
+        </div>
+      ) : null}
 
       {/* Bottom Navigation */}
       <div className="bg-slate-950 border-t border-cyan-900/50 flex justify-around p-2 pb-6 absolute bottom-0 w-full z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">

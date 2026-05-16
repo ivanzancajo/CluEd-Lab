@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useLocation } from "react-router";
 import { motion } from "motion/react";
 import {
   Activity,
@@ -76,9 +76,11 @@ type TeamSlotStatus = "free" | "connected" | "inactive" | "disconnected";
 
 export function BoardView() {
   const navigate = useNavigate();
+  const location = useLocation();
   const socketRef = useRef<LobbySocketClient | null>(null);
-  const hasAnimatedRef = useRef(false);
-  const [showEnvelopeAnimation, setShowEnvelopeAnimation] = useState(false);
+  const shouldAnimateOnMount = !!(location.state as { showEnvelopeAnimation?: boolean } | null)?.showEnvelopeAnimation;
+  const hasAnimatedRef = useRef(shouldAnimateOnMount);
+  const [showEnvelopeAnimation, setShowEnvelopeAnimation] = useState(shouldAnimateOnMount);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [sessionCode, setSessionCode] = useState("");
   const [boardConfig, setBoardConfig] = useState(() => readStoredActiveBoardConfig());

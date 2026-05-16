@@ -195,7 +195,7 @@ export function LobbyView() {
         : await startGameSession(sessionCode);
 
       storeHostLobbySession(session);
-      navigate("/board", { replace: true });
+      navigate("/board", { replace: true, state: { showEnvelopeAnimation: true } });
     } catch (error) {
       setLobbyError(getSessionErrorMessage(error, "No se ha podido iniciar la partida."));
     } finally {

@@ -207,6 +207,69 @@ describe("SCRUM-100 Evidencias Comunes en TerminalView", () => {
   });
 });
 
+describe("SCRUM-103 Evidencias Comunes interactivas en TerminalView", () => {
+  let adminSocket: Socket | null = null;
+
+  afterEach(() => {
+    adminSocket?.disconnect();
+    adminSocket = null;
+  });
+
+  it("abre la modal de detalle al clicar una carta sobrante y cierra al clicar el fondo", () => {
+    // 4 equipos → 2 sobrantes
+    const skinName = `Skin EC-Interactive ${Date.now()}`;
+
+    loginAsAdmin().then((token) => {
+      createSkin(token, skinName).then((skin) => {
+        createSession(token, skin.id).then((session) => {
+          joinTeam(session.accessCode, "ROJO").then((redTeam) => {
+            joinTeam(session.accessCode, "AZUL").then(() => {
+              joinTeam(session.accessCode, "VERDE").then(() => {
+                joinTeam(session.accessCode, "AMARILLO").then(() => {
+                  cy.visit("/terminal", {
+                    onBeforeLoad(win) {
+                      win.localStorage.setItem("sessionId", session.id);
+                      win.localStorage.setItem("sessionCode", session.accessCode);
+                      win.localStorage.setItem("sessionStatus", "LOBBY");
+                      win.localStorage.setItem("teamId", redTeam.id);
+                      win.localStorage.setItem("teamColor", redTeam.color);
+                      win.localStorage.setItem("teamName", redTeam.name);
+                    },
+                  });
+
+                  cy.then(() => connectAdminSocket(token))
+                    .then((socket) => {
+                      adminSocket = socket;
+                      return emitStartGame(socket, session.accessCode);
+                    })
+                    .then((response) => {
+                      expect(response.ok).to.eq(true);
+                    });
+
+                  cy.get('[data-cy="evidencias-comunes-card"]').should("have.length", 2);
+
+                  // La modal no existe antes de clicar
+                  cy.get('[data-cy="evidencias-comunes-modal"]').should("not.exist");
+
+                  // Clicar la primera carta abre la modal con nombre y tipo
+                  cy.get('[data-cy="evidencias-comunes-card"]').first().click();
+                  cy.get('[data-cy="evidencias-comunes-modal"]').should("be.visible");
+                  cy.get('[data-cy="evidencias-comunes-modal-name"]').should("not.be.empty");
+                  cy.get('[data-cy="evidencias-comunes-modal-kind"]').should("not.be.empty");
+
+                  // Clicar el fondo cierra la modal
+                  cy.get('[data-cy="evidencias-comunes-modal"]').click({ force: true });
+                  cy.get('[data-cy="evidencias-comunes-modal"]').should("not.exist");
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+});
+
 describe("SCRUM-100 Evidencias Comunes en BoardView", () => {
   let adminSocket: Socket | null = null;
 

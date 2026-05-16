@@ -84,6 +84,7 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
           return (
             <motion.div
               key="evidencias-comunes-modal"
+              data-cy="evidencias-comunes-modal"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -91,6 +92,7 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
               onClick={handleCloseModal}
             >
               <motion.div
+                data-cy="evidencias-comunes-modal-card"
                 initial={{ scale: 0.8, y: 20 }}
                 animate={{ scale: 1, y: 0, rotateY: cardFlipped ? 180 : 0 }}
                 exit={{ scale: 0.8, opacity: 0 }}
@@ -110,15 +112,15 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
                     )}
                   </div>
                   <div className="w-full flex-1 flex flex-col items-center justify-center p-2">
-                    <h4 className="font-bold text-sm tracking-widest uppercase text-white drop-shadow-md leading-tight line-clamp-2 px-1">{selectedCard.name}</h4>
-                    <span className="text-[9px] uppercase tracking-widest text-slate-400 mt-2 bg-black/50 px-2 py-1 rounded border border-slate-800">{styles.label}</span>
+                    <h4 data-cy="evidencias-comunes-modal-name" className="font-bold text-sm tracking-widest uppercase text-white drop-shadow-md leading-tight line-clamp-2 px-1">{selectedCard.name}</h4>
+                    <span data-cy="evidencias-comunes-modal-kind" className="text-[9px] uppercase tracking-widest text-slate-400 mt-2 bg-black/50 px-2 py-1 rounded border border-slate-800">{styles.label}</span>
                   </div>
                 </div>
 
                 {/* Back */}
                 <div className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] flex flex-col items-center justify-center p-4 text-center bg-slate-950 border border-slate-700 rounded-lg">
                   <h4 className="font-bold text-xs tracking-widest uppercase text-slate-300 mb-4 border-b border-slate-800 pb-2 w-full">{selectedCard.name}</h4>
-                  <p className="text-xs text-slate-400 leading-relaxed font-mono">{selectedCard.desc}</p>
+                  <p data-cy="evidencias-comunes-modal-desc" className="text-xs text-slate-400 leading-relaxed font-mono">{selectedCard.desc}</p>
                   <div className="mt-auto text-[8px] text-cyan-500 uppercase tracking-widest animate-pulse">
                     Toca para voltear
                   </div>

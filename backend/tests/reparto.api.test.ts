@@ -245,6 +245,98 @@ describe('SCRUM-100 reparto cíclico y sobrantes', () => {
       unsubscribedSocket.disconnect();
     }
   });
+
+  it('reparte 1 carta por equipo con 1 sobrante para 5 equipos (REPT07)', async () => {
+    const seed = await seedLobbySession('REPT07', [
+      ColorEquipo.ROJO, ColorEquipo.AMARILLO, ColorEquipo.AZUL, ColorEquipo.VERDE, ColorEquipo.MORADO,
+    ]);
+    // 9 total, 3 solución → 6 no-solución, 5 equipos → floor(6/5)=1/equipo (5 dealt), 1 sobrante
+    const adminSocket = await connectSocketClient(socketUrl, signAdminToken({ role: 'admin', sub: 'admin' }));
+
+    try {
+      await emitSocketAck<LobbySubscribeResponse>(adminSocket, 'lobby:host-subscribe', { sessionId: seed.sessionId });
+
+      const ack = await emitSocketAck<StartGameAck>(adminSocket, 'startGame', { accessCode: seed.accessCode });
+      if (!ack.ok) throw new Error(`startGame falló: ${JSON.stringify(ack)}`);
+
+      const cartasEquipo = await prisma.cartaEquipo.findMany({
+        where: { equipo: { partidaId: seed.sessionId } },
+        select: { elementId: true, equipoId: true },
+      });
+      const cartasPublicas = await prisma.cartaPublica.findMany({
+        where: { partidaId: seed.sessionId },
+        select: { elementId: true },
+      });
+
+      expect(cartasEquipo).toHaveLength(5);
+      expect(cartasPublicas).toHaveLength(1);
+
+      // Todos los equipos tienen exactamente 1 carta
+      const cartasPorEquipo = new Map<string, number>();
+      for (const carta of cartasEquipo) {
+        cartasPorEquipo.set(carta.equipoId, (cartasPorEquipo.get(carta.equipoId) ?? 0) + 1);
+      }
+      for (const count of cartasPorEquipo.values()) {
+        expect(count).toBe(1);
+      }
+
+      // Ninguna carta es de la solución
+      const solucion = await prisma.solucion.findFirst({ where: { partidas: { some: { id: seed.sessionId } } } });
+      const solutionIds = new Set([solucion!.subjectElementId, solucion!.objectElementId, solucion!.spaceElementId]);
+      for (const carta of [...cartasEquipo, ...cartasPublicas]) {
+        expect(solutionIds.has(carta.elementId)).toBe(false);
+      }
+    } finally {
+      adminSocket.disconnect();
+    }
+  });
+
+  it('reparte 1 carta por equipo sin sobrantes para 6 equipos (REPT08)', async () => {
+    const seed = await seedLobbySession('REPT08', [
+      ColorEquipo.ROJO, ColorEquipo.AMARILLO, ColorEquipo.AZUL,
+      ColorEquipo.VERDE, ColorEquipo.MORADO, ColorEquipo.BLANCO,
+    ]);
+    // 9 total, 3 solución → 6 no-solución, 6 equipos → 1/equipo, 0 sobrantes
+    const adminSocket = await connectSocketClient(socketUrl, signAdminToken({ role: 'admin', sub: 'admin' }));
+
+    try {
+      await emitSocketAck<LobbySubscribeResponse>(adminSocket, 'lobby:host-subscribe', { sessionId: seed.sessionId });
+
+      const ack = await emitSocketAck<StartGameAck>(adminSocket, 'startGame', { accessCode: seed.accessCode });
+      if (!ack.ok) throw new Error(`startGame falló: ${JSON.stringify(ack)}`);
+
+      const cartasEquipo = await prisma.cartaEquipo.findMany({
+        where: { equipo: { partidaId: seed.sessionId } },
+        select: { elementId: true, equipoId: true },
+      });
+      const cartasPublicas = await prisma.cartaPublica.findMany({
+        where: { partidaId: seed.sessionId },
+        select: { elementId: true },
+      });
+
+      expect(cartasEquipo).toHaveLength(6);
+      expect(cartasPublicas).toHaveLength(0);
+
+      // Todos los equipos tienen exactamente 1 carta
+      const cartasPorEquipo = new Map<string, number>();
+      for (const carta of cartasEquipo) {
+        cartasPorEquipo.set(carta.equipoId, (cartasPorEquipo.get(carta.equipoId) ?? 0) + 1);
+      }
+      expect(cartasPorEquipo.size).toBe(6);
+      for (const count of cartasPorEquipo.values()) {
+        expect(count).toBe(1);
+      }
+
+      // Ninguna carta es de la solución
+      const solucion = await prisma.solucion.findFirst({ where: { partidas: { some: { id: seed.sessionId } } } });
+      const solutionIds = new Set([solucion!.subjectElementId, solucion!.objectElementId, solucion!.spaceElementId]);
+      for (const carta of cartasEquipo) {
+        expect(solutionIds.has(carta.elementId)).toBe(false);
+      }
+    } finally {
+      adminSocket.disconnect();
+    }
+  });
 });
 
 async function seedLobbySession(accessCode: string, colors: ColorEquipo[]) {

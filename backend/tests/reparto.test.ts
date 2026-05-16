@@ -74,4 +74,33 @@ describe('cyclicDeal', () => {
     const allDealt = [...cardsByTeam.flat(), ...sobrantes];
     expect(allDealt.sort()).toEqual([...deck].sort());
   });
+
+  it('reparte 1 carta por equipo con 1 sobrante para 5 equipos y 6 cartas', () => {
+    const deck = ['a', 'b', 'c', 'd', 'e', 'f'];
+    const { cardsByTeam, sobrantes } = cyclicDeal(deck, 5);
+
+    expect(cardsByTeam).toHaveLength(5);
+    expect(cardsByTeam.every((hand) => hand.length === 1)).toBe(true);
+    expect(sobrantes).toHaveLength(1);
+    expect(sobrantes[0]).toBe('f');
+  });
+
+  it('reparte 1 carta por equipo sin sobrantes para 6 equipos y 6 cartas', () => {
+    const deck = ['a', 'b', 'c', 'd', 'e', 'f'];
+    const { cardsByTeam, sobrantes } = cyclicDeal(deck, 6);
+
+    expect(cardsByTeam).toHaveLength(6);
+    expect(cardsByTeam.every((hand) => hand.length === 1)).toBe(true);
+    expect(sobrantes).toHaveLength(0);
+  });
+
+  it('todos los equipos reciben exactamente el mismo numero de cartas para cualquier N entre 2 y 6', () => {
+    const deck = ['a', 'b', 'c', 'd', 'e', 'f'];
+
+    for (let n = 2; n <= 6; n++) {
+      const { cardsByTeam } = cyclicDeal(deck, n);
+      const expectedCount = Math.floor(deck.length / n);
+      expect(cardsByTeam.every((hand) => hand.length === expectedCount)).toBe(true);
+    }
+  });
 });

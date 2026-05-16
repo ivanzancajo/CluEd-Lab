@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { User, Box, MapPin, Mail } from 'lucide-react';
 
@@ -13,10 +13,12 @@ const CARDS = [
 ] as const;
 
 export function EnvelopeAnimation({ onComplete }: EnvelopeAnimationProps) {
+  const onCompleteRef = useRef(onComplete);
+
   useEffect(() => {
-    const timer = setTimeout(onComplete, 3500);
+    const timer = setTimeout(() => onCompleteRef.current(), 3500);
     return () => clearTimeout(timer);
-  }, [onComplete]);
+  }, []);
 
   return (
     <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">

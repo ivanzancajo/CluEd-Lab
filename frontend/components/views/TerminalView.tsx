@@ -934,6 +934,7 @@ export function TerminalView() {
       applyRealtimeSession(payload.session, currentTeam);
       setLobbyConnectionStatus("connected");
       setHandError(null);
+      setIsLoadingHand(true);
 
       if (!hasEnvelopeAnimatedRef.current) {
         hasEnvelopeAnimatedRef.current = true;

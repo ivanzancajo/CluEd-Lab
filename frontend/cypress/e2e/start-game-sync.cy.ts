@@ -241,8 +241,8 @@ describe("SCRUM-42/43/44 inicio sincronizado de partida", () => {
               cy.get('[data-cy="terminal-lobby-status-banner"]').should("contain", "Turno actual: Equipo Rojo.");
               cy.get('[data-cy="terminal-lobby-status-banner"]').should("contain", "Sin tirada activa.");
               cy.get('[data-cy="terminal-hand-list"]').should("be.visible");
-              // 2 equipos: 18 no-solución − 4 ocultas = 14 / 2 = 7 cartas por equipo
-              cy.get('[data-cy="terminal-hand-card"]').should("have.length", 7);
+              // 2 equipos: 18 no-solución / 2 = 9 cartas por equipo (reparto estándar)
+              cy.get('[data-cy="terminal-hand-card"]').should("have.length", 9);
               cy.window().then((window) => {
                 expect(window.localStorage.getItem("sessionStatus")).to.eq("EN_CURSO");
               });

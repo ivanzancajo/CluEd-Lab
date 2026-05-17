@@ -8,7 +8,6 @@ import {
   gameRefuteCommandSchema,
   gameSuggestCommandSchema,
   gameStatusCommandSchema,
-  gameConsultHiddenCardCommandSchema,
   hostLobbySubscriptionSchema,
   startGameCommandSchema,
   teamSecretPassageCommandSchema,
@@ -18,7 +17,6 @@ import {
   type GameRefuteCommandInput,
   type GameSuggestCommandInput,
   type GameStatusCommandInput,
-  type GameConsultHiddenCardCommandInput,
   type HostLobbySubscriptionInput,
   type StartGameCommandInput,
   type TeamSecretPassageCommandInput,
@@ -72,7 +70,6 @@ export type LobbyPresenceState = {
   activeSuggestion: SuggestionSummary | null;
   resolution: SessionResolutionSnapshot | null;
   publicCards: import('../lib/sessionCards.js').TeamHandCard[];
-  hiddenCards: import('../lib/sessionCards.js').TeamHandCard[];
   updatedAt: number;
 };
 
@@ -174,11 +171,6 @@ export type GameRefutationResultPayload = {
   shownByTeamName?: string | undefined;
 };
 
-export type GameHiddenCardDetailsPayload = {
-  card: import('../lib/sessionCards.js').TeamHandCard;
-  occurredAt: number;
-};
-
 type GameStatusChangeAck =
   | {
       ok: true;
@@ -209,16 +201,6 @@ type GameFinalChanceSubmissionAck =
       error: string;
     };
 
-type ConsultHiddenCardAck =
-  | {
-      ok: true;
-      occurredAt: number;
-    }
-  | {
-      ok: false;
-      error: string;
-    };
-
 type LobbyClientToServerEvents = {
   'lobby:host-subscribe': (payload: unknown, acknowledge?: (response: LobbySubscribeAck) => void) => void;
   'lobby:team-subscribe': (payload: unknown, acknowledge?: (response: LobbySubscribeAck) => void) => void;
@@ -231,7 +213,6 @@ type LobbyClientToServerEvents = {
   'game:suggest': (payload: unknown, acknowledge?: (response: GameSuggestAck) => void) => void;
   'game:refute': (payload: unknown, acknowledge?: (response: GameRefuteAck) => void) => void;
   'game:submit-final-chance': (payload: unknown, acknowledge?: (response: GameFinalChanceSubmissionAck) => void) => void;
-  'game:consult-hidden-card': (payload: unknown, acknowledge?: (response: ConsultHiddenCardAck) => void) => void;
 };
 
 type LobbySocketData = {
@@ -253,7 +234,6 @@ type LobbySocket = Socket<
     'game:refute-request': (payload: GameRefuteRequestPayload) => void;
     'game:refutation-result': (payload: GameRefutationResultPayload) => void;
     'game:setup-cards': (payload: GameSetupCardsPayload) => void;
-    'game:hidden-card-details': (payload: GameHiddenCardDetailsPayload) => void;
   },
   Record<string, never>,
   LobbySocketData
@@ -764,66 +744,6 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
     }
   });
 
-  socket.on('game:consult-hidden-card', async (payload: unknown, acknowledge?: (response: ConsultHiddenCardAck) => void) => {
-    try {
-      if (socket.data.role !== 'team' || !socket.data.sessionId || !socket.data.teamId) {
-        throw new HttpError(403, 'Solo un terminal de equipo puede consultar cartas ocultas.');
-      }
-
-      const input = parseGameConsultHiddenCardCommand(payload);
-
-      const carta = await prisma.cartaPublica.findFirst({
-        where: {
-          partidaId: socket.data.sessionId,
-          elementId: input.elementId,
-          hidden: true,
-        },
-        include: {
-          element: { select: { id: true, kind: true, name: true, imageUrl: true } },
-        },
-      });
-
-      if (!carta) {
-        throw new HttpError(404, 'La carta oculta indicada no existe en esta partida.');
-      }
-
-      const session = await prisma.partida.findUnique({
-        where: { id: socket.data.sessionId },
-        select: { skinId: true },
-      });
-
-      if (!session?.skinId) {
-        throw new HttpError(409, 'La sesión no tiene una configuración válida asociada.');
-      }
-
-      const { loadSkinConfiguration } = await import('../lib/skinConfigs.js');
-      const { buildSkinItemLookup } = await import('../lib/sessionCards.js');
-      const skin = await loadSkinConfiguration(prisma, session.skinId);
-      const skinItems = buildSkinItemLookup(skin);
-      const skinItem = skinItems.get(carta.elementId);
-
-      const card = {
-        id: carta.elementId,
-        kind: carta.element.kind,
-        name: carta.element.name,
-        desc: skinItem?.desc ?? '',
-        imageUrl: carta.element.imageUrl ?? skinItem?.imageUrl,
-        motif: skinItem?.motif,
-      };
-
-      const occurredAt = Date.now();
-
-      io.to(getTeamRoom(socket.data.sessionId, socket.data.teamId)).emit('game:hidden-card-details', {
-        card,
-        occurredAt,
-      });
-
-      acknowledge?.({ ok: true, occurredAt });
-    } catch (error) {
-      acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });
-    }
-  });
-
   socket.on('disconnect', async () => {
     if (socket.data.role !== 'team' || !socket.data.sessionId || !socket.data.teamId) {
       return;
@@ -949,15 +869,6 @@ function parseGameFinalChanceAccusationCommand(payload: unknown): GameFinalChanc
   return parsed.data;
 }
 
-function parseGameConsultHiddenCardCommand(payload: unknown): GameConsultHiddenCardCommandInput {
-  const parsed = gameConsultHiddenCardCommandSchema.safeParse(payload);
-  if (!parsed.success) {
-    throw new HttpError(400, 'La consulta de carta oculta no es válida.', parsed.error.issues.map((issue) => issue.message));
-  }
-
-  return parsed.data;
-}
-
 function requireAdminUser(socket: LobbySocket) {
   const token = getSocketToken(socket);
 
@@ -1001,7 +912,6 @@ async function buildLobbyPresenceState(sessionId: string): Promise<LobbyPresence
     activeSuggestion: snapshot.activeSuggestion,
     resolution: snapshot.resolution,
     publicCards: snapshot.publicCards,
-    hiddenCards: snapshot.hiddenCards,
     updatedAt: Date.now(),
   };
 }

@@ -1,13 +1,10 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Database, User, Box, MapPin, EyeOff } from 'lucide-react';
+import { Database, User, Box, MapPin } from 'lucide-react';
 import type { TeamHandCard, TeamElementKind } from '../../src/lib/sessionApi';
 
 interface EvidenciasComunesProps {
   publicCards: TeamHandCard[];
-  hiddenCards?: TeamHandCard[];
-  onConsultHiddenCard?: (elementId: string) => Promise<void>;
-  isConsultingHiddenCard?: boolean;
 }
 
 const KIND_STYLES: Record<TeamElementKind, { border: string; bg: string; icon: typeof User; label: string }> = {
@@ -16,12 +13,7 @@ const KIND_STYLES: Record<TeamElementKind, { border: string; bg: string; icon: t
   ESPACIO: { border: 'border-red-500', bg: 'bg-red-950', icon: MapPin, label: 'Espacio' },
 };
 
-export function EvidenciasComunes({
-  publicCards,
-  hiddenCards = [],
-  onConsultHiddenCard,
-  isConsultingHiddenCard = false,
-}: EvidenciasComunesProps) {
+export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
   const [selectedCard, setSelectedCard] = useState<TeamHandCard | null>(null);
   const [cardFlipped, setCardFlipped] = useState(false);
 
@@ -82,40 +74,6 @@ export function EvidenciasComunes({
               </div>
             );
           })}
-        </div>
-      )}
-
-      {hiddenCards.length > 0 && (
-        <div className="mt-4" data-cy="cartas-ocultas-panel">
-          <div className="flex items-center gap-2 mb-2">
-            <EyeOff className="w-4 h-4 text-amber-400 flex-shrink-0" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-amber-400">
-              Cartas Ocultas
-            </span>
-          </div>
-          <div className="flex gap-3 overflow-x-auto pb-1">
-            {hiddenCards.map((card) => (
-              <div
-                key={card.id}
-                data-cy="carta-oculta"
-                className="w-28 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 border-amber-700/60 bg-amber-950/30 flex flex-col overflow-hidden"
-              >
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="w-14 h-14 rounded-full border-2 border-amber-700/40 flex items-center justify-center">
-                    <EyeOff className="w-7 h-7 text-amber-700/60" />
-                  </div>
-                </div>
-                <button
-                  data-cy="carta-oculta-consultar"
-                  onClick={() => onConsultHiddenCard?.(card.id)}
-                  disabled={isConsultingHiddenCard}
-                  className="w-full py-1.5 text-[9px] font-bold uppercase tracking-wider bg-amber-900/50 hover:bg-amber-800/60 text-amber-300 transition-colors border-t border-amber-800/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isConsultingHiddenCard ? 'Consultando...' : 'Consultar en secreto'}
-                </button>
-              </div>
-            ))}
-          </div>
         </div>
       )}
 

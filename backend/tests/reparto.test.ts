@@ -104,12 +104,12 @@ describe('cyclicDeal', () => {
     }
   });
 
-  it('caso 2 jugadores con 4 cartas ocultas retiradas: 14 cartas → 7 por equipo sin sobrantes', () => {
-    const deck = Array.from({ length: 14 }, (_, i) => `card-${i}`);
+  it('caso 2 jugadores: 18 cartas → 9 por equipo sin sobrantes (reparto estándar)', () => {
+    const deck = Array.from({ length: 18 }, (_, i) => `card-${i}`);
     const { cardsByTeam, sobrantes } = cyclicDeal(deck, 2);
 
-    expect(cardsByTeam[0]).toHaveLength(7);
-    expect(cardsByTeam[1]).toHaveLength(7);
+    expect(cardsByTeam[0]).toHaveLength(9);
+    expect(cardsByTeam[1]).toHaveLength(9);
     expect(sobrantes).toHaveLength(0);
   });
 });

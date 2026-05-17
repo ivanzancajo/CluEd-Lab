@@ -73,7 +73,6 @@ export type SessionSnapshot = {
   winnerTeam: SessionWinnerSnapshot | null;
   resolution: SessionResolutionSnapshot | null;
   publicCards: TeamHandCard[];
-  hiddenCards: TeamHandCard[];
 };
 
 export async function loadSessionSnapshotByAccessCode(
@@ -208,11 +207,6 @@ async function loadSessionSnapshot(
     .map(mapPublicCard)
     .sort(sortHandCards);
 
-  const hiddenCards: TeamHandCard[] = rawPublicCards
-    .filter((pc) => pc.hidden)
-    .map(mapPublicCard)
-    .sort(sortHandCards);
-
   return {
     id: session.id,
     accessCode: session.accessCode,
@@ -240,7 +234,6 @@ async function loadSessionSnapshot(
       : null,
     resolution: getSessionResolutionSnapshot(session.id),
     publicCards,
-    hiddenCards,
   };
 }
 

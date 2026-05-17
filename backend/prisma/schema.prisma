@@ -134,6 +134,7 @@ model Partida {
   activeDiceValueTwo Int?  @map("dado_activo_2")
   activeDiceRemainingMoves Int? @map("pasos_mov_restantes")
   activeSuggestionEventId String? @db.Uuid @map("id_evento_sugerencia_activa")
+  isDebug    Boolean  @default(false) @map("es_debug")
 
   skin       CluedoSkin? @relation(fields: [skinId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   solution   Solucion?   @relation(fields: [solutionId], references: [id], onDelete: NoAction, onUpdate: NoAction)

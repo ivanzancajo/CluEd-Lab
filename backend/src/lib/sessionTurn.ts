@@ -150,6 +150,10 @@ export function rollTurnDice(): SessionTurnDice {
   return createDiceSnapshot(randomInt(1, 7), randomInt(1, 7));
 }
 
+export function rollTurnDiceForced(total: number): SessionTurnDice {
+  return createDiceSnapshot(Math.ceil(total / 2), Math.floor(total / 2));
+}
+
 function createDiceSnapshot(valueOne: number, valueTwo: number): SessionTurnDice {
   return {
     valueOne,

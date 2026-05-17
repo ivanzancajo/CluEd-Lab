@@ -18,6 +18,7 @@ import {
   getActiveDice,
   getActiveDiceRemainingMoves,
   rollTurnDice,
+  rollTurnDiceForced,
   type SessionTurnDice,
 } from './sessionTurn.js';
 
@@ -250,7 +251,8 @@ export async function loadTeamMoveStateByAccessCode(
 export async function rollTeamDiceByAccessCode(
   client: TeamMovementClient,
   accessCode: string,
-  teamId: string
+  teamId: string,
+  forcedTotal?: number
 ): Promise<TeamDiceRollResult> {
   const session = await loadMovementSessionByAccessCode(client, accessCode);
   ensureSessionIsMovable(session.status);
@@ -259,7 +261,10 @@ export async function rollTeamDiceByAccessCode(
   ensureTurnHasNoActiveDice(session);
 
   const movementContext = resolveTeamMovementContext(session, teamId);
-  const dice = rollTurnDice();
+  const dice =
+    session.isDebug && typeof forcedTotal === 'number'
+      ? rollTurnDiceForced(forcedTotal)
+      : rollTurnDice();
   const destinationNodes = getReachableMoveNodes(
     movementContext.currentNode.id,
     movementContext.occupiedNodeIds,
@@ -387,6 +392,7 @@ async function loadMovementSessionByAccessCode(client: TeamMovementClient, acces
       activeDiceValueTwo: true,
       activeDiceRemainingMoves: true,
       activeSuggestionEventId: true,
+      isDebug: true,
       teams: {
         select: {
           id: true,
@@ -414,6 +420,7 @@ async function loadMovementSessionByAccessCode(client: TeamMovementClient, acces
     activeDiceValueTwo: session.activeDiceValueTwo,
     activeDiceRemainingMoves: session.activeDiceRemainingMoves,
     activeSuggestionEventId: session.activeSuggestionEventId,
+    isDebug: session.isDebug,
     teams: session.teams,
   };
 }

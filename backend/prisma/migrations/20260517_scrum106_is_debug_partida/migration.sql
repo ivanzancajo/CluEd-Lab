@@ -1,0 +1,2 @@
+ALTER TABLE "partida"
+  ADD COLUMN "es_debug" BOOLEAN NOT NULL DEFAULT false;

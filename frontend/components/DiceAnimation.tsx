@@ -59,17 +59,13 @@ export const DiceAnimation = ({
   disabled = false,
   dataCy,
   resetSignal = 0,
-  showDebugControls = false,
   forcedDiceValue,
-  onForcedDiceChange,
 }: {
   onRollRequest: (forcedTotal?: number) => Promise<DiceRollResult>;
   disabled?: boolean;
   dataCy?: string;
   resetSignal?: number;
-  showDebugControls?: boolean;
   forcedDiceValue?: number;
-  onForcedDiceChange?: (value: number | undefined) => void;
 }) => {
   const [dice1, setDice1] = useState(1);
   const [dice2, setDice2] = useState(1);
@@ -114,25 +110,6 @@ export const DiceAnimation = ({
 
   return (
     <div className="flex flex-col items-center gap-2">
-      {showDebugControls && (
-        <div className="flex flex-col items-center gap-1">
-          <label className="font-mono text-[9px] uppercase tracking-widest text-fuchsia-400">
-            Forzar dado
-          </label>
-          <select
-            data-cy="debug-forced-dice-select"
-            value={forcedDiceValue ?? ''}
-            onChange={(e) => onForcedDiceChange?.(e.target.value ? Number(e.target.value) : undefined)}
-            onClick={(e) => e.stopPropagation()}
-            className="rounded border border-fuchsia-700/60 bg-slate-950 font-mono text-[11px] text-fuchsia-200 px-1 py-0.5"
-          >
-            <option value="">— aleatorio —</option>
-            {Array.from({ length: 11 }, (_, i) => i + 2).map((v) => (
-              <option key={v} value={v}>{v}</option>
-            ))}
-          </select>
-        </div>
-      )}
     <button
       data-cy={dataCy}
       onClick={startRoll}

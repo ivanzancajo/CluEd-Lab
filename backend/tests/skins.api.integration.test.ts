@@ -90,6 +90,7 @@ describe('API de gestion de CluedoSkins', () => {
 
   beforeEach(async () => {
     await prisma.partida.deleteMany();
+    await prisma.solucion.deleteMany();
     await prisma.descripcionElemento.deleteMany();
     await prisma.elemento.deleteMany();
     await prisma.cluedoSkin.deleteMany();

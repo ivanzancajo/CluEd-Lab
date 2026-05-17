@@ -141,7 +141,7 @@ describe('SCRUM-100 reparto cíclico y sobrantes', () => {
 
   it('emite game:setup-cards a cada equipo con su mano privada exclusiva', async () => {
     const seed = await seedLobbySession('REPT03', [ColorEquipo.ROJO, ColorEquipo.AZUL]);
-    // 6 non-solution, 2 equipos → 3/equipo, 0 sobrantes
+    // 6 non-solution, 2 equipos → regla 2 jugadores: 4 ocultas, 2 a repartir → 1/equipo
     const adminToken = signAdminToken({ role: 'admin', sub: 'admin' });
     const adminSocket = await connectSocketClient(socketUrl, adminToken);
     const redSocket = await connectSocketClient(socketUrl);
@@ -165,9 +165,9 @@ describe('SCRUM-100 reparto cíclico y sobrantes', () => {
 
       const [redPayload, bluePayload] = await Promise.all([redSetupCardsPromise, blueSetupCardsPromise]);
 
-      // Cada equipo recibe exactamente 3 cartas
-      expect(redPayload.hand).toHaveLength(3);
-      expect(bluePayload.hand).toHaveLength(3);
+      // Con skin 3+3+3=9: 6 no-sol, −4 ocultas = 2 restantes → 1/equipo
+      expect(redPayload.hand).toHaveLength(1);
+      expect(bluePayload.hand).toHaveLength(1);
 
       // Las manos son disjuntas (sin duplicados entre equipos)
       const redIds = new Set(redPayload.hand.map((c) => c.id));

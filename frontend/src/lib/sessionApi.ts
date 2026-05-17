@@ -160,7 +160,6 @@ export interface LobbySession {
   winnerTeam: SessionWinner | null;
   resolution: SessionResolutionState | null;
   publicCards: TeamHandCard[];
-  hiddenCards: TeamHandCard[];
 }
 
 export interface GameSetupCardsPayload {

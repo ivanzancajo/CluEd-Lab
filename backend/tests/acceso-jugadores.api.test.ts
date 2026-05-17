@@ -991,8 +991,8 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
       expect(teamGameStarted.session.id).toBe(seeded.session.id);
       expect(hostGameStarted.session.status).toBe(EstadoPartida.EN_CURSO);
       expect(teamGameStarted.session.status).toBe(EstadoPartida.EN_CURSO);
-      // Skin 6+6+9=21 elementos, 3 en solución, 4 ocultas (2 equipos) → 14 cartas repartidas (7/equipo)
-      expect(await prisma.cartaEquipo.count()).toBe(14);
+      // Skin 6+6+9=21 elementos, 3 en solución, 18 no-solución → 9 por equipo (reparto estándar)
+      expect(await prisma.cartaEquipo.count()).toBe(18);
     } finally {
       hostSocket.disconnect();
       teamSocket.disconnect();

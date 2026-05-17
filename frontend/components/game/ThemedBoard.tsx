@@ -41,6 +41,7 @@ type ThemedBoardProps = {
   debugHighlightedNodeIds?: string[];
   spaceNameScale?: number;
   spaceMotifScale?: number;
+  onSpaceMotifClick?: (space: BoardSpaceLabel) => void;
   children?: ReactNode;
   className?: string;
   dataCy?: string;
@@ -61,7 +62,8 @@ export function ThemedBoard({
   debugProbe,
   debugHighlightedNodeIds,
   spaceNameScale = 1,
-  spaceMotifScale = 1,
+  spaceMotifScale: _spaceMotifScale = 1,
+  onSpaceMotifClick,
   children,
   className,
   dataCy,
@@ -91,12 +93,13 @@ export function ThemedBoard({
             key={space.id}
             data-cy={`board-space-${index + 1}`}
             className={joinClasses(
-              'pointer-events-none absolute z-10 -translate-y-1/2',
-              isCenteredSlot ? '-translate-x-1/2' : undefined
+              'absolute -translate-y-1/2',
+              isCenteredSlot ? '-translate-x-1/2' : undefined,
+              space.motif ? 'z-30 pointer-events-auto' : 'z-10 pointer-events-none'
             )}
             style={getBoardLabelStyle(slot)}
           >
-            <div className="w-full overflow-hidden text-center">
+            <div className="relative w-full overflow-hidden text-center">
               <p
                 className="font-black leading-[1.05] tracking-[0.01em] text-[#1b5a6d] [text-shadow:0_1px_2px_rgba(255,255,255,0.55)]"
                 style={{
@@ -108,18 +111,15 @@ export function ThemedBoard({
                 {space.name}
               </p>
               {space.motif ? (
-                <p
-                  className="leading-[1.1] font-medium text-[#6b5231] [text-shadow:0_1px_2px_rgba(255,255,255,0.45)]"
-                  style={{
-                    fontSize: scaleBoardFontSize(slot.motifSize, spaceMotifScale),
-                    textAlign: slot.textAlign ?? 'center',
-                    overflow: 'hidden',
-                    whiteSpace: 'nowrap',
-                    textOverflow: 'ellipsis',
-                  }}
+                <button
+                  type="button"
+                  data-cy={`board-space-motif-${index + 1}`}
+                  onClick={(e) => { e.stopPropagation(); onSpaceMotifClick?.(space); }}
+                  className="absolute top-0 right-0 z-30 flex h-5 w-5 items-center justify-center rounded-full bg-amber-900/70 text-[9px] font-black text-amber-100 shadow-sm backdrop-blur-sm border border-amber-700/60 hover:bg-amber-800/90 hover:scale-110 transition-all duration-150"
+                  title={space.motif}
                 >
-                  {space.motif}
-                </p>
+                  M
+                </button>
               ) : null}
             </div>
           </div>

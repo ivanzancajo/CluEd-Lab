@@ -42,6 +42,8 @@ export type BoardSpaceLabel = {
   id: string;
   name: string;
   motif?: string;
+  desc?: string;
+  imageUrl?: string;
 };
 
 export const BOARD_BASE_IMAGE_PATH = '/board-base.jpg';
@@ -92,6 +94,8 @@ export function mapBoardSpaces(config: StoredBoardConfig | null): BoardSpaceLabe
     id: space.id || BOARD_SPACE_SLOTS[index]?.id || `space-${index + 1}`,
     name: space.name,
     motif: showMotifs ? normalizeOptionalText(space.motif) : undefined,
+    desc: normalizeOptionalText(space.desc),
+    imageUrl: space.imageUrl,
   }));
 }
 

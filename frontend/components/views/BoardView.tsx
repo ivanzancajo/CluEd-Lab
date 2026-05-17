@@ -46,6 +46,7 @@ import {
 import {
   mapBoardSpaces,
   readStoredActiveBoardConfig,
+  type BoardSpaceLabel,
   type StoredBoardConfig,
   type StoredBoardItem,
 } from "../../src/lib/boardTheme";
@@ -68,6 +69,7 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog";
 import { ThemedBoard } from "../game/ThemedBoard";
+import { SpaceMotifModal } from "../game/SpaceMotifModal";
 import { EnvelopeAnimation } from "../game/EnvelopeAnimation";
 import { EvidenciasComunes } from "../game/EvidenciasComunes";
 
@@ -93,6 +95,7 @@ export function BoardView() {
   const [isTriggeringResolution, setIsTriggeringResolution] = useState(false);
   const [isBoardDebugEnabled, setIsBoardDebugEnabled] = useState(() => getStoredBoardDebugMode());
   const [boardDebugProbe, setBoardDebugProbe] = useState<BoardDebugProbe | null>(null);
+  const [activeMotifSpace, setActiveMotifSpace] = useState<BoardSpaceLabel | null>(null);
   const [monitoringNow, setMonitoringNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -750,6 +753,7 @@ export function BoardView() {
             spaceMotifScale={1.2}
             teams={boardPawns}
             dataCy="host-themed-board"
+            onSpaceMotifClick={setActiveMotifSpace}
           >
             {isBoardDebugEnabled ? (
               <div
@@ -758,6 +762,10 @@ export function BoardView() {
                 onClick={handleBoardDebugSurfaceClick}
               />
             ) : null}
+            <SpaceMotifModal
+              space={activeMotifSpace}
+              onClose={() => setActiveMotifSpace(null)}
+            />
           </ThemedBoard>
 
           {isBoardSolutionVisible && activeResolution?.solution ? (
@@ -859,7 +867,7 @@ export function BoardView() {
             </motion.div>
           ) : null}
 
-          {!isBoardSolutionVisible ? (
+          {import.meta.env.DEV && !isBoardSolutionVisible ? (
             <button
               type="button"
               data-cy="host-board-debug-toggle"

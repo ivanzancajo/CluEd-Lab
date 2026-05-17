@@ -270,8 +270,11 @@ export async function getTeamMoveState(accessCode: string, teamId: string) {
   return response.data.item;
 }
 
-export async function rollTeamDice(accessCode: string, teamId: string) {
-  const response = await api.post<TeamRollResponse>(`/game/sessions/${accessCode}/teams/${teamId}/roll`);
+export async function rollTeamDice(accessCode: string, teamId: string, forcedTotal?: number) {
+  const response = await api.post<TeamRollResponse>(
+    `/game/sessions/${accessCode}/teams/${teamId}/roll`,
+    forcedTotal !== undefined ? { forcedTotal } : {}
+  );
   return response.data.item;
 }
 

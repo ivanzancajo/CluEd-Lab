@@ -93,9 +93,9 @@ export function ThemedBoard({
             key={space.id}
             data-cy={`board-space-${index + 1}`}
             className={joinClasses(
-              'absolute z-10 -translate-y-1/2',
+              'absolute -translate-y-1/2',
               isCenteredSlot ? '-translate-x-1/2' : undefined,
-              space.motif ? 'pointer-events-auto' : 'pointer-events-none'
+              space.motif ? 'z-30 pointer-events-auto' : 'z-10 pointer-events-none'
             )}
             style={getBoardLabelStyle(slot)}
           >
@@ -115,7 +115,7 @@ export function ThemedBoard({
                   type="button"
                   data-cy={`board-space-motif-${index + 1}`}
                   onClick={(e) => { e.stopPropagation(); onSpaceMotifClick?.(space); }}
-                  className="absolute top-0 right-0 z-20 flex h-5 w-5 items-center justify-center rounded-full bg-amber-900/70 text-[9px] font-black text-amber-100 shadow-sm backdrop-blur-sm border border-amber-700/60 hover:bg-amber-800/90 hover:scale-110 transition-all duration-150"
+                  className="absolute top-0 right-0 z-30 flex h-5 w-5 items-center justify-center rounded-full bg-amber-900/70 text-[9px] font-black text-amber-100 shadow-sm backdrop-blur-sm border border-amber-700/60 hover:bg-amber-800/90 hover:scale-110 transition-all duration-150"
                   title={space.motif}
                 >
                   M

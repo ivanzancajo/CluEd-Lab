@@ -59,11 +59,13 @@ export const DiceAnimation = ({
   disabled = false,
   dataCy,
   resetSignal = 0,
+  forcedDiceValue,
 }: {
-  onRollRequest: () => Promise<DiceRollResult>;
+  onRollRequest: (forcedTotal?: number) => Promise<DiceRollResult>;
   disabled?: boolean;
   dataCy?: string;
   resetSignal?: number;
+  forcedDiceValue?: number;
 }) => {
   const [dice1, setDice1] = useState(1);
   const [dice2, setDice2] = useState(1);
@@ -79,7 +81,7 @@ export const DiceAnimation = ({
     if (isRolling || disabled) return;
     setIsRolling(true);
     setHasRolled(true);
-    const rollPromise = onRollRequest();
+    const rollPromise = onRollRequest(forcedDiceValue);
     
     let iterations = 0;
     const interval = setInterval(() => {
@@ -107,7 +109,8 @@ export const DiceAnimation = ({
   };
 
   return (
-    <button 
+    <div className="flex flex-col items-center gap-2">
+    <button
       data-cy={dataCy}
       onClick={startRoll}
       disabled={isRolling || disabled}
@@ -145,5 +148,6 @@ export const DiceAnimation = ({
         </motion.span>
       )}
     </button>
+    </div>
   );
 };

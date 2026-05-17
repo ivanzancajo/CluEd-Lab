@@ -859,7 +859,7 @@ export function BoardView() {
             </motion.div>
           ) : null}
 
-          {!isBoardSolutionVisible ? (
+          {import.meta.env.DEV && !isBoardSolutionVisible ? (
             <button
               type="button"
               data-cy="host-board-debug-toggle"

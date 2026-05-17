@@ -271,6 +271,7 @@ export function TerminalView() {
   const [isBoardDebugEnabled, setIsBoardDebugEnabled] = useState(() => getStoredBoardDebugMode());
   const [boardDebugProbe, setBoardDebugProbe] = useState<BoardDebugProbe | null>(null);
   const [diceResetSignal, setDiceResetSignal] = useState(0);
+  const [forcedDiceValue, setForcedDiceValue] = useState<number | undefined>(undefined);
   const [isLoadingMoves, setIsLoadingMoves] = useState(false);
   const [isMovingPawn, setIsMovingPawn] = useState(false);
   const [isEmittingSecretPassage, setIsEmittingSecretPassage] = useState(false);
@@ -417,7 +418,7 @@ export function TerminalView() {
     }
   });
 
-  const handleDiceRoll = async () => {
+  const handleDiceRoll = async (forcedTotal?: number) => {
     const accessCode = getStoredSessionCode();
     const teamId = getStoredTeamId();
 
@@ -446,7 +447,7 @@ export function TerminalView() {
     };
 
     try {
-      const rollResult = await rollTeamDice(accessCode, teamId);
+      const rollResult = await rollTeamDice(accessCode, teamId, forcedTotal);
       const currentTeam = rollResult.session.teams.find((team) => team.id === teamId);
 
       await waitForDiceAnimationToFinish();
@@ -1637,15 +1638,17 @@ export function TerminalView() {
             >
               {/* Tablero sobre base cuadrada fija para mantener coordenadas y áreas clicables consistentes */}
               <div className="relative h-[clamp(18rem,88vw,26rem)] w-[clamp(18rem,88vw,26rem)] bg-black/50 rounded-b-xl border-b-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex-shrink-0 overflow-hidden">
-                 <button
-                   type="button"
-                   data-cy="terminal-board-debug-toggle"
-                   onClick={handleBoardDebugToggle}
-                   className={`absolute right-3 top-3 z-40 rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] shadow-[0_0_10px_rgba(0,0,0,0.35)] ${isBoardDebugEnabled ? 'border-fuchsia-400/70 bg-fuchsia-950/75 text-fuchsia-100' : 'border-cyan-900/60 bg-slate-950/80 text-cyan-200'}`}
-                   title="Activa la rejilla y los nodos del tablero para ajustar el mapa"
-                 >
-                   {isBoardDebugEnabled ? 'Debug on' : 'Debug off'}
-                 </button>
+                 {import.meta.env.DEV && (
+                   <button
+                     type="button"
+                     data-cy="terminal-board-debug-toggle"
+                     onClick={handleBoardDebugToggle}
+                     className={`absolute right-3 top-3 z-40 rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] shadow-[0_0_10px_rgba(0,0,0,0.35)] ${isBoardDebugEnabled ? 'border-fuchsia-400/70 bg-fuchsia-950/75 text-fuchsia-100' : 'border-cyan-900/60 bg-slate-950/80 text-cyan-200'}`}
+                     title="Activa la rejilla y los nodos del tablero para ajustar el mapa"
+                   >
+                     {isBoardDebugEnabled ? 'Debug on' : 'Debug off'}
+                   </button>
+                 )}
                  <ThemedBoard
                    centerImage={centerImage}
                    spaces={boardSpaces}
@@ -1681,9 +1684,12 @@ export function TerminalView() {
                        <div className="scale-[0.28] sm:scale-[0.34] md:scale-[0.42] origin-center">
                          <DiceAnimation
                            dataCy="terminal-dice-roll"
-                          disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || isResolutionBlockingGameplay || sessionTurn?.dice !== null || isLoadingMoves || isMovingPawn}
+                           disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || isResolutionBlockingGameplay || sessionTurn?.dice !== null || isLoadingMoves || isMovingPawn}
                            resetSignal={diceResetSignal}
-                            onRollRequest={handleDiceRoll}
+                           onRollRequest={handleDiceRoll}
+                           showDebugControls={isBoardDebugEnabled && import.meta.env.DEV}
+                           forcedDiceValue={forcedDiceValue}
+                           onForcedDiceChange={setForcedDiceValue}
                          />
                        </div>
                      </div>

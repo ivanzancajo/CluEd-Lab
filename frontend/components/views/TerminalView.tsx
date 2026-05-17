@@ -19,11 +19,13 @@ import {
   Wifi,
   Shield,
   Radio,
-  Database
+  Database,
+  EyeOff
 } from "lucide-react";
 import { DiceAnimation } from "../DiceAnimation";
 import {
   createLobbySocketClient,
+  emitConsultHiddenCard,
   emitTeamHeartbeat,
   emitTeamRefutation,
   emitTeamSecretPassage,
@@ -263,6 +265,10 @@ export function TerminalView() {
   const [isLoadingHand, setIsLoadingHand] = useState(false);
   const [teamHand, setTeamHand] = useState<TerminalCard[]>([]);
   const [publicCards, setPublicCards] = useState<TeamHandCard[]>([]);
+  const [hiddenCards, setHiddenCards] = useState<TeamHandCard[]>([]);
+  const [consultedHiddenCard, setConsultedHiddenCard] = useState<TeamHandCard | null>(null);
+  const [isHiddenCardModalOpen, setIsHiddenCardModalOpen] = useState(false);
+  const [isConsultingHiddenCard, setIsConsultingHiddenCard] = useState(false);
   const [destinationNodes, setDestinationNodes] = useState<TeamMoveNode[]>([]);
   const [selectedDestinationNodeId, setSelectedDestinationNodeId] = useState("");
   const [isMoveConfirmOpen, setIsMoveConfirmOpen] = useState(false);
@@ -344,6 +350,7 @@ export function TerminalView() {
     setActiveSuggestion(session.activeSuggestion);
     setResolutionState(session.resolution);
     setPublicCards(session.publicCards ?? []);
+    setHiddenCards(session.hiddenCards ?? []);
     setCurrentMoveNode((previousNode) => mergePublicCurrentMoveNode(previousNode, session.teams, currentTeam.id));
     setLobbyError(null);
   };
@@ -364,6 +371,7 @@ export function TerminalView() {
     setCurrentMoveNode((previousNode) => mergePublicCurrentMoveNode(previousNode, state.session.teams, state.team.id));
     setTeamHand(state.hand.map((card) => mapHandCardToTerminalCard(card, sessionConfig)));
     setPublicCards(state.session.publicCards ?? []);
+    setHiddenCards(state.session.hiddenCards ?? []);
   };
 
   const refreshTerminalState = React.useEffectEvent(async () => {
@@ -965,6 +973,7 @@ export function TerminalView() {
       setActiveSuggestion(state.activeSuggestion);
       setResolutionState(state.resolution);
       setPublicCards(state.publicCards ?? []);
+      setHiddenCards(state.hiddenCards ?? []);
       setCurrentMoveNode((previousNode) => mergePublicCurrentMoveNode(previousNode, state.teams, currentTeam.id));
       setLobbyConnectionStatus(currentTeam.connected ? "connected" : "disconnected");
     };
@@ -1065,6 +1074,10 @@ export function TerminalView() {
       }
       setHandError(null);
       setIsLoadingHand(false);
+    });
+    socket.on("game:hidden-card-details", (payload) => {
+      setConsultedHiddenCard(payload.card);
+      setIsHiddenCardModalOpen(true);
     });
     socket.on("lobby:presence-updated", applyPresenceState);
     socket.on("lobby:event", applyLobbyEvent);
@@ -1888,7 +1901,18 @@ export function TerminalView() {
               </div>
 
               <div className="mt-4">
-                <EvidenciasComunes publicCards={publicCards} />
+                <EvidenciasComunes
+                  publicCards={publicCards}
+                  hiddenCards={hiddenCards}
+                  isConsultingHiddenCard={isConsultingHiddenCard}
+                  onConsultHiddenCard={async (elementId) => {
+                    const socket = lobbySocketRef.current;
+                    if (!socket) return;
+                    setIsConsultingHiddenCard(true);
+                    await emitConsultHiddenCard(socket, elementId);
+                    setIsConsultingHiddenCard(false);
+                  }}
+                />
               </div>
             </motion.div>
           )}
@@ -2523,6 +2547,50 @@ export function TerminalView() {
             </motion.div>
           </motion.div>
         ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isHiddenCardModalOpen && consultedHiddenCard && (
+          <motion.div
+            key="hidden-card-modal"
+            data-cy="carta-oculta-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 z-[70] flex flex-col items-center justify-center p-6 backdrop-blur-sm"
+            onClick={() => { setIsHiddenCardModalOpen(false); setConsultedHiddenCard(null); }}
+          >
+            <div className="mb-4 flex items-center gap-2">
+              <EyeOff className="w-4 h-4 text-amber-400" />
+              <span className="text-amber-400 text-xs font-bold uppercase tracking-widest">Consulta secreta</span>
+            </div>
+            <motion.div
+              initial={{ scale: 0.8, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={{ duration: 0.3, type: 'spring' }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-48 aspect-[2.5/3.5] rounded-xl border-4 border-amber-700 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden bg-amber-950"
+            >
+              <div className="h-[60%] bg-black/40 border-b border-amber-800/50 flex items-center justify-center">
+                {consultedHiddenCard.imageUrl ? (
+                  <img src={consultedHiddenCard.imageUrl} alt={consultedHiddenCard.name} className="w-full h-full object-cover opacity-90" />
+                ) : (
+                  <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-amber-700">
+                    <EyeOff className="w-6 h-6 text-amber-400" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 flex flex-col items-center justify-center p-2">
+                <h4 data-cy="carta-oculta-modal-name" className="font-bold text-sm tracking-widest uppercase text-amber-100 drop-shadow-md leading-tight line-clamp-2 px-1 text-center">{consultedHiddenCard.name}</h4>
+                {consultedHiddenCard.desc && (
+                  <p className="text-[9px] text-amber-300/70 mt-1 text-center leading-tight px-1 line-clamp-3">{consultedHiddenCard.desc}</p>
+                )}
+              </div>
+            </motion.div>
+            <p className="mt-4 text-amber-600/70 text-[10px] uppercase tracking-widest">Solo tú ves esto · Toca para cerrar</p>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {showEnvelopeAnimation ? (

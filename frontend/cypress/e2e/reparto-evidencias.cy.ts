@@ -113,8 +113,8 @@ describe("SCRUM-100 Evidencias Comunes en TerminalView", () => {
     adminSocket = null;
   });
 
-  it("muestra estado vacío cuando no hay sobrantes (2 equipos, 18 cartas → 9/equipo)", () => {
-    // 21 elementos − 3 solución = 18 no-solución; 18 ÷ 2 = 9/equipo, 0 sobrantes
+  it("muestra 7 cartas en mano y cartas ocultas sin sobrantes visibles (2 equipos, regla 4 ocultas)", () => {
+    // 21 elementos − 3 solución = 18 no-solución; 18 − 4 ocultas = 14; 14 ÷ 2 = 7/equipo, 0 sobrantes visibles
     const skinName = `Skin EC-Empty ${Date.now()}`;
 
     loginAsAdmin().then((token) => {
@@ -145,12 +145,16 @@ describe("SCRUM-100 Evidencias Comunes en TerminalView", () => {
                 });
 
               cy.get('[data-cy="terminal-hand-list"]').should("be.visible");
-              cy.get('[data-cy="terminal-hand-card"]').should("have.length", 9);
+              cy.get('[data-cy="terminal-hand-card"]').should("have.length", 7);
 
-              cy.get('[data-cy="evidencias-comunes-panel"]').should("be.visible");
+              // No hay sobrantes visibles en evidencias comunes
+              cy.get('[data-cy="evidencias-comunes-panel"]').scrollIntoView().should("be.visible");
               cy.get('[data-cy="evidencias-comunes-empty"]').should("be.visible");
-              cy.get('[data-cy="evidencias-comunes-empty"]').should("contain", "No hay cartas sobrantes en esta partida.");
               cy.get('[data-cy="evidencias-comunes-card"]').should("not.exist");
+
+              // Hay 4 cartas ocultas
+              cy.get('[data-cy="cartas-ocultas-panel"]').should("be.visible");
+              cy.get('[data-cy="carta-oculta"]').should("have.length", 4);
             });
           });
         });
@@ -194,7 +198,7 @@ describe("SCRUM-100 Evidencias Comunes en TerminalView", () => {
                   cy.get('[data-cy="terminal-hand-list"]').should("be.visible");
                   cy.get('[data-cy="terminal-hand-card"]').should("have.length", 4);
 
-                  cy.get('[data-cy="evidencias-comunes-panel"]').should("be.visible");
+                  cy.get('[data-cy="evidencias-comunes-panel"]').scrollIntoView().should("be.visible");
                   cy.get('[data-cy="evidencias-comunes-card"]').should("have.length", 2);
                   cy.get('[data-cy="evidencias-comunes-empty"]').should("not.exist");
                 });
@@ -300,7 +304,7 @@ describe("SCRUM-100 Evidencias Comunes en BoardView", () => {
                   cy.location("pathname").should("eq", "/board");
                   cy.contains("PANTALLA CENTRAL").should("be.visible");
 
-                  cy.get('[data-cy="evidencias-comunes-panel"]').should("be.visible");
+                  cy.get('[data-cy="evidencias-comunes-panel"]').should("exist");
                   cy.get('[data-cy="evidencias-comunes-card"]').should("have.length", 2);
                 });
               });

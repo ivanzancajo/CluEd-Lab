@@ -34,6 +34,7 @@ export type LobbyPresenceState = {
   activeSuggestion: SuggestionSummary | null;
   resolution: SessionResolutionState | null;
   publicCards: TeamHandCard[];
+  hiddenCards: TeamHandCard[];
   updatedAt: number;
 };
 
@@ -130,6 +131,21 @@ export type GameRefutationResultPayload = {
   shownByTeamName?: string;
 };
 
+export type GameHiddenCardDetailsPayload = {
+  card: TeamHandCard;
+  occurredAt: number;
+};
+
+export type ConsultHiddenCardAck =
+  | {
+      ok: true;
+      occurredAt: number;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 export type GameStatusChangeAck =
   | {
       ok: true;
@@ -170,6 +186,7 @@ type ServerToClientEvents = {
   'game:refute-request': (payload: GameRefuteRequestPayload) => void;
   'game:refutation-result': (payload: GameRefutationResultPayload) => void;
   'game:setup-cards': (payload: GameSetupCardsPayload) => void;
+  'game:hidden-card-details': (payload: GameHiddenCardDetailsPayload) => void;
 };
 
 type ClientToServerEvents = {
@@ -201,6 +218,10 @@ type ClientToServerEvents = {
   'game:submit-final-chance': (
     payload: { subjectElementId: string; objectElementId: string; spaceElementId: string },
     acknowledge: (response: GameFinalChanceSubmissionAck) => void
+  ) => void;
+  'game:consult-hidden-card': (
+    payload: { elementId: string },
+    acknowledge: (response: ConsultHiddenCardAck) => void
   ) => void;
 };
 
@@ -285,6 +306,12 @@ export function submitFinalChanceAccusation(
 ) {
   return new Promise<GameFinalChanceSubmissionAck>((resolve) => {
     socket.emit('game:submit-final-chance', payload, resolve);
+  });
+}
+
+export function emitConsultHiddenCard(socket: LobbySocketClient, elementId: string) {
+  return new Promise<ConsultHiddenCardAck>((resolve) => {
+    socket.emit('game:consult-hidden-card', { elementId }, resolve);
   });
 }
 

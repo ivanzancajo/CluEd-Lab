@@ -48,6 +48,7 @@ type DistributedGameSetup = {
   allElementIds: string[];
   cardsByTeam: TeamCardAssignment[];
   sobrantes: string[];
+  ocultas: string[];
 };
 
 export const MINIMUM_TEAMS_TO_START = 2;
@@ -144,6 +145,17 @@ export async function initializeStartedSession(client: SessionGameplayClient, se
         data: setup.sobrantes.map((elementId) => ({
           partidaId: session.id,
           elementId,
+          hidden: false,
+        })),
+      });
+    }
+
+    if (setup.ocultas.length > 0) {
+      await client.cartaPublica.createMany({
+        data: setup.ocultas.map((elementId) => ({
+          partidaId: session.id,
+          elementId,
+          hidden: true,
         })),
       });
     }
@@ -339,6 +351,8 @@ export function cyclicDeal(
   return { cardsByTeam, sobrantes: deck.slice(dealCount) };
 }
 
+const HIDDEN_CARDS_FOR_TWO_TEAMS = 4;
+
 function buildDistributedGameSetup(skin: LoadedSkinConfiguration, teamIds: string[]): DistributedGameSetup {
   ensurePlayableCollections(skin);
 
@@ -353,7 +367,15 @@ function buildDistributedGameSetup(skin: LoadedSkinConfiguration, teamIds: strin
     ...skin.spaces.filter((item) => item.id !== space.id).map((item) => item.id),
   ]);
 
-  const { cardsByTeam: rawCardsByTeam, sobrantes } = cyclicDeal(deck, teamIds.length);
+  let ocultas: string[] = [];
+  let dealDeck = deck;
+
+  if (teamIds.length === 2) {
+    ocultas = dealDeck.slice(0, HIDDEN_CARDS_FOR_TWO_TEAMS);
+    dealDeck = dealDeck.slice(HIDDEN_CARDS_FOR_TWO_TEAMS);
+  }
+
+  const { cardsByTeam: rawCardsByTeam, sobrantes } = cyclicDeal(dealDeck, teamIds.length);
   const cardsByTeam: TeamCardAssignment[] = teamIds.map((teamId, i) => ({
     teamId,
     elementIds: rawCardsByTeam[i] ?? [],
@@ -368,6 +390,7 @@ function buildDistributedGameSetup(skin: LoadedSkinConfiguration, teamIds: strin
     allElementIds,
     cardsByTeam,
     sobrantes,
+    ocultas,
   };
 }
 

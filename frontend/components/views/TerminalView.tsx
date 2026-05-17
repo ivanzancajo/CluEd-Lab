@@ -1976,15 +1976,26 @@ export function TerminalView() {
                       
                       {/* Items Rows */}
                       {items.map((item: ElementoItem) => {
-                        const rowName = (!isC1 && !isC2 && item.motif) ? item.motif : item.name;
-                        
+                        const rowName = item.name;
+
                         return (
                         <div key={item.name} className="flex border-b border-slate-800/50 hover:bg-slate-900/50 transition-colors">
-                          <div className="w-32 flex-shrink-0 p-2 border-r border-slate-800 flex items-center gap-2 overflow-hidden bg-slate-950">
+                          <div className="w-32 flex-shrink-0 p-2 border-r border-slate-800 flex items-center gap-1.5 overflow-hidden bg-slate-950">
                             <div className="p-1 rounded-md border border-slate-800 bg-slate-900 flex-shrink-0">
                               {item.avatar}
                             </div>
-                            <span className="text-[10px] text-slate-300 leading-tight truncate w-full" title={rowName}>{rowName}</span>
+                            <span className="text-[10px] text-slate-300 leading-tight truncate flex-1" title={item.name}>{item.name}</span>
+                            {!isC1 && !isC2 && item.motif && (
+                              <button
+                                type="button"
+                                data-cy={`matrix-space-motif-${item.id}`}
+                                onClick={() => setActiveMotifSpace({ id: item.id, name: item.name, motif: item.motif, desc: item.desc })}
+                                className="flex-shrink-0 w-4 h-4 rounded-full bg-amber-900/70 text-[8px] font-black text-amber-100 border border-amber-700/60 hover:bg-amber-800/90 transition-colors flex items-center justify-center"
+                                title={item.motif}
+                              >
+                                M
+                              </button>
+                            )}
                           </div>
                           <div className="flex-1 flex overflow-x-auto scrollbar-none">
                             {TEAMS.map(team => {

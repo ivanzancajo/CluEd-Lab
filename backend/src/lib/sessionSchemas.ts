@@ -27,6 +27,10 @@ export const moveTeamSchema = z.object({
   targetNodeId: z.string().trim().min(1, 'El destino del movimiento es obligatorio.'),
 });
 
+export const rollDiceBodySchema = z.object({
+  forcedTotal: z.number().int().min(2).max(12).optional(),
+});
+
 export const finalAccusationSchema = z.object({
   subjectElementId: z.string().uuid('El sujeto de la acusación debe ser un UUID válido.'),
   objectElementId: z.string().uuid('El objeto de la acusación debe ser un UUID válido.'),

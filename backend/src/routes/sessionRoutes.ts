@@ -15,6 +15,7 @@ import {
   finalAccusationSchema,
   joinSessionSchema,
   moveTeamSchema,
+  rollDiceBodySchema,
   sessionAccessCodeParamsSchema,
   teamSessionStateParamsSchema,
 } from '../lib/sessionSchemas.js';
@@ -103,9 +104,14 @@ router.post('/sessions/:accessCode/teams/:teamId/roll', async (req, res) => {
     return;
   }
 
+  const rollBody = parseBody(rollDiceBodySchema, req.body ?? {}, res);
+  if (!rollBody) {
+    return;
+  }
+
   try {
     const rollResult = await prisma.$transaction(
-      (tx) => rollTeamDiceByAccessCode(tx, teamParams.accessCode, teamParams.teamId),
+      (tx) => rollTeamDiceByAccessCode(tx, teamParams.accessCode, teamParams.teamId, rollBody.forcedTotal),
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
     );
     const session = await loadSessionSnapshotByAccessCode(prisma, teamParams.accessCode);

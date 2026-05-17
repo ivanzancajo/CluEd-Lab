@@ -46,6 +46,10 @@ export const gameFinalChanceAccusationCommandSchema = z.object({
   spaceElementId: z.string().uuid('La sala de la acusación final no es válida.'),
 });
 
+export const gameConsultHiddenCardCommandSchema = z.object({
+  elementId: z.string().uuid('La carta oculta indicada no es válida.'),
+});
+
 export type HostLobbySubscriptionInput = z.infer<typeof hostLobbySubscriptionSchema>;
 export type TeamLobbySubscriptionInput = z.infer<typeof teamLobbySubscriptionSchema>;
 export type StartGameCommandInput = z.infer<typeof startGameCommandSchema>;
@@ -55,3 +59,4 @@ export type TeamSecretPassageCommandInput = z.infer<typeof teamSecretPassageComm
 export type GameSuggestCommandInput = z.infer<typeof gameSuggestCommandSchema>;
 export type GameRefuteCommandInput = z.infer<typeof gameRefuteCommandSchema>;
 export type GameFinalChanceAccusationCommandInput = z.infer<typeof gameFinalChanceAccusationCommandSchema>;
+export type GameConsultHiddenCardCommandInput = z.infer<typeof gameConsultHiddenCardCommandSchema>;

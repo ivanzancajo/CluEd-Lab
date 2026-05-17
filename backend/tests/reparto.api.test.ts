@@ -337,6 +337,80 @@ describe('SCRUM-100 reparto cíclico y sobrantes', () => {
       adminSocket.disconnect();
     }
   });
+  it('genera 4 CartaPublica ocultas y reparte equitativamente para 2 equipos (REPT09)', async () => {
+    const seed = await seedLobbySession('REPT09', [ColorEquipo.ROJO, ColorEquipo.AZUL]);
+    // skin 3+3+3=9, solución=3, no-solución=6, 2 equipos → 4 ocultas, 2 a repartir → 1/equipo
+    const adminSocket = await connectSocketClient(socketUrl, signAdminToken({ role: 'admin', sub: 'admin' }));
+
+    try {
+      await emitSocketAck<LobbySubscribeResponse>(adminSocket, 'lobby:host-subscribe', { sessionId: seed.sessionId });
+
+      const ack = await emitSocketAck<StartGameAck>(adminSocket, 'startGame', { accessCode: seed.accessCode });
+      if (!ack.ok) throw new Error(`startGame falló: ${JSON.stringify(ack)}`);
+
+      const cartasEquipo = await prisma.cartaEquipo.findMany({
+        where: { equipo: { partidaId: seed.sessionId } },
+        select: { elementId: true, equipoId: true },
+      });
+      const cartasOcultas = await prisma.cartaPublica.findMany({
+        where: { partidaId: seed.sessionId, hidden: true },
+        select: { elementId: true },
+      });
+      const cartasPublicasVisibles = await prisma.cartaPublica.findMany({
+        where: { partidaId: seed.sessionId, hidden: false },
+        select: { elementId: true },
+      });
+
+      expect(cartasOcultas).toHaveLength(4);
+      expect(cartasPublicasVisibles).toHaveLength(0);
+
+      // Cartas equitativamente entre los 2 equipos
+      const cartasPorEquipo = new Map<string, number>();
+      for (const carta of cartasEquipo) {
+        cartasPorEquipo.set(carta.equipoId, (cartasPorEquipo.get(carta.equipoId) ?? 0) + 1);
+      }
+      const counts = [...cartasPorEquipo.values()];
+      expect(counts).toHaveLength(2);
+      expect(counts[0]).toBe(counts[1]);
+
+      // Ninguna carta (mano ni oculta) pertenece a la solución
+      const solucion = await prisma.solucion.findFirst({ where: { partidas: { some: { id: seed.sessionId } } } });
+      const solutionIds = new Set([solucion!.subjectElementId, solucion!.objectElementId, solucion!.spaceElementId]);
+      for (const carta of [...cartasEquipo, ...cartasOcultas]) {
+        expect(solutionIds.has(carta.elementId)).toBe(false);
+      }
+
+      // No hay solapamientos entre manos ni con las ocultas
+      const handIds = new Set(cartasEquipo.map((c) => c.elementId));
+      for (const carta of cartasOcultas) {
+        expect(handIds.has(carta.elementId)).toBe(false);
+      }
+    } finally {
+      adminSocket.disconnect();
+    }
+  });
+
+  it('hiddenCards llega en lobby:presence-updated tras startGame con 2 equipos (REPT10)', async () => {
+    const seed = await seedLobbySession('REPT10', [ColorEquipo.ROJO, ColorEquipo.AZUL]);
+    const adminSocket = await connectSocketClient(socketUrl, signAdminToken({ role: 'admin', sub: 'admin' }));
+
+    try {
+      const subAck = await emitSocketAck<LobbySubscribeResponse>(adminSocket, 'lobby:host-subscribe', { sessionId: seed.sessionId });
+      if (!subAck.ok) throw new Error('subscribe falló');
+
+      const presencePromise = waitForSocketEvent<LobbyPresenceState>(adminSocket, 'lobby:presence-updated');
+
+      const ack = await emitSocketAck<StartGameAck>(adminSocket, 'startGame', { accessCode: seed.accessCode });
+      if (!ack.ok) throw new Error(`startGame falló: ${JSON.stringify(ack)}`);
+
+      const presence = await presencePromise;
+
+      expect(presence.hiddenCards).toHaveLength(4);
+      expect(presence.publicCards).toHaveLength(0);
+    } finally {
+      adminSocket.disconnect();
+    }
+  });
 });
 
 async function seedLobbySession(accessCode: string, colors: ColorEquipo[]) {

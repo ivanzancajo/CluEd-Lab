@@ -73,6 +73,7 @@ export type SessionSnapshot = {
   winnerTeam: SessionWinnerSnapshot | null;
   resolution: SessionResolutionSnapshot | null;
   publicCards: TeamHandCard[];
+  hiddenCards: TeamHandCard[];
 };
 
 export async function loadSessionSnapshotByAccessCode(
@@ -189,18 +190,27 @@ async function loadSessionSnapshot(
     },
   });
   const skinItems = buildSkinItemLookup(skin);
+
+  const mapPublicCard = (pc: (typeof rawPublicCards)[number]): TeamHandCard => {
+    const skinItem = skinItems.get(pc.elementId);
+    return {
+      id: pc.elementId,
+      kind: pc.element.kind,
+      name: pc.element.name,
+      desc: skinItem?.desc ?? '',
+      imageUrl: pc.element.imageUrl ?? skinItem?.imageUrl,
+      motif: skinItem?.motif,
+    } satisfies TeamHandCard;
+  };
+
   const publicCards: TeamHandCard[] = rawPublicCards
-    .map((pc) => {
-      const skinItem = skinItems.get(pc.elementId);
-      return {
-        id: pc.elementId,
-        kind: pc.element.kind,
-        name: pc.element.name,
-        desc: skinItem?.desc ?? '',
-        imageUrl: pc.element.imageUrl ?? skinItem?.imageUrl,
-        motif: skinItem?.motif,
-      } satisfies TeamHandCard;
-    })
+    .filter((pc) => !pc.hidden)
+    .map(mapPublicCard)
+    .sort(sortHandCards);
+
+  const hiddenCards: TeamHandCard[] = rawPublicCards
+    .filter((pc) => pc.hidden)
+    .map(mapPublicCard)
     .sort(sortHandCards);
 
   return {
@@ -230,6 +240,7 @@ async function loadSessionSnapshot(
       : null,
     resolution: getSessionResolutionSnapshot(session.id),
     publicCards,
+    hiddenCards,
   };
 }
 

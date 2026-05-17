@@ -126,10 +126,14 @@ describe("SCRUM-48 renderizado dinamico del tablero tematico", () => {
 
     cy.wait("@getTeamState");
     cy.get('[data-cy="terminal-themed-board"]').should("be.visible");
-    cy.get('[data-cy="board-space-1"]').should("contain", "Camara Anecoica").and("contain", "Sello roto");
-    cy.get('[data-cy="board-space-6"]').should("contain", "Laboratorio de Comunicaciones Opticas").and("contain", "Haz desviado");
-    cy.get('[data-cy="board-space-8"]').should("contain", "Lab. Electronica y Electricidad").and("contain", "Panel abierto");
-    cy.get('[data-cy="board-space-9"]').should("contain", "Seminario Maxwell").and("contain", "Nota de despedida");
+    cy.get('[data-cy="board-space-1"]').should("contain", "Camara Anecoica");
+    cy.get('[data-cy="board-space-motif-1"]').should("be.visible").and("contain.text", "M").and("have.attr", "title", "Sello roto");
+    cy.get('[data-cy="board-space-6"]').should("contain", "Laboratorio de Comunicaciones Opticas");
+    cy.get('[data-cy="board-space-motif-6"]').should("have.attr", "title", "Haz desviado");
+    cy.get('[data-cy="board-space-8"]').should("contain", "Lab. Electronica y Electricidad");
+    cy.get('[data-cy="board-space-motif-8"]').should("have.attr", "title", "Panel abierto");
+    cy.get('[data-cy="board-space-9"]').should("contain", "Seminario Maxwell");
+    cy.get('[data-cy="board-space-motif-9"]').should("have.attr", "title", "Nota de despedida");
     cy.get('[data-cy="board-pawn-rojo"]').should("be.visible");
     cy.get('[data-cy="board-pawn-azul"]').should("not.exist");
     cy.get('img[alt="Imagen central del tablero"], img[alt="Imagen central de la skin"]').should("exist");
@@ -155,8 +159,11 @@ describe("SCRUM-48 renderizado dinamico del tablero tematico", () => {
     });
 
     cy.wait("@authSession");
-    cy.get('[data-cy="board-space-2"]').should("contain", "Sala Hedy Lamarr").and("contain", "Interferencia");
-    cy.get('[data-cy="board-space-6"]').should("contain", "Laboratorio de Comunicaciones Opticas").and("contain", "Haz desviado");
-    cy.get('[data-cy="board-space-7"]').should("contain", "Seminario Torres Quevedo").and("contain", "Llave doblada");
+    cy.get('[data-cy="board-space-2"]').should("contain", "Sala Hedy Lamarr");
+    cy.get('[data-cy="board-space-motif-2"]').should("have.attr", "title", "Interferencia");
+    cy.get('[data-cy="board-space-6"]').should("contain", "Laboratorio de Comunicaciones Opticas");
+    cy.get('[data-cy="board-space-motif-6"]').should("have.attr", "title", "Haz desviado");
+    cy.get('[data-cy="board-space-7"]').should("contain", "Seminario Torres Quevedo");
+    cy.get('[data-cy="board-space-motif-7"]').should("have.attr", "title", "Llave doblada");
   });
 });

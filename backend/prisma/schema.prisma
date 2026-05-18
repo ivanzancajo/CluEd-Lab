@@ -133,6 +133,7 @@ model Partida {
   activeDiceValueOne Int?  @map("dado_activo_1")
   activeDiceValueTwo Int?  @map("dado_activo_2")
   activeDiceRemainingMoves Int? @map("pasos_mov_restantes")
+  currentTurnHasMoved Boolean @default(false) @map("turno_se_movio")
   activeSuggestionEventId String? @db.Uuid @map("id_evento_sugerencia_activa")
   isDebug    Boolean  @default(false) @map("es_debug")
 

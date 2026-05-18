@@ -1233,6 +1233,7 @@ export function TerminalView() {
     !isTeamEliminated &&
     !isResolutionBlockingGameplay &&
     sessionTurn?.dice === null &&
+    !sessionTurn?.hasMoved &&
     resolvedCurrentMoveNode?.kind === "room" &&
     !activeSuggestion &&
     !pendingSuggestion &&
@@ -1718,11 +1719,6 @@ export function TerminalView() {
                        </div>
                      </div>
                    )}
-
-                   <SpaceMotifModal
-                     space={activeMotifSpace}
-                     onClose={() => setActiveMotifSpace(null)}
-                   />
 
                    {/* Card Modal Overlay */}
                    <AnimatePresence>
@@ -2576,6 +2572,11 @@ export function TerminalView() {
           <EnvelopeAnimation onComplete={() => setShowEnvelopeAnimation(false)} />
         </div>
       ) : null}
+
+      <SpaceMotifModal
+        space={activeMotifSpace}
+        onClose={() => setActiveMotifSpace(null)}
+      />
 
       {/* Bottom Navigation */}
       <div className="bg-slate-950 border-t border-cyan-900/50 flex justify-around p-2 pb-6 absolute bottom-0 w-full z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">

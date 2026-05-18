@@ -565,6 +565,7 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
           id: true,
           status: true,
           currentTurnTeamId: true,
+          currentTurnHasMoved: true,
           activeSuggestionEventId: true,
           teams: {
             where: { id: socket.data.teamId },
@@ -591,6 +592,10 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
 
       if (session.currentTurnTeamId !== socket.data.teamId) {
         throw new HttpError(409, 'Solo el equipo con turno activo puede usar un pasadizo.');
+      }
+
+      if (session.currentTurnHasMoved) {
+        throw new HttpError(409, 'Solo puedes usar el pasadizo si llevas en la sala desde el turno anterior.');
       }
 
       if (session.activeSuggestionEventId) {
@@ -633,6 +638,7 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
           activeDiceValueOne: null,
           activeDiceValueTwo: null,
           activeDiceRemainingMoves: null,
+          currentTurnHasMoved: true,
         },
       });
 

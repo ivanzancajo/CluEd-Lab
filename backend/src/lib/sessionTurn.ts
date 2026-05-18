@@ -143,6 +143,7 @@ export function buildNextTurnUpdate(
     activeDiceValueOne: null,
     activeDiceValueTwo: null,
     activeDiceRemainingMoves: null,
+    currentTurnHasMoved: false,
   };
 }
 

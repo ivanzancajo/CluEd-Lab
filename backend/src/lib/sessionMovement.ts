@@ -349,6 +349,7 @@ export async function moveTeamByAccessCode(
           activeDiceValueOne: null,
           activeDiceValueTwo: null,
           activeDiceRemainingMoves: null,
+          currentTurnHasMoved: true,
         },
   });
 

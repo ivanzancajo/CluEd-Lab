@@ -71,6 +71,7 @@ export interface SessionTurn {
   startedAt: string | null;
   dice: SessionTurnDice | null;
   remainingMoves: number | null;
+  hasMoved: boolean;
 }
 
 export interface TeamMoveState {

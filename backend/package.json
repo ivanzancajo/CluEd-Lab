@@ -9,7 +9,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "demo:deal": "tsx src/scripts/createDealDemo.ts",
-    "demo:motif-skin": "tsx src/scripts/createMotifSkin.ts",
+    "demo:motif-skin": "node dist/scripts/createMotifSkin.js",
     "prisma:generate": "prisma generate",
     "prisma:pull": "prisma db pull",
     "prisma:migrate:dev": "prisma migrate dev",
@@ -36,11 +36,11 @@
     "prisma": "^6.19.3",
     "socket.io-client": "^4.8.3",
     "ts-jest": "^29.4.9",
+    "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
-    "tsx": "^4.21.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

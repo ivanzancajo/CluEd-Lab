@@ -1237,8 +1237,7 @@ export function TerminalView() {
     resolvedCurrentMoveNode?.kind === "room" &&
     !activeSuggestion &&
     !pendingSuggestion &&
-    Boolean(secretPassageDestinationNode) &&
-    lobbyConnectionStatus === "connected";
+    Boolean(secretPassageDestinationNode);
   const selectedDestinationRoomNode = resolvedCurrentMoveNode?.kind !== "room" && selectedDestinationNode
     ? getRoomEntryNodeByDoorNodeId(selectedDestinationNode.id)
     : null;
@@ -1825,7 +1824,7 @@ export function TerminalView() {
                           type="button"
                           data-cy="terminal-secret-passage-emit"
                           onClick={() => void handleEmitSecretPassage()}
-                          disabled={isEmittingSecretPassage || isResolutionBlockingGameplay}
+                          disabled={isEmittingSecretPassage || isResolutionBlockingGameplay || lobbyConnectionStatus !== "connected"}
                           className="rounded-md border border-amber-500/70 bg-amber-500 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {isEmittingSecretPassage ? "Usando..." : `Usar pasadizo → ${secretPassageDestinationNode.label}`}

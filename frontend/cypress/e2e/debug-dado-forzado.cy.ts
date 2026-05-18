@@ -42,6 +42,7 @@ function buildSession(activeConfig: ReturnType<typeof buildActiveConfig>) {
       startedAt: "2026-05-17T10:00:00.000Z",
       dice: null,
       remainingMoves: null,
+      hasMoved: false,
     },
     teams: [
       {

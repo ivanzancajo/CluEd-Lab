@@ -1233,11 +1233,11 @@ export function TerminalView() {
     !isTeamEliminated &&
     !isResolutionBlockingGameplay &&
     sessionTurn?.dice === null &&
+    !sessionTurn?.hasMoved &&
     resolvedCurrentMoveNode?.kind === "room" &&
     !activeSuggestion &&
     !pendingSuggestion &&
-    Boolean(secretPassageDestinationNode) &&
-    lobbyConnectionStatus === "connected";
+    Boolean(secretPassageDestinationNode);
   const selectedDestinationRoomNode = resolvedCurrentMoveNode?.kind !== "room" && selectedDestinationNode
     ? getRoomEntryNodeByDoorNodeId(selectedDestinationNode.id)
     : null;
@@ -1719,11 +1719,6 @@ export function TerminalView() {
                      </div>
                    )}
 
-                   <SpaceMotifModal
-                     space={activeMotifSpace}
-                     onClose={() => setActiveMotifSpace(null)}
-                   />
-
                    {/* Card Modal Overlay */}
                    <AnimatePresence>
                      {selectedCard && (
@@ -1829,7 +1824,7 @@ export function TerminalView() {
                           type="button"
                           data-cy="terminal-secret-passage-emit"
                           onClick={() => void handleEmitSecretPassage()}
-                          disabled={isEmittingSecretPassage || isResolutionBlockingGameplay}
+                          disabled={isEmittingSecretPassage || isResolutionBlockingGameplay || lobbyConnectionStatus !== "connected"}
                           className="rounded-md border border-amber-500/70 bg-amber-500 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {isEmittingSecretPassage ? "Usando..." : `Usar pasadizo → ${secretPassageDestinationNode.label}`}
@@ -2576,6 +2571,11 @@ export function TerminalView() {
           <EnvelopeAnimation onComplete={() => setShowEnvelopeAnimation(false)} />
         </div>
       ) : null}
+
+      <SpaceMotifModal
+        space={activeMotifSpace}
+        onClose={() => setActiveMotifSpace(null)}
+      />
 
       {/* Bottom Navigation */}
       <div className="bg-slate-950 border-t border-cyan-900/50 flex justify-around p-2 pb-6 absolute bottom-0 w-full z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">

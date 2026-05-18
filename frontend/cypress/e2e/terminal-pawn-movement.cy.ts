@@ -64,6 +64,7 @@ function buildSession(activeConfig: ReturnType<typeof buildActiveConfig>) {
       startedAt: "2026-05-04T10:00:00.000Z",
       dice: null,
       remainingMoves: null,
+      hasMoved: false,
     },
     teams: [
       {
@@ -164,6 +165,7 @@ describe("movimiento de peones en terminal", () => {
         startedAt: "2026-05-04T10:00:25.000Z",
         dice: null,
         remainingMoves: null,
+        hasMoved: false,
       },
       teams: initialSession.teams.map((team) =>
         team.id === "team-rojo"

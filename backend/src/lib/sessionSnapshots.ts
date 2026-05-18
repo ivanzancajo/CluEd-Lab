@@ -56,6 +56,7 @@ export type SessionTurnSnapshot = {
   startedAt: string | null;
   dice: SessionTurnDiceSnapshot | null;
   remainingMoves: number | null;
+  hasMoved: boolean;
 };
 
 export type SessionSnapshot = {
@@ -135,6 +136,7 @@ async function loadSessionSnapshot(
       activeDiceValueOne: true,
       activeDiceValueTwo: true,
       activeDiceRemainingMoves: true,
+      currentTurnHasMoved: true,
       activeSuggestionEventId: true,
       winnerTeam: {
         select: {
@@ -243,6 +245,7 @@ function buildTurnSnapshot(session: {
   activeDiceValueOne: number | null;
   activeDiceValueTwo: number | null;
   activeDiceRemainingMoves: number | null;
+  currentTurnHasMoved: boolean;
   currentTurnTeam: {
     id: string;
     name: string;
@@ -273,6 +276,7 @@ function buildTurnSnapshot(session: {
             session.activeDiceRemainingMoves
           )
         : null,
+    hasMoved: session.currentTurnHasMoved,
   } satisfies SessionTurnSnapshot;
 }
 

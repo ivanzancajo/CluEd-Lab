@@ -9,6 +9,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "demo:deal": "tsx src/scripts/createDealDemo.ts",
+    "demo:motif-skin": "tsx src/scripts/createMotifSkin.ts",
     "prisma:generate": "prisma generate",
     "prisma:pull": "prisma db pull",
     "prisma:migrate:dev": "prisma migrate dev",

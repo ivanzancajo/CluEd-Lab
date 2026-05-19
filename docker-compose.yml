@@ -1,12 +1,27 @@
 services:
+  db:
+    image: postgres:16
+    container_name: cluedo_db
+    environment:
+      POSTGRES_USER: cluedo_admin
+      POSTGRES_PASSWORD: CluedoDb2026
+      POSTGRES_DB: cluedo_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cluedo_admin -d cluedo_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     image: tfg-backend:dev
     build:
       context: ./backend
       target: dev
     container_name: cluedo_backend
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     ports:
       - "4000:4000"
     env_file:
@@ -14,6 +29,9 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend:
     image: tfg-frontend:dev
@@ -30,3 +48,6 @@ services:
       - backend
     environment:
       - VITE_API_URL=http://localhost:4000/api
+
+volumes:
+  pgdata:

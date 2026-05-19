@@ -351,7 +351,7 @@ const ROOM_ENTRY_DOOR_GRID_COORDINATES: Record<string, readonly BoardGridCoordin
   'sala-media-izquierda': [{ col: 5, row: 8 }, { col: 2, row: 10 }],
   'sala-media-izquierda-inferior': [{ col: 0, row: 12 }, { col: 4, row: 15 }],
   'sala-media-derecha': [{ col: 16, row: 9 }, { col: 15, row: 12 }],
-  'sala-inferior-izquierda': [{ col: 3, row: 20 }],
+  'sala-inferior-izquierda': [{ col: 3, row: 19 }],
   'sala-inferior-centro': [{ col: 8, row: 17 }, { col: 13, row: 17 }, { col: 14, row: 19 }, { col: 7, row: 19 }],
   'sala-inferior-derecha': [{ col: 18, row: 18 }],
 } as const;
@@ -476,6 +476,7 @@ const EXCLUDED_SQUARE_GRID_POINTS = [
   ...columnRangePoints(18, [[15, 15]]),
   ...columnRangePoints(19, [[14, 14]]),
   ...columnRangePoints(20, [[9, 13]]),
+  grid(3, 20),
 ] as const;
 
 const EXCLUDED_SQUARE_GRID_KEYS = new Set(
@@ -484,9 +485,9 @@ const EXCLUDED_SQUARE_GRID_KEYS = new Set(
 
 const IMAGE_ALIGNED_EXTRA_GRID_POINTS = [
   ...rowRangePoints(0, [[6, 6]]),
-  ...rowRangePoints(1, [[6, 7]]),
-  ...rowRangePoints(2, [[6, 8]]),
-  ...rowRangePoints(3, [[5, 8]]),
+  ...rowRangePoints(1, [[6, 7], [14, 14]]),
+  ...rowRangePoints(2, [[6, 8], [14, 14]]),
+  ...rowRangePoints(3, [[5, 8], [14, 14]]),
   ...rowRangePoints(4, [[1, 8], [15, 16]]),
   ...rowRangePoints(5, [[1, 8], [14, 16]]),
   ...rowRangePoints(6, [[5, 8], [11, 14], [15, 21]]),

@@ -193,9 +193,6 @@ function BoardDebugOverlay({
   debugProbe?: BoardDebugProbe | null;
   highlightedNodeIds: Set<string>;
 }) {
-  const probedNode = debugProbe?.nearestNodeId
-    ? BOARD_MOVEMENT_NODE_LIST.find((node) => node.id === debugProbe.nearestNodeId) ?? null
-    : null;
   const probedGridPosition = debugProbe
     ? findClosestGridPosition(debugProbe.positionX, debugProbe.positionY)
     : null;
@@ -285,22 +282,6 @@ function BoardDebugOverlay({
         </>
       ) : null}
 
-      <div className="absolute right-2 top-2 max-w-[48%] rounded-md border border-cyan-500/35 bg-slate-950/78 px-2 py-1.5 font-mono text-[10px] text-cyan-100 shadow-[0_0_12px_rgba(0,0,0,0.28)] backdrop-blur-[1px]">
-        <p className="uppercase tracking-[0.2em] text-cyan-300">Debug mapa</p>
-        <p className="mt-1 text-slate-300">
-          Grid {BOARD_GRID_COLUMNS_PERCENT.length}x{BOARD_GRID_ROWS_PERCENT.length} | nodos {BOARD_MOVEMENT_NODE_LIST.length}
-        </p>
-        <p className="mt-1 text-slate-200">
-          {debugProbe
-            ? `Celda ${formatGridPositionLabel(probedGridPosition) ?? 'sin celda'} | click ${debugProbe.positionX}% / ${debugProbe.positionY}%`
-            : 'Pulsa el tablero para muestrear coordenadas y validar alineación.'}
-        </p>
-        {debugProbe ? (
-          <p className="mt-1 text-slate-400">
-            Nodo cercano {formatDebugProbeNodeLabel(probedNode, debugProbe.nearestNodeId)}
-          </p>
-        ) : null}
-      </div>
     </div>
   );
 }
@@ -325,25 +306,6 @@ function getBoardDebugMarkerClass(kind: string, isGeneratedSquare: boolean, isHi
   return isGeneratedSquare ? 'h-2 w-2 bg-cyan-200/80' : 'h-3 w-3 bg-cyan-300/90';
 }
 
-function formatDebugProbeNodeLabel(
-  node: (typeof BOARD_MOVEMENT_NODE_LIST)[number] | null,
-  fallbackNodeId?: string | null
-) {
-  if (!node) {
-    return fallbackNodeId ?? 'sin nodo cercano';
-  }
-
-  const coordinateLabel = formatGridPositionLabel(node.gridPosition);
-  return coordinateLabel ? `${coordinateLabel} · ${node.id}` : node.id;
-}
-
-function formatGridPositionLabel(gridPosition?: { col: number; row: number }) {
-  if (!gridPosition) {
-    return null;
-  }
-
-  return `C${gridPosition.col}:R${gridPosition.row}`;
-}
 
 function findClosestGridPosition(positionX: number, positionY: number) {
   return {

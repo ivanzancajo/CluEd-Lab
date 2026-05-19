@@ -59,13 +59,11 @@ export const DiceAnimation = ({
   disabled = false,
   dataCy,
   resetSignal = 0,
-  forcedDiceValue,
 }: {
   onRollRequest: (forcedTotal?: number) => Promise<DiceRollResult>;
   disabled?: boolean;
   dataCy?: string;
   resetSignal?: number;
-  forcedDiceValue?: number;
 }) => {
   const [dice1, setDice1] = useState(1);
   const [dice2, setDice2] = useState(1);
@@ -81,7 +79,7 @@ export const DiceAnimation = ({
     if (isRolling || disabled) return;
     setIsRolling(true);
     setHasRolled(true);
-    const rollPromise = onRollRequest(forcedDiceValue);
+    const rollPromise = onRollRequest();
     
     let iterations = 0;
     const interval = setInterval(() => {

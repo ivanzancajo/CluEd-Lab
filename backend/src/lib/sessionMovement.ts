@@ -262,7 +262,7 @@ export async function rollTeamDiceByAccessCode(
 
   const movementContext = resolveTeamMovementContext(session, teamId);
   const dice =
-    session.isDebug && typeof forcedTotal === 'number'
+    process.env.NODE_ENV !== 'production' && typeof forcedTotal === 'number'
       ? rollTurnDiceForced(forcedTotal)
       : rollTurnDice();
   const destinationNodes = getReachableMoveNodes(

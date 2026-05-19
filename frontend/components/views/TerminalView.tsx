@@ -269,7 +269,9 @@ export function TerminalView() {
   const [isMoveConfirmOpen, setIsMoveConfirmOpen] = useState(false);
   const [currentMoveNode, setCurrentMoveNode] = useState<TeamMoveNode | null>(null);
   const [sessionTurn, setSessionTurn] = useState<LobbySession["turn"]>(null);
-  const [isBoardDebugEnabled, setIsBoardDebugEnabled] = useState(() => getStoredBoardDebugMode());
+  const [debugMode, setDebugMode] = useState<'off' | 'map' | 'forced-dice'>(() =>
+    getStoredBoardDebugMode() ? 'map' : 'off'
+  );
   const [boardDebugProbe, setBoardDebugProbe] = useState<BoardDebugProbe | null>(null);
   const [diceResetSignal, setDiceResetSignal] = useState(0);
   const [forcedDiceValue, setForcedDiceValue] = useState<number | undefined>(undefined);
@@ -550,7 +552,7 @@ export function TerminalView() {
         )
       : null;
 
-    if (isBoardDebugEnabled) {
+    if (debugMode === 'map') {
       setBoardDebugProbe(buildBoardDebugProbe(positionX, positionY, matchedNode));
     }
 
@@ -589,15 +591,19 @@ export function TerminalView() {
     handleBoardNodePress(matchedNode);
   };
 
-  const handleBoardDebugToggle = () => {
-    setIsBoardDebugEnabled((currentValue) => {
-      const nextValue = !currentValue;
-      setStoredBoardDebugMode(nextValue);
-      if (!nextValue) {
-        setBoardDebugProbe(null);
-      }
-      return nextValue;
-    });
+  const handleDebugModeChange = (mode: 'off' | 'map' | 'forced-dice') => {
+    setDebugMode(mode);
+    setStoredBoardDebugMode(mode === 'map');
+    if (mode !== 'map') setBoardDebugProbe(null);
+    if (mode !== 'forced-dice') setForcedDiceValue(undefined);
+  };
+
+  const handleForcedDiceConfirm = async () => {
+    try {
+      await handleDiceRoll(forcedDiceValue);
+    } catch {
+      // error handled inside handleDiceRoll
+    }
   };
 
   const handleMoveConfirmOpenChange = (open: boolean) => {
@@ -1642,34 +1648,56 @@ export function TerminalView() {
               <div className="relative h-[clamp(18rem,88vw,26rem)] w-[clamp(18rem,88vw,26rem)] bg-black/50 rounded-b-xl border-b-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex-shrink-0 overflow-hidden">
                  {import.meta.env.DEV && (
                    <div className="absolute right-3 top-3 z-40 flex flex-col items-end gap-1.5">
-                     <button
-                       type="button"
-                       data-cy="terminal-board-debug-toggle"
-                       onClick={handleBoardDebugToggle}
-                       className={`rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] shadow-[0_0_10px_rgba(0,0,0,0.35)] ${isBoardDebugEnabled ? 'border-fuchsia-400/70 bg-fuchsia-950/75 text-fuchsia-100' : 'border-cyan-900/60 bg-slate-950/80 text-cyan-200'}`}
-                       title="Activa la rejilla y los nodos del tablero para ajustar el mapa"
-                     >
-                       {isBoardDebugEnabled ? 'Debug on' : 'Debug off'}
-                     </button>
-                     {isBoardDebugEnabled && isMyTurn && sessionTurn?.dice === null && (
+                     <div className="flex gap-1">
+                       <button
+                         type="button"
+                         data-cy="terminal-board-debug-toggle"
+                         onClick={() => handleDebugModeChange(debugMode === 'map' ? 'off' : 'map')}
+                         className={`rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] shadow-[0_0_10px_rgba(0,0,0,0.35)] ${debugMode === 'map' ? 'border-fuchsia-400/70 bg-fuchsia-950/75 text-fuchsia-100' : 'border-cyan-900/60 bg-slate-950/80 text-cyan-200'}`}
+                         title="Activa la rejilla y los nodos del tablero para ajustar el mapa"
+                       >
+                         Mapa
+                       </button>
+                       {isMyTurn && sessionTurn?.dice === null && (
+                         <button
+                           type="button"
+                           data-cy="terminal-board-debug-forced-dice-toggle"
+                           onClick={() => handleDebugModeChange(debugMode === 'forced-dice' ? 'off' : 'forced-dice')}
+                           className={`rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] shadow-[0_0_10px_rgba(0,0,0,0.35)] ${debugMode === 'forced-dice' ? 'border-amber-400/70 bg-amber-950/75 text-amber-100' : 'border-cyan-900/60 bg-slate-950/80 text-cyan-200'}`}
+                           title="Fuerza el valor de la próxima tirada de dados"
+                         >
+                           Dado
+                         </button>
+                       )}
+                     </div>
+                     {debugMode === 'forced-dice' && isMyTurn && sessionTurn?.dice === null && (
                        <div
                          data-cy="debug-forced-dice-panel"
-                         className="flex flex-col items-end gap-1 rounded-md border border-fuchsia-700/60 bg-fuchsia-950/85 px-2 py-1.5 shadow-[0_0_12px_rgba(168,85,247,0.25)]"
+                         className="flex flex-col items-end gap-1.5 rounded-md border border-amber-700/60 bg-amber-950/85 px-2 py-2 shadow-[0_0_12px_rgba(245,158,11,0.25)]"
                        >
-                         <label className="font-mono text-[9px] uppercase tracking-widest text-fuchsia-400">
+                         <label className="font-mono text-[9px] uppercase tracking-widest text-amber-400">
                            Forzar dado
                          </label>
                          <select
                            data-cy="debug-forced-dice-select"
                            value={forcedDiceValue ?? ''}
                            onChange={(e) => setForcedDiceValue(e.target.value ? Number(e.target.value) : undefined)}
-                           className="rounded border border-fuchsia-700/40 bg-slate-950/90 font-mono text-[11px] text-fuchsia-200 px-1.5 py-0.5"
+                           className="rounded border border-amber-700/40 bg-slate-950/90 font-mono text-[11px] text-amber-200 px-1.5 py-0.5"
                          >
-                           <option value="">— aleatorio —</option>
+                           <option value="">— elige valor —</option>
                            {Array.from({ length: 11 }, (_, i) => i + 2).map((v) => (
                              <option key={v} value={v}>{v}</option>
                            ))}
                          </select>
+                         <button
+                           type="button"
+                           data-cy="debug-forced-dice-confirm"
+                           onClick={handleForcedDiceConfirm}
+                           disabled={forcedDiceValue === undefined}
+                           className="w-full rounded border border-amber-500/60 bg-amber-900/70 px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-amber-100 shadow disabled:cursor-not-allowed disabled:opacity-40 enabled:hover:bg-amber-800/80"
+                         >
+                           Confirmar
+                         </button>
                        </div>
                      )}
                    </div>
@@ -1681,7 +1709,7 @@ export function TerminalView() {
                    spaceNameScale={0.88}
                    spaceMotifScale={0.72}
                    pawns={boardPawns}
-                   showDebugOverlay={isBoardDebugEnabled}
+                   showDebugOverlay={debugMode === 'map'}
                    debugProbe={boardDebugProbe}
                    debugHighlightedNodeIds={boardDebugHighlightedNodeIds}
                    boardImageAlt="Mapa temático de la partida"
@@ -1696,8 +1724,8 @@ export function TerminalView() {
                      />
                    ) : null}
 
-                   {/* Center Area for Dice (Only on My Turn) */}
-                   {isMyTurn && (
+                   {/* Center Area for Dice (Only on My Turn, hidden in forced-dice debug mode) */}
+                   {isMyTurn && debugMode !== 'forced-dice' && (
                      <div
                        className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
                        style={{
@@ -1713,7 +1741,6 @@ export function TerminalView() {
                            disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || isResolutionBlockingGameplay || sessionTurn?.dice !== null || isLoadingMoves || isMovingPawn}
                            resetSignal={diceResetSignal}
                            onRollRequest={handleDiceRoll}
-                           forcedDiceValue={forcedDiceValue}
                          />
                        </div>
                      </div>
@@ -1773,6 +1800,32 @@ export function TerminalView() {
                    </AnimatePresence>
                  </ThemedBoard>
               </div>
+
+              {debugMode === 'map' && (
+                <div className="w-full px-3 pt-2">
+                  <div
+                    data-cy="board-debug-info-panel"
+                    className="rounded-md border border-fuchsia-500/30 bg-slate-950/80 px-3 py-2 font-mono text-[10px] text-cyan-100 shadow-[0_0_10px_rgba(0,0,0,0.3)]"
+                  >
+                    <p className="uppercase tracking-[0.2em] text-fuchsia-300">Debug mapa</p>
+                    {boardDebugProbe ? (
+                      <>
+                        <p className="mt-1 text-slate-200">
+                          Click&nbsp;{boardDebugProbe.positionX}%&nbsp;/&nbsp;{boardDebugProbe.positionY}%
+                        </p>
+                        <p className="mt-0.5 text-slate-400">
+                          Nodo&nbsp;cercano:&nbsp;
+                          {boardDebugProbe.nearestNodeLabel
+                            ? `${boardDebugProbe.nearestNodeLabel} (${boardDebugProbe.nearestNodeKind ?? '?'}) — ${boardDebugProbe.nearestNodeId}`
+                            : boardDebugProbe.nearestNodeId ?? 'ninguno'}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="mt-1 text-slate-400">Pulsa el tablero para muestrear coordenadas y validar alineación.</p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {sessionStatus === "EN_CURSO" ? (
                 <div className="w-full px-4 pt-4">

@@ -202,13 +202,16 @@ describe('sessionMovement', () => {
     );
   });
 
-  it('solo permite usar la casilla inmediata de salida en sala-inferior-izquierda con tirada 2', () => {
-    const shortRollMoves = getReachableMoveNodes('sala-inferior-izquierda', [], 2).map((node) => node.id);
-    const longRollMoves = getReachableMoveNodes('sala-inferior-izquierda', [], 3).map((node) => node.id);
+  it('la puerta de sala-inferior-izquierda está en col 3 row 19 y es alcanzable con tirada 1', () => {
+    const tirada1 = getReachableMoveNodes('sala-inferior-izquierda', [], 1).map((node) => node.id);
+    const tirada2 = getReachableMoveNodes('sala-inferior-izquierda', [], 2).map((node) => node.id);
 
-    expect(shortRollMoves).toContain('square:grid:3:19');
-    expect(shortRollMoves).not.toContain('square:grid:3:20');
-    expect(longRollMoves).not.toContain('square:grid:3:19');
+    // La puerta está a 1 paso, no a 2.
+    expect(tirada1).toContain('square:grid:3:19');
+    expect(tirada2).not.toContain('square:grid:3:19');
+    // La casilla 3:20 está excluida del grafo.
+    expect(tirada1).not.toContain('square:grid:3:20');
+    expect(tirada2).not.toContain('square:grid:3:20');
   });
 
   it('al salir de cualquier sala, la puerta consume un paso antes de alcanzar casillas exteriores', () => {
@@ -708,6 +711,130 @@ describe('sessionMovement', () => {
         expect(isSecretPassageMoveValid(roomId, secretRoom.id)).toBe(true);
       });
     });
+  });
+
+  // ─── Tests de ajustes de mapa: nodos añadidos / eliminados ─────────────────
+
+  it('las casillas grid 14:1, 14:2 y 14:3 existen en el grafo y están conectadas', () => {
+    const ids = ['square:grid:14:1', 'square:grid:14:2', 'square:grid:14:3'];
+
+    ids.forEach((id) => {
+      expect(BOARD_MOVEMENT_NODES[id]).toBeDefined();
+      expect(BOARD_MOVEMENT_NODES[id]?.kind).toBe('square');
+      expect((BOARD_MOVEMENT_CONNECTIONS[id] ?? []).length).toBeGreaterThan(0);
+    });
+  });
+
+  it('las casillas grid 14:1, 14:2 y 14:3 tienen posiciones de grid correctas', () => {
+    expect(BOARD_MOVEMENT_NODES['square:grid:14:1']?.gridPosition).toEqual({ col: 14, row: 1 });
+    expect(BOARD_MOVEMENT_NODES['square:grid:14:2']?.gridPosition).toEqual({ col: 14, row: 2 });
+    expect(BOARD_MOVEMENT_NODES['square:grid:14:3']?.gridPosition).toEqual({ col: 14, row: 3 });
+  });
+
+  it('las casillas grid 14:1, 14:2 y 14:3 están conectadas entre sí ortogonalmente', () => {
+    expect(BOARD_MOVEMENT_CONNECTIONS['square:grid:14:1']).toContain('square:grid:14:2');
+    expect(BOARD_MOVEMENT_CONNECTIONS['square:grid:14:2']).toContain('square:grid:14:1');
+    expect(BOARD_MOVEMENT_CONNECTIONS['square:grid:14:2']).toContain('square:grid:14:3');
+    expect(BOARD_MOVEMENT_CONNECTIONS['square:grid:14:3']).toContain('square:grid:14:2');
+  });
+
+  it('la casilla grid 3:20 está excluida del grafo (puerta movida a 3:19)', () => {
+    expect(BOARD_MOVEMENT_NODES['square:grid:3:20']).toBeUndefined();
+    expect(BOARD_MOVEMENT_CONNECTIONS['square:grid:3:20']).toBeUndefined();
+  });
+
+  it('la casilla de paso de pasillo-derecho-superior a pasillo-superior-derecho paso 7 existe y está conectada', () => {
+    const nodeId = 'square:pasillo-derecho-superior::pasillo-superior-derecho:7';
+
+    expect(BOARD_MOVEMENT_NODES[nodeId]).toBeDefined();
+    expect(BOARD_MOVEMENT_NODES[nodeId]?.gridPosition).toEqual({ col: 20, row: 6 });
+    expect((BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? []).length).toBeGreaterThan(0);
+  });
+
+  it('la casilla de paso 5 entre centro-norte y centro-oeste existe y está conectada', () => {
+    const nodeId = 'square:centro-norte::centro-oeste:5';
+
+    expect(BOARD_MOVEMENT_NODES[nodeId]).toBeDefined();
+    expect(BOARD_MOVEMENT_NODES[nodeId]?.gridPosition).toEqual({ col: 7, row: 12 });
+    expect((BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? []).length).toBeGreaterThan(0);
+  });
+
+  it('la casilla de paso 3 entre centro-norte y pasillo-superior-central existe y está conectada', () => {
+    const nodeId = 'square:centro-norte::pasillo-superior-central:3';
+
+    expect(BOARD_MOVEMENT_NODES[nodeId]).toBeDefined();
+    expect(BOARD_MOVEMENT_NODES[nodeId]?.gridPosition).toEqual({ col: 10, row: 7 });
+    expect((BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? []).length).toBeGreaterThan(0);
+  });
+
+  it('la cadena de casillas entre centro-norte y centro-oeste: :1 y :2 están excluidas, :3–:5 conectan a centro-oeste', () => {
+    // :1 (col 9, row 8) excluida por columnRangePoints(9, [[8,8]])
+    // :2 (col 8, row 9) excluida por columnRangePoints(8, [[8,14]])
+    expect(BOARD_MOVEMENT_NODES['square:centro-norte::centro-oeste:1']).toBeUndefined();
+    expect(BOARD_MOVEMENT_NODES['square:centro-norte::centro-oeste:2']).toBeUndefined();
+
+    // La sub-cadena :3 → :4 → :5 → centro-oeste sí está completa
+    const subChain = [
+      'square:centro-norte::centro-oeste:3',
+      'square:centro-norte::centro-oeste:4',
+      'square:centro-norte::centro-oeste:5',
+      'centro-oeste',
+    ];
+
+    for (let i = 0; i < subChain.length - 1; i++) {
+      const a = subChain[i]!;
+      const b = subChain[i + 1]!;
+      expect(BOARD_MOVEMENT_CONNECTIONS[a]).toContain(b);
+      expect(BOARD_MOVEMENT_CONNECTIONS[b]).toContain(a);
+    }
+
+    // centro-norte NO conecta directamente a :3 (el puente :1/:2 fue eliminado)
+    expect(BOARD_MOVEMENT_CONNECTIONS['centro-norte']).not.toContain('square:centro-norte::centro-oeste:3');
+  });
+
+  it('la cadena de casillas entre centro-norte y pasillo-superior-central: :1 está excluida, :2 y :3 conectan a centro-norte', () => {
+    // :1 (col 10, row 5) excluida por columnRangePoints(10, [[4,5]])
+    expect(BOARD_MOVEMENT_NODES['square:centro-norte::pasillo-superior-central:1']).toBeUndefined();
+
+    // pasillo-superior-central queda aislado del corredor (su único puente :1 fue eliminado)
+    const pasilloCentroConnections = BOARD_MOVEMENT_CONNECTIONS['pasillo-superior-central'] ?? [];
+    expect(pasilloCentroConnections).not.toContain('square:centro-norte::pasillo-superior-central:2');
+
+    // La sub-cadena :2 → :3 → centro-norte sí está completa
+    const subChain = [
+      'square:centro-norte::pasillo-superior-central:2',
+      'square:centro-norte::pasillo-superior-central:3',
+      'centro-norte',
+    ];
+
+    for (let i = 0; i < subChain.length - 1; i++) {
+      const a = subChain[i]!;
+      const b = subChain[i + 1]!;
+      expect(BOARD_MOVEMENT_CONNECTIONS[a]).toContain(b);
+      expect(BOARD_MOVEMENT_CONNECTIONS[b]).toContain(a);
+    }
+  });
+
+  it('la cadena de casillas entre pasillo-superior-derecho y pasillo-derecho-superior está completa y conectada en serie', () => {
+    // 7 casillas: :1 (15,5) → :2 (15,6) → :3 (16,6) → :4 (17,6) → :5 (18,6) → :6 (19,6) → :7 (20,6)
+    const chain = [
+      'pasillo-superior-derecho',
+      'square:pasillo-derecho-superior::pasillo-superior-derecho:1',
+      'square:pasillo-derecho-superior::pasillo-superior-derecho:2',
+      'square:pasillo-derecho-superior::pasillo-superior-derecho:3',
+      'square:pasillo-derecho-superior::pasillo-superior-derecho:4',
+      'square:pasillo-derecho-superior::pasillo-superior-derecho:5',
+      'square:pasillo-derecho-superior::pasillo-superior-derecho:6',
+      'square:pasillo-derecho-superior::pasillo-superior-derecho:7',
+      'pasillo-derecho-superior',
+    ];
+
+    for (let i = 0; i < chain.length - 1; i++) {
+      const a = chain[i]!;
+      const b = chain[i + 1]!;
+      expect(BOARD_MOVEMENT_CONNECTIONS[a]).toContain(b);
+      expect(BOARD_MOVEMENT_CONNECTIONS[b]).toContain(a);
+    }
   });
 
   it('los nodos intermedios de cada arista están en grid positions ortogonales consecutivas', () => {

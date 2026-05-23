@@ -290,6 +290,66 @@ describe('API de gestion de CluedoSkins', () => {
     }
   );
 
+  it('SCRUM-116 rechaza la creacion cuando dos espacios comparten el mismo motivo', async () => {
+    const payload = buildCreatePayload('Skin Motivos Duplicados');
+    payload.hasMotifs = true;
+    payload.spaces = payload.spaces.map((space, index) => ({
+      ...space,
+      motif: index < 2 ? 'Motivo Repetido' : `Motivo ${index + 1}`,
+    }));
+
+    const response = await request('/api/config/skins', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    const body = (await response.json()) as ValidationErrorResponse;
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('La solicitud contiene datos inválidos.');
+    expect(body.details).toContain('No se pueden repetir los motivos de los espacios dentro de la misma skin.');
+    expect(await prisma.cluedoSkin.count()).toBe(0);
+  });
+
+  it('SCRUM-116 rechaza la actualizacion cuando se introducen motivos duplicados en espacios', async () => {
+    const existingSkin = await seedSkinInDatabase('Skin Editable Motivos');
+    const payload = buildCreatePayload('Skin Editable Motivos');
+    payload.hasMotifs = true;
+    payload.spaces = payload.spaces.map((space, index) => ({
+      ...space,
+      motif: index < 2 ? 'motivo repetido' : `motivo-${index + 1}`,
+    }));
+
+    const response = await request(`/api/config/skins/${existingSkin.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+
+    const body = (await response.json()) as ValidationErrorResponse;
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('La solicitud contiene datos inválidos.');
+    expect(body.details).toContain('No se pueden repetir los motivos de los espacios dentro de la misma skin.');
+    expect(await prisma.cluedoSkin.count()).toBe(1);
+  });
+
+  it('SCRUM-116 acepta motivos diferentes aunque sean similares en case', async () => {
+    const payload = buildCreatePayload('Skin Motivos Validos');
+    payload.hasMotifs = true;
+    payload.spaces = payload.spaces.map((space, index) => ({
+      ...space,
+      motif: `Motivo Único ${index + 1}`,
+    }));
+
+    const response = await request('/api/config/skins', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    expect(response.status).toBe(201);
+    expect(await prisma.cluedoSkin.count()).toBe(1);
+  });
+
   it('elimina una skin existente y sus elementos huerfanos', async () => {
     const existingSkin = await seedSkinInDatabase('Skin Eliminable');
 

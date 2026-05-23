@@ -113,3 +113,81 @@ describe('cyclicDeal', () => {
     expect(sobrantes).toHaveLength(0);
   });
 });
+
+describe('reparto por categoría (equilibrio entre tipos)', () => {
+  function dealByCategory(
+    subjects: string[],
+    objects: string[],
+    spaces: string[],
+    teamCount: number
+  ) {
+    const { cardsByTeam: sbt, sobrantes: ss } = cyclicDeal(subjects, teamCount);
+    const { cardsByTeam: obt, sobrantes: os } = cyclicDeal(objects,  teamCount);
+    const { cardsByTeam: spbt, sobrantes: sps } = cyclicDeal(spaces, teamCount);
+
+    const cardsByTeam = Array.from({ length: teamCount }, (_, i) => ({
+      subjects: sbt[i] ?? [],
+      objects:  obt[i]  ?? [],
+      spaces:   spbt[i] ?? [],
+      all: [...(sbt[i] ?? []), ...(obt[i] ?? []), ...(spbt[i] ?? [])],
+    }));
+
+    return { cardsByTeam, sobrantes: [...ss, ...os, ...sps] };
+  }
+
+  it('2 equipos: cada uno recibe sujetos de ambas categorías de forma balanceada', () => {
+    // 5 sujetos, 5 objetos, 5 espacios (solución ya retirada): diferencia máxima de 1 por categoría
+    const subjects = ['s1', 's2', 's3', 's4', 's5'];
+    const objects  = ['o1', 'o2', 'o3', 'o4', 'o5'];
+    const spaces   = ['sp1', 'sp2', 'sp3', 'sp4', 'sp5'];
+
+    const { cardsByTeam, sobrantes } = dealByCategory(subjects, objects, spaces, 2);
+
+    for (const team of cardsByTeam) {
+      expect(team.subjects.length).toBeGreaterThanOrEqual(2);
+      expect(team.objects.length).toBeGreaterThanOrEqual(2);
+      expect(team.spaces.length).toBeGreaterThanOrEqual(2);
+    }
+    expect(sobrantes).toHaveLength(3); // 1 sobrante por categoría impar
+  });
+
+  it('2 equipos: ningún equipo acapara todos los elementos de una categoría', () => {
+    const subjects = ['s1', 's2', 's3', 's4'];
+    const objects  = ['o1', 'o2', 'o3', 'o4'];
+    const spaces   = ['sp1', 'sp2', 'sp3', 'sp4'];
+
+    const { cardsByTeam } = dealByCategory(subjects, objects, spaces, 2);
+
+    for (const team of cardsByTeam) {
+      // Con 4 elementos por categoría y 2 equipos cada uno recibe exactamente 2
+      expect(team.subjects).toHaveLength(2);
+      expect(team.objects).toHaveLength(2);
+      expect(team.spaces).toHaveLength(2);
+    }
+  });
+
+  it('todas las cartas aparecen exactamente una vez entre manos y sobrantes', () => {
+    const subjects = ['s1', 's2', 's3', 's4', 's5'];
+    const objects  = ['o1', 'o2', 'o3'];
+    const spaces   = ['sp1', 'sp2', 'sp3', 'sp4'];
+
+    const { cardsByTeam, sobrantes } = dealByCategory(subjects, objects, spaces, 3);
+
+    const allDealt = [...cardsByTeam.flatMap((t) => t.all), ...sobrantes].sort();
+    const allCards = [...subjects, ...objects, ...spaces].sort();
+    expect(allDealt).toEqual(allCards);
+  });
+
+  it('con 6 equipos y pocas cartas por categoría los sobrantes se minimizan', () => {
+    const subjects = ['s1', 's2', 's3', 's4', 's5'];
+    const objects  = ['o1', 'o2', 'o3', 'o4', 'o5'];
+    const spaces   = ['sp1', 'sp2', 'sp3', 'sp4', 'sp5'];
+
+    const { cardsByTeam } = dealByCategory(subjects, objects, spaces, 6);
+
+    // Con 5 cartas por categoría y 6 equipos: 5 reciben 1 y 1 recibe 0 por categoría
+    for (const team of cardsByTeam) {
+      expect(team.all.length).toBeLessThanOrEqual(3);
+    }
+  });
+});

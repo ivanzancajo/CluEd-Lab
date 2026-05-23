@@ -349,16 +349,23 @@ function buildDistributedGameSetup(skin: LoadedSkinConfiguration, teamIds: strin
   const space = pickRandomItem(skin.spaces);
   const allElementIds = [...skin.subjects, ...skin.objects, ...skin.spaces].map((item) => item.id);
 
-  const deck = shuffleArray([
-    ...skin.subjects.filter((item) => item.id !== subject.id).map((item) => item.id),
-    ...skin.objects.filter((item) => item.id !== object.id).map((item) => item.id),
-    ...skin.spaces.filter((item) => item.id !== space.id).map((item) => item.id),
-  ]);
+  // Repartir por categoría para garantizar equilibrio entre equipos dentro de cada tipo.
+  // Un reparto mezclado puede concentrar todos los objetos en un equipo y ninguno en otro.
+  const subjectDeck = shuffleArray(skin.subjects.filter((s) => s.id !== subject.id).map((s) => s.id));
+  const objectDeck  = shuffleArray(skin.objects.filter((o) => o.id !== object.id).map((o) => o.id));
+  const spaceDeck   = shuffleArray(skin.spaces.filter((sp) => sp.id !== space.id).map((sp) => sp.id));
 
-  const { cardsByTeam: rawCardsByTeam, sobrantes } = cyclicDeal(deck, teamIds.length);
+  const { cardsByTeam: subjectsByTeam, sobrantes: subjectSobrantes } = cyclicDeal(subjectDeck, teamIds.length);
+  const { cardsByTeam: objectsByTeam,  sobrantes: objectSobrantes  } = cyclicDeal(objectDeck,  teamIds.length);
+  const { cardsByTeam: spacesByTeam,   sobrantes: spaceSobrantes   } = cyclicDeal(spaceDeck,   teamIds.length);
+
   const cardsByTeam: TeamCardAssignment[] = teamIds.map((teamId, i) => ({
     teamId,
-    elementIds: rawCardsByTeam[i] ?? [],
+    elementIds: [
+      ...(subjectsByTeam[i] ?? []),
+      ...(objectsByTeam[i]  ?? []),
+      ...(spacesByTeam[i]   ?? []),
+    ],
   }));
 
   return {
@@ -369,7 +376,7 @@ function buildDistributedGameSetup(skin: LoadedSkinConfiguration, teamIds: strin
     },
     allElementIds,
     cardsByTeam,
-    sobrantes,
+    sobrantes: [...subjectSobrantes, ...objectSobrantes, ...spaceSobrantes],
   };
 }
 

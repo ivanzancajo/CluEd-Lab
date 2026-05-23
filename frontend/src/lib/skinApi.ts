@@ -96,6 +96,12 @@ export interface SkinValidationResult {
     objects: number;
     spaces: number;
   };
+  duplicateIndices: {
+    subjectNames: Set<number>;
+    objectNames: Set<number>;
+    spaceNames: Set<number>;
+    spaceMotifs: Set<number>;
+  };
 }
 
 interface ListSkinsResponse {
@@ -139,19 +145,41 @@ function normalizeName(value: string) {
   return value.trim().toLocaleLowerCase("es");
 }
 
-function hasDuplicateNames(items: SkinItemPayload[]) {
-  const seen = new Set<string>();
+function getDuplicateNameIndices(items: SkinItemPayload[]): Set<number> {
+  const seen = new Map<string, number>();
+  const duplicates = new Set<number>();
 
-  for (const item of items) {
+  items.forEach((item, index) => {
     const normalized = normalizeName(item.name);
-    if (seen.has(normalized)) {
-      return true;
+    const previousIndex = seen.get(normalized);
+    if (previousIndex !== undefined) {
+      duplicates.add(previousIndex);
+      duplicates.add(index);
+    } else {
+      seen.set(normalized, index);
     }
+  });
 
-    seen.add(normalized);
-  }
+  return duplicates;
+}
 
-  return false;
+function getDuplicateMotifIndices(items: SkinItemPayload[]): Set<number> {
+  const seen = new Map<string, number>();
+  const duplicates = new Set<number>();
+
+  items.forEach((item, index) => {
+    if (!item.motif?.trim()) return;
+    const normalized = item.motif.trim().toLocaleLowerCase("es");
+    const previousIndex = seen.get(normalized);
+    if (previousIndex !== undefined) {
+      duplicates.add(previousIndex);
+      duplicates.add(index);
+    } else {
+      seen.set(normalized, index);
+    }
+  });
+
+  return duplicates;
 }
 
 export function validateSkinComposition(config: {
@@ -165,6 +193,11 @@ export function validateSkinComposition(config: {
   const spaces = config.spaces ?? [];
   const errors: string[] = [];
 
+  const subjectNames = getDuplicateNameIndices(subjects);
+  const objectNames = getDuplicateNameIndices(objects);
+  const spaceNames = getDuplicateNameIndices(spaces);
+  const spaceMotifs = getDuplicateMotifIndices(spaces);
+
   if (subjects.length !== REQUIRED_ITEM_COUNTS.subjects) {
     errors.push(`La skin debe tener exactamente ${REQUIRED_ITEM_COUNTS.subjects} sujetos.`);
   }
@@ -177,15 +210,15 @@ export function validateSkinComposition(config: {
     errors.push(`La skin debe tener exactamente ${REQUIRED_ITEM_COUNTS.spaces} espacios.`);
   }
 
-  if (hasDuplicateNames(subjects)) {
+  if (subjectNames.size > 0) {
     errors.push("No se pueden repetir nombres de sujetos dentro de la misma skin.");
   }
 
-  if (hasDuplicateNames(objects)) {
+  if (objectNames.size > 0) {
     errors.push("No se pueden repetir nombres de objetos dentro de la misma skin.");
   }
 
-  if (hasDuplicateNames(spaces)) {
+  if (spaceNames.size > 0) {
     errors.push("No se pueden repetir nombres de espacios dentro de la misma skin.");
   }
 
@@ -201,6 +234,10 @@ export function validateSkinComposition(config: {
     errors.push("Debes indicar un motivo para cada espacio cuando la configuración tiene motivos habilitados.");
   }
 
+  if (spaceMotifs.size > 0) {
+    errors.push("No se pueden repetir los motivos de los espacios dentro de la misma skin.");
+  }
+
   return {
     isValid: errors.length === 0,
     errors,
@@ -209,6 +246,7 @@ export function validateSkinComposition(config: {
       objects: objects.length,
       spaces: spaces.length,
     },
+    duplicateIndices: { subjectNames, objectNames, spaceNames, spaceMotifs },
   };
 }
 

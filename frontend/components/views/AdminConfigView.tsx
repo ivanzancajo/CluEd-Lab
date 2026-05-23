@@ -93,6 +93,21 @@ function toPayloadItems(items: EditableSkinItem[]): SkinItemPayload[] {
   }));
 }
 
+function buildItemErrorMap(
+  items: EditableSkinItem[],
+  nameIndices: Set<number>,
+  motifIndices: Set<number>
+): Map<string, ("name" | "motif")[]> {
+  const map = new Map<string, ("name" | "motif")[]>();
+  items.forEach((item, index) => {
+    const fields: ("name" | "motif")[] = [];
+    if (nameIndices.has(index)) fields.push("name");
+    if (motifIndices.has(index)) fields.push("motif");
+    if (fields.length > 0) map.set(item.localId, fields);
+  });
+  return map;
+}
+
 function areCollectionsEqual(left: SkinItem[], right: SkinItemPayload[]) {
   if (left.length !== right.length) {
     return false;
@@ -234,6 +249,15 @@ export function AdminConfigView() {
       }),
     [hasMotifs, subjectPayload, objectPayload, spacePayload]
   );
+
+  const itemErrors = useMemo(() => {
+    const { duplicateIndices } = validation;
+    return {
+      subjects: buildItemErrorMap(subjects, duplicateIndices.subjectNames, new Set()),
+      objects: buildItemErrorMap(objects, duplicateIndices.objectNames, new Set()),
+      spaces: buildItemErrorMap(spaces, duplicateIndices.spaceNames, duplicateIndices.spaceMotifs),
+    };
+  }, [validation, subjects, objects, spaces]);
 
   const metadataReady = [configName, gameTitle, objective, cat1Name, cat2Name, cat3Name].every(
     (value) => value.trim().length > 0
@@ -480,7 +504,8 @@ export function AdminConfigView() {
     type: string,
     collectionKey: "subjects" | "objects" | "spaces",
     maxItems: number,
-    showMotif: boolean
+    showMotif: boolean,
+    errorItems: Map<string, ("name" | "motif")[]>
   ) => {
     const updateItem = (localId: string, updater: (item: EditableSkinItem) => EditableSkinItem) => {
       setItems((currentItems) => currentItems.map((item) => (item.localId === localId ? updater(item) : item)));
@@ -558,7 +583,11 @@ export function AdminConfigView() {
                   disabled={fieldsDisabled}
                   data-cy={`admin-config-${collectionKey}-name-input`}
                   onChange={(event) => updateItem(item.localId, (currentItem) => ({ ...currentItem, name: event.target.value }))}
-                  className="w-full rounded border border-slate-700 bg-slate-950 p-3 font-bold text-cyan-100 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
+                  className={`w-full rounded border bg-slate-950 p-3 font-bold text-cyan-100 outline-none disabled:opacity-60 ${
+                    errorItems.get(item.localId)?.includes("name")
+                      ? "border-red-500 ring-1 ring-red-500"
+                      : "border-slate-700 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500"
+                  }`}
                   placeholder={`Nombre del ${type.toLowerCase()}...`}
                 />
 
@@ -613,7 +642,11 @@ export function AdminConfigView() {
                   disabled={fieldsDisabled}
                   data-cy={`admin-config-${collectionKey}-motif-input`}
                   onChange={(event) => updateItem(item.localId, (currentItem) => ({ ...currentItem, motif: event.target.value }))}
-                  className="w-full rounded border border-purple-900/50 bg-slate-950 p-3 text-xs text-purple-200 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-500 disabled:opacity-60"
+                  className={`w-full rounded border bg-slate-950 p-3 text-xs outline-none disabled:opacity-60 ${
+                    errorItems.get(item.localId)?.includes("motif")
+                      ? "border-red-500 ring-1 ring-red-500 text-red-200"
+                      : "border-purple-900/50 text-purple-200 focus:border-purple-400 focus:ring-1 focus:ring-purple-500"
+                  }`}
                   placeholder="Motivo asociado a este espacio..."
                 />
               ) : null}
@@ -1069,7 +1102,7 @@ export function AdminConfigView() {
                 <p className="text-sm text-slate-400">Define exactamente {REQUIRED_ITEM_COUNTS.subjects} sujetos para la skin.</p>
               </div>
 
-              {renderEditableItemList(subjects, setSubjects, <User className="h-4 w-4" />, "Sujeto", "subjects", REQUIRED_ITEM_COUNTS.subjects, false)}
+              {renderEditableItemList(subjects, setSubjects, <User className="h-4 w-4" />, "Sujeto", "subjects", REQUIRED_ITEM_COUNTS.subjects, false, itemErrors.subjects)}
             </motion.div>
           ) : null}
 
@@ -1088,7 +1121,7 @@ export function AdminConfigView() {
                 <p className="text-sm text-slate-400">Define exactamente {REQUIRED_ITEM_COUNTS.objects} objetos para la skin.</p>
               </div>
 
-              {renderEditableItemList(objects, setObjects, <Box className="h-4 w-4" />, "Objeto", "objects", REQUIRED_ITEM_COUNTS.objects, false)}
+              {renderEditableItemList(objects, setObjects, <Box className="h-4 w-4" />, "Objeto", "objects", REQUIRED_ITEM_COUNTS.objects, false, itemErrors.objects)}
             </motion.div>
           ) : null}
 
@@ -1109,7 +1142,7 @@ export function AdminConfigView() {
                 </p>
               </div>
 
-              {renderEditableItemList(spaces, setSpaces, <MapPin className="h-4 w-4" />, cat3Name, "spaces", REQUIRED_ITEM_COUNTS.spaces, hasMotifs)}
+              {renderEditableItemList(spaces, setSpaces, <MapPin className="h-4 w-4" />, cat3Name, "spaces", REQUIRED_ITEM_COUNTS.spaces, hasMotifs, itemErrors.spaces)}
             </motion.div>
           ) : null}
         </AnimatePresence>

@@ -1105,7 +1105,7 @@ export function AdminConfigView() {
                 <p className="text-sm text-slate-400">Define entre {COLLECTION_CONSTRAINTS.subjects.min} y {COLLECTION_CONSTRAINTS.subjects.max} sujetos para la skin.</p>
               </div>
 
-              {renderEditableItemList(subjects, setSubjects, <User className="h-4 w-4" />, "Sujeto", "subjects", COLLECTION_CONSTRAINTS.subjects.min, COLLECTION_CONSTRAINTS.subjects.max, false)}
+              {renderEditableItemList(subjects, setSubjects, <User className="h-4 w-4" />, "Sujeto", "subjects", COLLECTION_CONSTRAINTS.subjects.min, COLLECTION_CONSTRAINTS.subjects.max, false, itemErrors.subjects)}
             </motion.div>
           ) : null}
 
@@ -1124,7 +1124,7 @@ export function AdminConfigView() {
                 <p className="text-sm text-slate-400">Define entre {COLLECTION_CONSTRAINTS.objects.min} y {COLLECTION_CONSTRAINTS.objects.max} objetos para la skin.</p>
               </div>
 
-              {renderEditableItemList(objects, setObjects, <Box className="h-4 w-4" />, "Objeto", "objects", COLLECTION_CONSTRAINTS.objects.min, COLLECTION_CONSTRAINTS.objects.max, false)}
+              {renderEditableItemList(objects, setObjects, <Box className="h-4 w-4" />, "Objeto", "objects", COLLECTION_CONSTRAINTS.objects.min, COLLECTION_CONSTRAINTS.objects.max, false, itemErrors.objects)}
             </motion.div>
           ) : null}
 
@@ -1145,7 +1145,7 @@ export function AdminConfigView() {
                 </p>
               </div>
 
-              {renderEditableItemList(spaces, setSpaces, <MapPin className="h-4 w-4" />, cat3Name, "spaces", COLLECTION_CONSTRAINTS.spaces.min, COLLECTION_CONSTRAINTS.spaces.max, hasMotifs)}
+              {renderEditableItemList(spaces, setSpaces, <MapPin className="h-4 w-4" />, cat3Name, "spaces", COLLECTION_CONSTRAINTS.spaces.min, COLLECTION_CONSTRAINTS.spaces.max, hasMotifs, itemErrors.spaces)}
             </motion.div>
           ) : null}
         </AnimatePresence>

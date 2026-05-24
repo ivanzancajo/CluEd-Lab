@@ -193,6 +193,11 @@ export function validateSkinComposition(config: {
   const spaces = config.spaces ?? [];
   const errors: string[] = [];
 
+  const subjectNames = getDuplicateNameIndices(subjects);
+  const objectNames = getDuplicateNameIndices(objects);
+  const spaceNames = getDuplicateNameIndices(spaces);
+  const spaceMotifs = getDuplicateMotifIndices(spaces);
+
   if (subjects.length < COLLECTION_CONSTRAINTS.subjects.min || subjects.length > COLLECTION_CONSTRAINTS.subjects.max) {
     errors.push(`La skin debe tener entre ${COLLECTION_CONSTRAINTS.subjects.min} y ${COLLECTION_CONSTRAINTS.subjects.max} sujetos.`);
   }

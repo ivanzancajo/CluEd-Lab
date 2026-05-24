@@ -88,6 +88,7 @@ import { ThemedBoard } from "../game/ThemedBoard";
 import { SpaceMotifModal } from "../game/SpaceMotifModal";
 import { EvidenciasComunes } from "../game/EvidenciasComunes";
 import { EnvelopeAnimation } from "../game/EnvelopeAnimation";
+import { ImageWithFallback } from "../figma/ImageWithFallback";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1770,15 +1771,25 @@ export function TerminalView() {
                            {/* Front of card */}
                            <div className={`absolute inset-0 [backface-visibility:hidden] flex flex-col items-center justify-start text-center ${selectedCard.bg} bg-opacity-90 overflow-hidden rounded-lg`}>
                              <div className="w-full h-[60%] bg-black/40 border-b border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden">
-                               {selectedCard.image ? (
-                                 <img src={selectedCard.image} alt={selectedCard.name} className="w-full h-full object-cover opacity-90" />
-                               ) : (
-                                 <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
-                                   {selectedCard.type === catNames.c1 && <User className="w-6 h-6 text-slate-300" />}
-                                   {selectedCard.type === catNames.c2 && <Box className="w-6 h-6 text-slate-300" />}
-                                   {selectedCard.type === catNames.c3 && <MapPin className="w-6 h-6 text-slate-300" />}
-                                 </div>
-                               )}
+                               {selectedCard.image
+                                 ? <ImageWithFallback
+                                     src={selectedCard.image}
+                                     alt={selectedCard.name}
+                                     className="w-full h-full object-cover opacity-90"
+                                     fallback={
+                                       <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
+                                         {selectedCard.type === catNames.c1 && <User className="w-6 h-6 text-slate-300" />}
+                                         {selectedCard.type === catNames.c2 && <Box className="w-6 h-6 text-slate-300" />}
+                                         {selectedCard.type === catNames.c3 && <MapPin className="w-6 h-6 text-slate-300" />}
+                                       </div>
+                                     }
+                                   />
+                                 : <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
+                                     {selectedCard.type === catNames.c1 && <User className="w-6 h-6 text-slate-300" />}
+                                     {selectedCard.type === catNames.c2 && <Box className="w-6 h-6 text-slate-300" />}
+                                     {selectedCard.type === catNames.c3 && <MapPin className="w-6 h-6 text-slate-300" />}
+                                   </div>
+                               }
                              </div>
                              <div className="w-full flex-1 flex flex-col items-center justify-center p-2">
                                <h4 className="font-bold text-sm tracking-widest uppercase text-white drop-shadow-md leading-tight line-clamp-2 px-1">{selectedCard.name}</h4>
@@ -1946,15 +1957,25 @@ export function TerminalView() {
                         className={`w-28 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${card.color} ${card.bg} bg-opacity-40 flex flex-col items-center justify-start cursor-pointer snap-center hover:scale-105 transition-transform shadow-lg relative overflow-hidden`}
                       >
                         <div className="w-full h-1/2 relative overflow-hidden border-b border-slate-800">
-                          {card.image ? (
-                            <img src={card.image} alt={card.name} className="w-full h-full object-cover opacity-80" />
-                          ) : (
-                            <div className="w-full h-full bg-slate-900 flex items-center justify-center">
-                              {card.kind === "SUJETO" && <User className="w-5 h-5 text-slate-400 opacity-80" />}
-                              {card.kind === "OBJETO" && <Box className="w-5 h-5 text-slate-400 opacity-80" />}
-                              {card.kind === "ESPACIO" && <MapPin className="w-5 h-5 text-slate-400 opacity-80" />}
-                            </div>
-                          )}
+                          {card.image
+                            ? <ImageWithFallback
+                                src={card.image}
+                                alt={card.name}
+                                className="w-full h-full object-cover opacity-80"
+                                fallback={
+                                  <div className="w-full h-full bg-slate-900 flex items-center justify-center">
+                                    {card.kind === "SUJETO" && <User className="w-5 h-5 text-slate-400 opacity-80" />}
+                                    {card.kind === "OBJETO" && <Box className="w-5 h-5 text-slate-400 opacity-80" />}
+                                    {card.kind === "ESPACIO" && <MapPin className="w-5 h-5 text-slate-400 opacity-80" />}
+                                  </div>
+                                }
+                              />
+                            : <div className="w-full h-full bg-slate-900 flex items-center justify-center">
+                                {card.kind === "SUJETO" && <User className="w-5 h-5 text-slate-400 opacity-80" />}
+                                {card.kind === "OBJETO" && <Box className="w-5 h-5 text-slate-400 opacity-80" />}
+                                {card.kind === "ESPACIO" && <MapPin className="w-5 h-5 text-slate-400 opacity-80" />}
+                              </div>
+                          }
                           <div className="absolute top-0 right-0 w-6 h-6 bg-black/60 rounded-bl-full backdrop-blur-sm border-b border-l border-slate-700/50 flex items-start justify-end p-1">
                             {card.kind === "SUJETO" && <User className="w-3 h-3 text-cyan-400" />}
                             {card.kind === "OBJETO" && <Box className="w-3 h-3 text-emerald-400" />}

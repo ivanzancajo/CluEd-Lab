@@ -1,4 +1,6 @@
+import { MapPin } from 'lucide-react';
 import type { BoardSpaceLabel } from '../../src/lib/boardTheme';
+import { ImageWithFallback } from '../figma/ImageWithFallback';
 
 type SpaceMotifModalProps = {
   space: BoardSpaceLabel | null;
@@ -33,10 +35,15 @@ export function SpaceMotifModal({ space, onClose }: SpaceMotifModalProps) {
 
         {space.imageUrl && (
           <div className="mb-3 flex justify-center">
-            <img
+            <ImageWithFallback
               src={space.imageUrl}
               alt={space.name}
               className="h-16 w-16 rounded-lg object-cover border border-amber-800/40 shadow-md"
+              fallback={
+                <div className="h-16 w-16 rounded-lg border border-amber-800/40 flex items-center justify-center bg-slate-900">
+                  <MapPin className="w-8 h-8 text-amber-700/60" />
+                </div>
+              }
             />
           </div>
         )}

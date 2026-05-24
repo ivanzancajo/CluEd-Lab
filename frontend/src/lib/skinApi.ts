@@ -82,10 +82,10 @@ export interface UpdateSkinPayload {
   spaces?: SkinItemPayload[];
 }
 
-export const REQUIRED_ITEM_COUNTS = {
-  subjects: 6,
-  objects: 6,
-  spaces: 9,
+export const COLLECTION_CONSTRAINTS = {
+  subjects: { min: 6, max: 10 },
+  objects:  { min: 6, max: 10 },
+  spaces:   { min: 9, max: 9 },
 } as const;
 
 export interface SkinValidationResult {
@@ -193,21 +193,16 @@ export function validateSkinComposition(config: {
   const spaces = config.spaces ?? [];
   const errors: string[] = [];
 
-  const subjectNames = getDuplicateNameIndices(subjects);
-  const objectNames = getDuplicateNameIndices(objects);
-  const spaceNames = getDuplicateNameIndices(spaces);
-  const spaceMotifs = getDuplicateMotifIndices(spaces);
-
-  if (subjects.length !== REQUIRED_ITEM_COUNTS.subjects) {
-    errors.push(`La skin debe tener exactamente ${REQUIRED_ITEM_COUNTS.subjects} sujetos.`);
+  if (subjects.length < COLLECTION_CONSTRAINTS.subjects.min || subjects.length > COLLECTION_CONSTRAINTS.subjects.max) {
+    errors.push(`La skin debe tener entre ${COLLECTION_CONSTRAINTS.subjects.min} y ${COLLECTION_CONSTRAINTS.subjects.max} sujetos.`);
   }
 
-  if (objects.length !== REQUIRED_ITEM_COUNTS.objects) {
-    errors.push(`La skin debe tener exactamente ${REQUIRED_ITEM_COUNTS.objects} objetos.`);
+  if (objects.length < COLLECTION_CONSTRAINTS.objects.min || objects.length > COLLECTION_CONSTRAINTS.objects.max) {
+    errors.push(`La skin debe tener entre ${COLLECTION_CONSTRAINTS.objects.min} y ${COLLECTION_CONSTRAINTS.objects.max} objetos.`);
   }
 
-  if (spaces.length !== REQUIRED_ITEM_COUNTS.spaces) {
-    errors.push(`La skin debe tener exactamente ${REQUIRED_ITEM_COUNTS.spaces} espacios.`);
+  if (spaces.length !== COLLECTION_CONSTRAINTS.spaces.min) {
+    errors.push(`La skin debe tener exactamente ${COLLECTION_CONSTRAINTS.spaces.min} espacios.`);
   }
 
   if (subjectNames.size > 0) {

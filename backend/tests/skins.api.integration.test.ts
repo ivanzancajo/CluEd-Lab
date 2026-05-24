@@ -50,8 +50,8 @@ type CreateItem = {
 type CollectionKey = 'subjects' | 'objects' | 'spaces';
 
 const COLLECTION_LENGTH_ERRORS: Array<{ key: CollectionKey; detail: string }> = [
-  { key: 'subjects', detail: 'La configuración debe tener exactamente 6 sujetos.' },
-  { key: 'objects', detail: 'La configuración debe tener exactamente 6 objetos.' },
+  { key: 'subjects', detail: 'La configuración debe tener al menos 6 sujetos.' },
+  { key: 'objects', detail: 'La configuración debe tener al menos 6 objetos.' },
   { key: 'spaces', detail: 'La configuración debe tener exactamente 9 espacios.' },
 ];
 
@@ -234,6 +234,36 @@ describe('API de gestion de CluedoSkins', () => {
       expect(await prisma.cluedoSkin.count()).toBe(0);
     }
   );
+
+  it('acepta la creacion con el maximo de sujetos y objetos (10 cada uno)', async () => {
+    const payload = buildCreatePayload('Skin Maxima');
+    payload.subjects = buildItems('Sujeto', 10);
+    payload.objects = buildItems('Objeto', 10);
+
+    const response = await request('/api/config/skins', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    expect(response.status).toBe(201);
+    expect(await prisma.cluedoSkin.count()).toBe(1);
+  });
+
+  it('rechaza la creacion cuando sujetos supera el maximo de 10', async () => {
+    const payload = buildCreatePayload('Skin Excesiva');
+    payload.subjects = buildItems('Sujeto', 11);
+
+    const response = await request('/api/config/skins', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    const body = (await response.json()) as ValidationErrorResponse;
+
+    expect(response.status).toBe(400);
+    expect(body.details).toContain('La configuración no puede tener más de 10 sujetos.');
+    expect(await prisma.cluedoSkin.count()).toBe(0);
+  });
 
   it('actualiza una skin existente y persiste los cambios de metadatos', async () => {
     const existingSkin = await seedSkinInDatabase('Skin Original');

@@ -433,7 +433,7 @@ const ROOM_GRID_FOOTPRINTS: RoomGridFootprintDefinition = {
         ...rowRangePoints(23, [[0, 4]]),
         ...rowRangePoints(24, [[0, 4]]),
       ],
-      [grid(3, 20), grid(3, 19)]
+      [grid(3, 19), grid(4, 19), grid(3, 20)]
     ),
   ],
   'sala-inferior-centro': [

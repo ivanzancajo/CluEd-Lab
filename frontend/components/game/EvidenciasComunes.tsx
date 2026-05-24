@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Database, User, Box, MapPin } from 'lucide-react';
 import type { TeamHandCard, TeamElementKind } from '../../src/lib/sessionApi';
+import { ImageWithFallback } from '../figma/ImageWithFallback';
 
 interface EvidenciasComunesProps {
   publicCards: TeamHandCard[];
@@ -53,15 +54,15 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
                 className={`w-28 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${styles.border} ${styles.bg} flex flex-col overflow-hidden relative cursor-pointer hover:brightness-125 transition-all`}
               >
                 <div className="h-1/2 relative flex items-center justify-center border-b border-white/10">
-                  {card.imageUrl ? (
-                    <img
-                      src={card.imageUrl}
-                      alt={card.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Icon className="w-8 h-8 text-white/40" />
-                  )}
+                  {card.imageUrl
+                    ? <ImageWithFallback
+                        src={card.imageUrl}
+                        alt={card.name}
+                        className="w-full h-full object-cover"
+                        fallback={<Icon className="w-8 h-8 text-white/40" />}
+                      />
+                    : <Icon className="w-8 h-8 text-white/40" />
+                  }
                   <div className={`absolute top-1 right-1 rounded-full p-0.5 ${styles.bg}`}>
                     <Icon className="w-3 h-3 text-white/70" />
                   </div>
@@ -103,13 +104,21 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
                 {/* Front */}
                 <div className={`absolute inset-0 [backface-visibility:hidden] flex flex-col items-center justify-start text-center ${styles.bg} bg-opacity-90 overflow-hidden rounded-lg`}>
                   <div className="w-full h-[60%] bg-black/40 border-b border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden">
-                    {selectedCard.imageUrl ? (
-                      <img src={selectedCard.imageUrl} alt={selectedCard.name} className="w-full h-full object-cover opacity-90" />
-                    ) : (
-                      <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
-                        <Icon className="w-6 h-6 text-slate-300" />
-                      </div>
-                    )}
+                    {selectedCard.imageUrl
+                      ? <ImageWithFallback
+                          src={selectedCard.imageUrl}
+                          alt={selectedCard.name}
+                          className="w-full h-full object-cover opacity-90"
+                          fallback={
+                            <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
+                              <Icon className="w-6 h-6 text-slate-300" />
+                            </div>
+                          }
+                        />
+                      : <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
+                          <Icon className="w-6 h-6 text-slate-300" />
+                        </div>
+                    }
                   </div>
                   <div className="w-full flex-1 flex flex-col items-center justify-center p-2">
                     <h4 data-cy="evidencias-comunes-modal-name" className="font-bold text-sm tracking-widest uppercase text-white drop-shadow-md leading-tight line-clamp-2 px-1">{selectedCard.name}</h4>

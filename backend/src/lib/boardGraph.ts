@@ -433,7 +433,7 @@ const ROOM_GRID_FOOTPRINTS: RoomGridFootprintDefinition = {
         ...rowRangePoints(23, [[0, 4]]),
         ...rowRangePoints(24, [[0, 4]]),
       ],
-      [grid(3, 20), grid(3, 19)]
+      [grid(3, 19), grid(4, 19), grid(3, 20)]
     ),
   ],
   'sala-inferior-centro': [
@@ -522,6 +522,10 @@ export const BOARD_MOVEMENT_NODE_LIST = Object.values(BOARD_MOVEMENT_NODES).sort
 
   return left.label.localeCompare(right.label, 'es');
 });
+
+export const BOARD_EXCLUDED_GRID_KEYS: ReadonlySet<string> = EXCLUDED_SQUARE_GRID_KEYS;
+export const BOARD_ROOM_FOOTPRINT_GRID_KEYS: ReadonlySet<string> = ROOM_FOOTPRINT_GRID_KEYS;
+export const BOARD_ROOM_DOOR_COORDINATES: Readonly<Record<string, readonly BoardGridCoordinate[]>> = ROOM_ENTRY_DOOR_GRID_COORDINATES;
 
 export function findRoomNodeIdByDoorNodeId(nodeId: string) {
   const node = BOARD_MOVEMENT_NODES[nodeId];

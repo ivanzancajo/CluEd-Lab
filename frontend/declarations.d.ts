@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 // Permite que TypeScript reconozca importaciones de imágenes PNG
 declare module "*.png" {
   const value: string;

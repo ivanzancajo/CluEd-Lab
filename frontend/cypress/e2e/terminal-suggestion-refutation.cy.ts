@@ -5,9 +5,6 @@ import { io, type Socket } from "socket.io-client";
 type TeamColor = "ROJO" | "AZUL" | "VERDE" | "AMARILLO" | "MORADO" | "BLANCO";
 type TeamElementKind = "SUJETO" | "OBJETO" | "ESPACIO";
 
-type CreatedSkin = {
-  id: string;
-};
 
 type SeededSkin = {
   skinId: string;

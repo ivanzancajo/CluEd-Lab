@@ -1,6 +1,7 @@
 import { createElement, lazy, Suspense, type ComponentType } from "react";
 import { createBrowserRouter } from "react-router";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
+import { RouterErrorPage } from "./components/RouterErrorPage";
 
 const Landing = lazy(async () => ({ default: (await import("./components/views/Landing")).Landing }));
 const LobbyView = lazy(async () => ({ default: (await import("./components/views/LobbyView")).LobbyView }));
@@ -46,33 +47,42 @@ const ProtectedLobbyView = withProtectedSuspense(LobbyView);
 const ProtectedBoardView = withProtectedSuspense(BoardView);
 const ProtectedSessionCreate = withProtectedSuspense(SessionCreateView);
 
+const errorElement = createElement(RouterErrorPage);
+
 export const router = createBrowserRouter([
   {
     path: "/",
     Component: LandingRoute,
+    errorElement,
   },
   {
     path: "/join",
     Component: JoinTerminalRoute,
+    errorElement,
   },
   {
     path: "/terminal",
     Component: TerminalRoute,
+    errorElement,
   },
   {
     path: "/config",
     Component: ProtectedAdminConfig,
+    errorElement,
   },
   {
     path: "/lobby",
     Component: ProtectedLobbyView,
+    errorElement,
   },
   {
     path: "/board",
     Component: ProtectedBoardView,
+    errorElement,
   },
   {
     path: "/host",
     Component: ProtectedSessionCreate,
+    errorElement,
   },
 ]);

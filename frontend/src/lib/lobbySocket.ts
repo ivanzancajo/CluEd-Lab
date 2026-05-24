@@ -294,7 +294,8 @@ function emitWithAck<EventName extends keyof ClientToServerEvents>(
   payload: Parameters<ClientToServerEvents[EventName]>[0]
 ) {
   return new Promise<LobbySubscribeAck>((resolve) => {
-    socket.emit(eventName, payload as never, resolve);
+    // Socket.IO generics no soportan callbacks genéricos bien — cast seguro aquí
+    (socket.emit as (ev: EventName, p: typeof payload, cb: typeof resolve) => void)(eventName, payload, resolve);
   });
 }
 

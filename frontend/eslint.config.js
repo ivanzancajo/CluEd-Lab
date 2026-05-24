@@ -18,8 +18,13 @@ export default tseslint.config(
     rules: {
       ...hooksPlugin.configs.recommended.rules,
       "react/react-in-jsx-scope": "off",
-      "react-hooks/exhaustive-deps": "warn", // Auditor clave de dependencias
-      "@typescript-eslint/no-explicit-any": "warn", // Para limpiar los 'any'
+      "react-hooks/exhaustive-deps": "warn",
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": ["error", {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        destructuredArrayIgnorePattern: "^_",
+      }],
     },
     settings: {
       react: { version: "detect" },
@@ -36,6 +41,10 @@ export default tseslint.config(
         beforeEach: "readonly",
         expect: "readonly",
       },
+    },
+    rules: {
+      // Las aserciones Chai (expect(x).to.exist) son expresiones sin asignación — es intencional
+      "@typescript-eslint/no-unused-expressions": "off",
     },
   }
 );

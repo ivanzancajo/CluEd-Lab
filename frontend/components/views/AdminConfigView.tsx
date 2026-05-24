@@ -35,7 +35,7 @@ import {
   getSkinConfig,
   getSkinErrorMessage,
   listSkinSummaries,
-  REQUIRED_ITEM_COUNTS,
+  COLLECTION_CONSTRAINTS,
   type SkinItem,
   type SkinItemPayload,
   type SkinSummary,
@@ -479,6 +479,7 @@ export function AdminConfigView() {
     icon: ReactNode,
     type: string,
     collectionKey: "subjects" | "objects" | "spaces",
+    minItems: number,
     maxItems: number,
     showMotif: boolean
   ) => {
@@ -511,12 +512,14 @@ export function AdminConfigView() {
       <div className="flex flex-col gap-4">
         <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-300">
           <div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-cyan-300">
-            {type}s configurados: {items.length}/{maxItems}
+            {type}s configurados: {items.length}/{minItems === maxItems ? maxItems : `${minItems}-${maxItems}`}
           </div>
           {showMotif ? (
             <p>Cuando los motivos están habilitados, la tabla de razonamiento mostrará el motivo en lugar del nombre del espacio.</p>
-          ) : (
+          ) : minItems === maxItems ? (
             <p>Edita los elementos de esta terna y completa exactamente {maxItems} para poder guardar la skin.</p>
+          ) : (
+            <p>Edita los elementos de esta terna y completa entre {minItems} y {maxItems} para poder guardar la skin.</p>
           )}
         </div>
 
@@ -703,7 +706,7 @@ export function AdminConfigView() {
                     : "border-transparent text-slate-500 hover:bg-slate-800 hover:text-slate-300"
                 }`}
               >
-                <User className="h-4 w-4" /> {cat1Name} ({subjects.length}/{REQUIRED_ITEM_COUNTS.subjects})
+                <User className="h-4 w-4" /> {cat1Name} ({subjects.length}/{COLLECTION_CONSTRAINTS.subjects.min}-{COLLECTION_CONSTRAINTS.subjects.max})
               </button>
 
               <button
@@ -715,7 +718,7 @@ export function AdminConfigView() {
                     : "border-transparent text-slate-500 hover:bg-slate-800 hover:text-slate-300"
                 }`}
               >
-                <Box className="h-4 w-4" /> {cat2Name} ({objects.length}/{REQUIRED_ITEM_COUNTS.objects})
+                <Box className="h-4 w-4" /> {cat2Name} ({objects.length}/{COLLECTION_CONSTRAINTS.objects.min}-{COLLECTION_CONSTRAINTS.objects.max})
               </button>
 
               <button
@@ -727,7 +730,7 @@ export function AdminConfigView() {
                     : "border-transparent text-slate-500 hover:bg-slate-800 hover:text-slate-300"
                 }`}
               >
-                <MapPin className="h-4 w-4" /> {cat3Name} ({spaces.length}/{REQUIRED_ITEM_COUNTS.spaces})
+                <MapPin className="h-4 w-4" /> {cat3Name} ({spaces.length}/{COLLECTION_CONSTRAINTS.spaces.min})
               </button>
             </>
           ) : null}
@@ -792,9 +795,9 @@ export function AdminConfigView() {
             >
               <div className="mb-2 text-[11px] font-bold uppercase tracking-widest">Estado de la skin</div>
               <div className="mb-2 flex flex-wrap gap-4">
-                <span>{cat1Name}: {validation.counts.subjects}/{REQUIRED_ITEM_COUNTS.subjects}</span>
-                <span>{cat2Name}: {validation.counts.objects}/{REQUIRED_ITEM_COUNTS.objects}</span>
-                <span>{cat3Name}: {validation.counts.spaces}/{REQUIRED_ITEM_COUNTS.spaces}</span>
+                <span>{cat1Name}: {validation.counts.subjects}/{COLLECTION_CONSTRAINTS.subjects.min}-{COLLECTION_CONSTRAINTS.subjects.max}</span>
+                <span>{cat2Name}: {validation.counts.objects}/{COLLECTION_CONSTRAINTS.objects.min}-{COLLECTION_CONSTRAINTS.objects.max}</span>
+                <span>{cat3Name}: {validation.counts.spaces}/{COLLECTION_CONSTRAINTS.spaces.min}</span>
               </div>
               {!validation.isValid ? (
                 <ul className="list-inside list-disc space-y-1">
@@ -1066,10 +1069,10 @@ export function AdminConfigView() {
                 <h2 className="mb-2 flex items-center gap-3 text-2xl font-black uppercase tracking-widest text-cyan-400">
                   <User className="h-8 w-8" /> Configurar Sujetos
                 </h2>
-                <p className="text-sm text-slate-400">Define exactamente {REQUIRED_ITEM_COUNTS.subjects} sujetos para la skin.</p>
+                <p className="text-sm text-slate-400">Define entre {COLLECTION_CONSTRAINTS.subjects.min} y {COLLECTION_CONSTRAINTS.subjects.max} sujetos para la skin.</p>
               </div>
 
-              {renderEditableItemList(subjects, setSubjects, <User className="h-4 w-4" />, "Sujeto", "subjects", REQUIRED_ITEM_COUNTS.subjects, false)}
+              {renderEditableItemList(subjects, setSubjects, <User className="h-4 w-4" />, "Sujeto", "subjects", COLLECTION_CONSTRAINTS.subjects.min, COLLECTION_CONSTRAINTS.subjects.max, false)}
             </motion.div>
           ) : null}
 
@@ -1085,10 +1088,10 @@ export function AdminConfigView() {
                 <h2 className="mb-2 flex items-center gap-3 text-2xl font-black uppercase tracking-widest text-emerald-400">
                   <Box className="h-8 w-8" /> Configurar Objetos
                 </h2>
-                <p className="text-sm text-slate-400">Define exactamente {REQUIRED_ITEM_COUNTS.objects} objetos para la skin.</p>
+                <p className="text-sm text-slate-400">Define entre {COLLECTION_CONSTRAINTS.objects.min} y {COLLECTION_CONSTRAINTS.objects.max} objetos para la skin.</p>
               </div>
 
-              {renderEditableItemList(objects, setObjects, <Box className="h-4 w-4" />, "Objeto", "objects", REQUIRED_ITEM_COUNTS.objects, false)}
+              {renderEditableItemList(objects, setObjects, <Box className="h-4 w-4" />, "Objeto", "objects", COLLECTION_CONSTRAINTS.objects.min, COLLECTION_CONSTRAINTS.objects.max, false)}
             </motion.div>
           ) : null}
 
@@ -1105,11 +1108,11 @@ export function AdminConfigView() {
                   <MapPin className="h-8 w-8" /> Configurar Espacios
                 </h2>
                 <p className="text-sm text-slate-400">
-                  Define exactamente {REQUIRED_ITEM_COUNTS.spaces} espacios. Si los motivos están activos, cada espacio debe tener uno.
+                  Define exactamente {COLLECTION_CONSTRAINTS.spaces.min} espacios. Si los motivos están activos, cada espacio debe tener uno.
                 </p>
               </div>
 
-              {renderEditableItemList(spaces, setSpaces, <MapPin className="h-4 w-4" />, cat3Name, "spaces", REQUIRED_ITEM_COUNTS.spaces, hasMotifs)}
+              {renderEditableItemList(spaces, setSpaces, <MapPin className="h-4 w-4" />, cat3Name, "spaces", COLLECTION_CONSTRAINTS.spaces.min, COLLECTION_CONSTRAINTS.spaces.max, hasMotifs)}
             </motion.div>
           ) : null}
         </AnimatePresence>

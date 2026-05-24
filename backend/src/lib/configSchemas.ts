@@ -2,10 +2,10 @@ import { z } from 'zod';
 
 const MAX_IMAGE_LENGTH = 5_000_000;
 const MAX_TEXT_LENGTH = 4_000;
-const REQUIRED_COLLECTION_COUNTS = {
-  subjects: 6,
-  objects: 6,
-  spaces: 9,
+const COLLECTION_CONSTRAINTS = {
+  subjects: { min: 6, max: 10 },
+  objects:  { min: 6, max: 10 },
+  spaces:   { min: 9, max: 9 },
 } as const;
 
 const uuidSchema = z.string().uuid('El identificador debe ser un UUID válido.');
@@ -82,10 +82,15 @@ export const configItemSchema = z.object({
 });
 
 function collectionSchema(key: ConfigCollectionKey) {
-  return z.array(configItemSchema).length(
-    REQUIRED_COLLECTION_COUNTS[key],
-    `La configuración debe tener exactamente ${REQUIRED_COLLECTION_COUNTS[key]} ${getCollectionLabel(key)}.`
-  );
+  const { min, max } = COLLECTION_CONSTRAINTS[key];
+  const label = getCollectionLabel(key);
+  const arr = z.array(configItemSchema);
+  if (min === max) {
+    return arr.length(min, `La configuración debe tener exactamente ${min} ${label}.`);
+  }
+  return arr
+    .min(min, `La configuración debe tener al menos ${min} ${label}.`)
+    .max(max, `La configuración no puede tener más de ${max} ${label}.`);
 }
 
 const fullConfigCollections = z.object({

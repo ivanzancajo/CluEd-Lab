@@ -293,6 +293,24 @@ function validateMotifRules(
       }
     });
   }
+
+  const seenMotifs = new Map<string, number>();
+  value.spaces?.forEach((item, index) => {
+    if (!item.motif) return;
+    const normalized = item.motif.trim().toLocaleLowerCase('es');
+    const previousIndex = seenMotifs.get(normalized);
+    if (previousIndex !== undefined) {
+      addIssueForCollection(
+        context,
+        'spaces',
+        index,
+        'motif',
+        'No se pueden repetir los motivos de los espacios dentro de la misma skin.'
+      );
+    } else {
+      seenMotifs.set(normalized, index);
+    }
+  });
 }
 
 export type ConfigItemInput = z.infer<typeof configItemSchema>;

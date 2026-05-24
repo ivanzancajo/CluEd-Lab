@@ -2094,14 +2094,14 @@ export function TerminalView() {
 
           {/* SUGGEST TAB */}
           {activeTab === "suggest" && (
-            <motion.div 
+            <motion.div
               key="suggest"
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-              className="p-4 pb-24 flex flex-col gap-4 bg-[radial-gradient(circle_at_top,_rgba(6,182,212,0.16),_transparent_34%),linear-gradient(180deg,_rgba(8,47,73,0.18),_rgba(2,6,23,0.96)_72%)]"
+              className="p-4 pb-24 flex flex-col gap-3 bg-[radial-gradient(circle_at_top,_rgba(6,182,212,0.16),_transparent_34%),linear-gradient(180deg,_rgba(8,47,73,0.18),_rgba(2,6,23,0.96)_72%)]"
             >
-              <div data-cy="terminal-suggest-panel" className="relative overflow-hidden rounded-[28px] border border-cyan-900/50 bg-slate-950/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+              <div data-cy="terminal-suggest-panel" className="relative overflow-hidden rounded-[28px] border border-cyan-900/50 bg-slate-950/75 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
                 <div className="absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.18),_transparent_70%)]" />
-                <div className="relative flex flex-col gap-5">
+                <div className="relative flex flex-col gap-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <div className="inline-flex items-center gap-2 rounded-full border border-cyan-900/60 bg-cyan-950/20 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-200">
@@ -2459,61 +2459,45 @@ export function TerminalView() {
                             </div>
                           </div>
 
-                          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                          <div className="mt-3 grid gap-3">
                             <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/45 p-4">
-                              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
+                              <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
                                 <User className="h-3.5 w-3.5" />
                                 {catNames.c1}
-                              </div>
-                              <div className="mt-3 grid gap-2">
-                                {categories.c1.map((item) => {
-                                  const isSelected = selectedSubjectId === item.id;
-                                  return (
-                                    <button
-                                      data-cy="terminal-suggest-subject"
-                                      key={item.id}
-                                      type="button"
-                                      onClick={() => setSelectedSubjectId(item.id)}
-                                      className={`rounded-xl border px-3 py-3 text-left transition-all ${isSelected ? "border-cyan-400 bg-cyan-950/40 shadow-[0_0_18px_rgba(34,211,238,0.18)]" : "border-slate-700 bg-slate-900/70 hover:border-cyan-700/60"}`}
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        <div className={`rounded-lg border p-2 ${item.color}`}>{item.avatar}</div>
-                                        <p className="text-sm font-semibold text-white">{item.name}</p>
-                                      </div>
-                                    </button>
-                                  );
-                                })}
-                              </div>
+                              </label>
+                              <select
+                                data-cy="terminal-suggest-subject"
+                                value={selectedSubjectId}
+                                onChange={(event) => setSelectedSubjectId(event.target.value)}
+                                className="mt-3 w-full rounded-xl border border-cyan-800/70 bg-slate-900/80 p-3 text-sm text-cyan-100 outline-none focus:border-cyan-400"
+                              >
+                                <option value="" disabled>Selecciona...</option>
+                                {categories.c1.map((item) => (
+                                  <option key={item.id} value={item.id}>{item.name}</option>
+                                ))}
+                              </select>
                             </div>
 
                             <div className="rounded-2xl border border-emerald-800/60 bg-slate-950/45 p-4">
-                              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">
+                              <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">
                                 <Box className="h-3.5 w-3.5" />
                                 {catNames.c2}
-                              </div>
-                              <div className="mt-3 grid gap-2">
-                                {categories.c2.map((item) => {
-                                  const isSelected = selectedObjectId === item.id;
-                                  return (
-                                    <button
-                                      data-cy="terminal-suggest-object"
-                                      key={item.id}
-                                      type="button"
-                                      onClick={() => setSelectedObjectId(item.id)}
-                                      className={`rounded-xl border px-3 py-3 text-left transition-all ${isSelected ? "border-emerald-400 bg-emerald-950/40 shadow-[0_0_18px_rgba(16,185,129,0.18)]" : "border-slate-700 bg-slate-900/70 hover:border-emerald-700/60"}`}
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        <div className={`rounded-lg border p-2 ${item.color}`}>{item.avatar}</div>
-                                        <p className="text-sm font-semibold text-white">{item.name}</p>
-                                      </div>
-                                    </button>
-                                  );
-                                })}
-                              </div>
+                              </label>
+                              <select
+                                data-cy="terminal-suggest-object"
+                                value={selectedObjectId}
+                                onChange={(event) => setSelectedObjectId(event.target.value)}
+                                className="mt-3 w-full rounded-xl border border-emerald-800/70 bg-slate-900/80 p-3 text-sm text-emerald-100 outline-none focus:border-emerald-400"
+                              >
+                                <option value="" disabled>Selecciona...</option>
+                                {categories.c2.map((item) => (
+                                  <option key={item.id} value={item.id}>{item.name}</option>
+                                ))}
+                              </select>
                             </div>
                           </div>
 
-                          <div data-cy="terminal-suggestion-preview" className="mt-5 rounded-2xl border border-slate-700 bg-slate-950/65 p-4">
+                          <div data-cy="terminal-suggestion-preview" className="mt-3 rounded-2xl border border-slate-700 bg-slate-950/65 p-4">
                             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Vista previa</p>
                             <p className="mt-2 text-sm text-white">
                               {suggestionPreview
@@ -2522,7 +2506,7 @@ export function TerminalView() {
                             </p>
                           </div>
 
-                          <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
+                          <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
                             <button
                               data-cy="terminal-suggest-submit"
                               type="button"

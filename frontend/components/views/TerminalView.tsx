@@ -1724,7 +1724,7 @@ export function TerminalView() {
                      {selectedCard && (
                        <motion.div
                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                         className="absolute inset-0 bg-black/80 z-40 flex items-center justify-center p-6 backdrop-blur-sm"
+                         className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 backdrop-blur-sm"
                          onClick={() => { setSelectedCard(null); setCardFlipped(false); }}
                        >
                          <motion.div
@@ -1909,7 +1909,7 @@ export function TerminalView() {
                         data-cy="terminal-hand-card"
                         key={card.id}
                         onClick={() => { setSelectedCard(card); setCardFlipped(false); }}
-                        className={`w-28 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${card.color} ${card.bg} bg-opacity-40 flex flex-col items-center justify-start cursor-pointer snap-center hover:scale-105 transition-transform shadow-lg relative overflow-hidden`}
+                        className={`w-28 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${card.color} ${card.bg} flex flex-col items-center justify-start cursor-pointer snap-center hover:brightness-110 transition-all shadow-lg relative overflow-hidden`}
                       >
                         <div className="w-full h-1/2 relative overflow-hidden border-b border-slate-800">
                           {card.image
@@ -1939,7 +1939,7 @@ export function TerminalView() {
                 )}
               </div>
 
-              <div className="px-4 pb-4">
+              <div className="w-full px-4 pb-4">
                 <EvidenciasComunes publicCards={publicCards} />
               </div>
             </motion.div>

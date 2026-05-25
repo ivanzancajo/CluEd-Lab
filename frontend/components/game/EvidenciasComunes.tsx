@@ -51,7 +51,7 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
                 key={card.id}
                 data-cy="evidencias-comunes-card"
                 onClick={() => handleCardClick(card)}
-                className={`w-28 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${styles.border} ${styles.bg} bg-opacity-40 flex flex-col items-center justify-start cursor-pointer hover:scale-105 transition-transform shadow-lg relative overflow-hidden`}
+                className={`w-28 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${styles.border} ${styles.bg} flex flex-col items-center justify-start cursor-pointer hover:brightness-110 transition-all shadow-lg relative overflow-hidden`}
               >
                 <div className="w-full h-1/2 relative overflow-hidden border-b border-slate-800">
                   {card.imageUrl

@@ -72,7 +72,6 @@ import { ThemedBoard } from "../game/ThemedBoard";
 import { SpaceMotifModal } from "../game/SpaceMotifModal";
 import { EnvelopeAnimation } from "../game/EnvelopeAnimation";
 import { EvidenciasComunes } from "../game/EvidenciasComunes";
-import { ScrollArea } from "../ui/scroll-area";
 
 type BoardConnectionStatus = "idle" | "connecting" | "connected" | "error";
 type TeamSlotStatus = "free" | "connected" | "inactive" | "disconnected";
@@ -502,7 +501,7 @@ export function BoardView() {
           {connectionStatus === "connecting" ? <LoaderCircle className="w-4 h-4 animate-spin text-cyan-300" /> : null}
         </div>
 
-        <ScrollArea className="flex-1">
+        <div className="flex-1 overflow-y-auto">
         <div className="p-6 border-b border-cyan-800/30 grid grid-cols-2 gap-4 bg-gradient-to-b from-cyan-950/10 to-transparent">
           <div className="flex flex-col gap-1 p-3 bg-slate-900 border border-slate-800 rounded-lg shadow-inner shadow-slate-950/50">
             <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><KeyRound className="w-3 h-3" /> Codigo Sesion</span>
@@ -738,7 +737,7 @@ export function BoardView() {
             })}
           </div>
         </div>
-        </ScrollArea>
+        </div>
       </div>
 
       <div className="flex-1 relative bg-[#020617] flex items-center justify-center p-8 overflow-hidden">

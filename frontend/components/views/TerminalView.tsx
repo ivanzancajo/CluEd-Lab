@@ -86,9 +86,9 @@ import {
 } from "../../src/lib/sessionApi";
 import { ThemedBoard } from "../game/ThemedBoard";
 import { SpaceMotifModal } from "../game/SpaceMotifModal";
+import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { EvidenciasComunes } from "../game/EvidenciasComunes";
 import { EnvelopeAnimation } from "../game/EnvelopeAnimation";
-import { ImageWithFallback } from "../figma/ImageWithFallback";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -144,6 +144,16 @@ interface TerminalCard {
   image?: string;
 }
 
+function mapHandCardToTerminalCard(card: TeamHandCard, config: GameConfig): TerminalCard {
+  if (card.kind === "SUJETO") {
+    return { id: card.id, kind: card.kind, name: card.name, desc: card.desc, type: config.cat1Name || "Sujetos", color: "border-blue-500", bg: "bg-blue-950", image: card.imageUrl };
+  }
+  if (card.kind === "OBJETO") {
+    return { id: card.id, kind: card.kind, name: card.name, desc: card.desc, type: config.cat2Name || "Objetos", color: "border-emerald-500", bg: "bg-emerald-950", image: card.imageUrl };
+  }
+  return { id: card.id, kind: card.kind, name: card.name, desc: card.desc, type: config.cat3Name || "Espacios", color: "border-red-500", bg: "bg-red-950", image: card.imageUrl };
+}
+
 // Categorías convertidas a objetos dinámicos con avatares predefinidos (íconos tech)
 const CATEGORIES = {
   sujetos: [
@@ -177,44 +187,6 @@ const CATEGORIES = {
 
 const TEAMS = ["Rojo", "Amarillo", "Azul", "Verde", "Morado", "Blanco"];
 
-function mapHandCardToTerminalCard(card: TeamHandCard, config: GameConfig): TerminalCard {
-  if (card.kind === "SUJETO") {
-    return {
-      id: card.id,
-      kind: card.kind,
-      name: card.name,
-      desc: card.desc,
-      type: config.cat1Name || "Sujetos",
-      color: "border-blue-500",
-      bg: "bg-blue-950",
-      image: card.imageUrl,
-    };
-  }
-
-  if (card.kind === "OBJETO") {
-    return {
-      id: card.id,
-      kind: card.kind,
-      name: card.name,
-      desc: card.desc,
-      type: config.cat2Name || "Objetos",
-      color: "border-emerald-500",
-      bg: "bg-emerald-950",
-      image: card.imageUrl,
-    };
-  }
-
-  return {
-    id: card.id,
-    kind: card.kind,
-    name: card.name,
-    desc: card.desc,
-    type: config.cat3Name || "Espacios",
-    color: "border-red-500",
-    bg: "bg-red-950",
-    image: card.imageUrl,
-  };
-}
 
 function resolveCurrentTeamBoardNode(teams: LobbySession["teams"], teamId: string | null): TeamMoveNode | null {
   if (!teamId) {
@@ -312,6 +284,8 @@ export function TerminalView() {
     c3: CATEGORIES.espacios.map(e => ({ id: e.name, ...e, desc: "Descripción", motif: "" }))
   });
   const [catNames, setCatNames] = useState({ c1: "Sujetos", c2: "Objetos", c3: "Espacios" });
+  const [selectedCard, setSelectedCard] = useState<TerminalCard | null>(null);
+  const [cardFlipped, setCardFlipped] = useState(false);
 
   const storedTeamId = getStoredTeamId();
   const isMyTurn = sessionTurn?.currentTeamId === storedTeamId;
@@ -328,8 +302,6 @@ export function TerminalView() {
   const resolutionCountdownSeconds = getResolutionCountdownSeconds(activeResolution?.deadlineAt, resolutionNow);
   const resolutionCountdownLabel = resolutionCountdownSeconds === null ? null : formatCountdownClock(resolutionCountdownSeconds);
 
-  const [selectedCard, setSelectedCard] = useState<TerminalCard | null>(null);
-  const [cardFlipped, setCardFlipped] = useState(false);
   const [suggestMode, setSuggestMode] = useState("hipotesis");
   
   // Mock room for locking hypothesis
@@ -1750,17 +1722,12 @@ export function TerminalView() {
                    {/* Card Modal Overlay */}
                    <AnimatePresence>
                      {selectedCard && (
-                       <motion.div 
-                         initial={{ opacity: 0 }}
-                         animate={{ opacity: 1 }}
-                         exit={{ opacity: 0 }}
-                         className="absolute inset-0 bg-black/80 z-40 flex items-center justify-center p-6 backdrop-blur-sm"
-                         onClick={() => {
-                           setSelectedCard(null);
-                           setCardFlipped(false);
-                         }}
+                       <motion.div
+                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                         className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 backdrop-blur-sm"
+                         onClick={() => { setSelectedCard(null); setCardFlipped(false); }}
                        >
-                         <motion.div 
+                         <motion.div
                            initial={{ scale: 0.8, y: 20 }}
                            animate={{ scale: 1, y: 0, rotateY: cardFlipped ? 180 : 0 }}
                            exit={{ scale: 0.8, opacity: 0 }}
@@ -1768,42 +1735,30 @@ export function TerminalView() {
                            onClick={(e) => { e.stopPropagation(); setCardFlipped(!cardFlipped); }}
                            className={`w-48 aspect-[2.5/3.5] rounded-xl border-4 ${selectedCard.color} shadow-[0_0_30px_rgba(0,0,0,0.8)] relative cursor-pointer [transform-style:preserve-3d]`}
                          >
-                           {/* Front of card */}
                            <div className={`absolute inset-0 [backface-visibility:hidden] flex flex-col items-center justify-start text-center ${selectedCard.bg} bg-opacity-90 overflow-hidden rounded-lg`}>
                              <div className="w-full h-[60%] bg-black/40 border-b border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden">
                                {selectedCard.image
-                                 ? <ImageWithFallback
-                                     src={selectedCard.image}
-                                     alt={selectedCard.name}
-                                     className="w-full h-full object-cover opacity-90"
-                                     fallback={
-                                       <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
-                                         {selectedCard.type === catNames.c1 && <User className="w-6 h-6 text-slate-300" />}
-                                         {selectedCard.type === catNames.c2 && <Box className="w-6 h-6 text-slate-300" />}
-                                         {selectedCard.type === catNames.c3 && <MapPin className="w-6 h-6 text-slate-300" />}
-                                       </div>
-                                     }
-                                   />
+                                 ? <ImageWithFallback src={selectedCard.image} alt={selectedCard.name} className="w-full h-full object-cover opacity-90"
+                                     fallback={<div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
+                                       {selectedCard.kind === "SUJETO" && <User className="w-6 h-6 text-slate-300" />}
+                                       {selectedCard.kind === "OBJETO" && <Box className="w-6 h-6 text-slate-300" />}
+                                       {selectedCard.kind === "ESPACIO" && <MapPin className="w-6 h-6 text-slate-300" />}
+                                     </div>} />
                                  : <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
-                                     {selectedCard.type === catNames.c1 && <User className="w-6 h-6 text-slate-300" />}
-                                     {selectedCard.type === catNames.c2 && <Box className="w-6 h-6 text-slate-300" />}
-                                     {selectedCard.type === catNames.c3 && <MapPin className="w-6 h-6 text-slate-300" />}
-                                   </div>
-                               }
+                                     {selectedCard.kind === "SUJETO" && <User className="w-6 h-6 text-slate-300" />}
+                                     {selectedCard.kind === "OBJETO" && <Box className="w-6 h-6 text-slate-300" />}
+                                     {selectedCard.kind === "ESPACIO" && <MapPin className="w-6 h-6 text-slate-300" />}
+                                   </div>}
                              </div>
                              <div className="w-full flex-1 flex flex-col items-center justify-center p-2">
                                <h4 className="font-bold text-sm tracking-widest uppercase text-white drop-shadow-md leading-tight line-clamp-2 px-1">{selectedCard.name}</h4>
                                <span className="text-[9px] uppercase tracking-widest text-slate-400 mt-2 bg-black/50 px-2 py-1 rounded border border-slate-800">{selectedCard.type}</span>
                              </div>
                            </div>
-                           
-                           {/* Back of card */}
-                           <div className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] flex flex-col items-center justify-center p-4 text-center bg-slate-950 border border-slate-700">
+                           <div className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] flex flex-col items-center justify-center p-4 text-center bg-slate-950 border border-slate-700 rounded-lg">
                              <h4 className="font-bold text-xs tracking-widest uppercase text-slate-300 mb-4 border-b border-slate-800 pb-2 w-full">{selectedCard.name}</h4>
                              <p className="text-xs text-slate-400 leading-relaxed font-mono">{selectedCard.desc}</p>
-                             <div className="mt-auto text-[8px] text-cyan-500 uppercase tracking-widest animate-pulse flex gap-1 items-center">
-                                Toca para voltear
-                             </div>
+                             <div className="mt-auto text-[8px] text-cyan-500 uppercase tracking-widest animate-pulse">Toca para voltear</div>
                            </div>
                          </motion.div>
                        </motion.div>
@@ -1950,32 +1905,25 @@ export function TerminalView() {
                 ) : (
                   <div data-cy="terminal-hand-list" className="flex gap-4 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory">
                     {teamHand.map(card => (
-                      <div 
+                      <div
                         data-cy="terminal-hand-card"
-                        key={card.id} 
+                        key={card.id}
                         onClick={() => { setSelectedCard(card); setCardFlipped(false); }}
-                        className={`w-28 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${card.color} ${card.bg} bg-opacity-40 flex flex-col items-center justify-start cursor-pointer snap-center hover:scale-105 transition-transform shadow-lg relative overflow-hidden`}
+                        className={`w-36 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${card.color} ${card.bg} flex flex-col items-center justify-start cursor-pointer snap-center hover:brightness-110 transition-all shadow-lg relative overflow-hidden`}
                       >
                         <div className="w-full h-1/2 relative overflow-hidden border-b border-slate-800">
                           {card.image
-                            ? <ImageWithFallback
-                                src={card.image}
-                                alt={card.name}
-                                className="w-full h-full object-cover opacity-80"
-                                fallback={
-                                  <div className="w-full h-full bg-slate-900 flex items-center justify-center">
-                                    {card.kind === "SUJETO" && <User className="w-5 h-5 text-slate-400 opacity-80" />}
-                                    {card.kind === "OBJETO" && <Box className="w-5 h-5 text-slate-400 opacity-80" />}
-                                    {card.kind === "ESPACIO" && <MapPin className="w-5 h-5 text-slate-400 opacity-80" />}
-                                  </div>
-                                }
-                              />
+                            ? <ImageWithFallback src={card.image} alt={card.name} className="w-full h-full object-cover opacity-80"
+                                fallback={<div className="w-full h-full bg-slate-900 flex items-center justify-center">
+                                  {card.kind === "SUJETO" && <User className="w-5 h-5 text-slate-400 opacity-80" />}
+                                  {card.kind === "OBJETO" && <Box className="w-5 h-5 text-slate-400 opacity-80" />}
+                                  {card.kind === "ESPACIO" && <MapPin className="w-5 h-5 text-slate-400 opacity-80" />}
+                                </div>} />
                             : <div className="w-full h-full bg-slate-900 flex items-center justify-center">
                                 {card.kind === "SUJETO" && <User className="w-5 h-5 text-slate-400 opacity-80" />}
                                 {card.kind === "OBJETO" && <Box className="w-5 h-5 text-slate-400 opacity-80" />}
                                 {card.kind === "ESPACIO" && <MapPin className="w-5 h-5 text-slate-400 opacity-80" />}
-                              </div>
-                          }
+                              </div>}
                           <div className="absolute top-0 right-0 w-6 h-6 bg-black/60 rounded-bl-full backdrop-blur-sm border-b border-l border-slate-700/50 flex items-start justify-end p-1">
                             {card.kind === "SUJETO" && <User className="w-3 h-3 text-cyan-400" />}
                             {card.kind === "OBJETO" && <Box className="w-3 h-3 text-emerald-400" />}
@@ -1991,7 +1939,7 @@ export function TerminalView() {
                 )}
               </div>
 
-              <div className="mt-4">
+              <div className="w-full px-4 pb-4">
                 <EvidenciasComunes publicCards={publicCards} />
               </div>
             </motion.div>

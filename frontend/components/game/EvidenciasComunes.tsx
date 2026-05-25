@@ -32,7 +32,7 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
     <div data-cy="evidencias-comunes-panel" className="w-full">
       <div className="flex items-center gap-2 mb-2">
         <Database className="w-4 h-4 text-slate-400 flex-shrink-0" />
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
           Evidencias Comunes
         </span>
       </div>
@@ -42,7 +42,7 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
           No hay cartas sobrantes en esta partida.
         </p>
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-1">
+        <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none">
           {publicCards.map((card) => {
             const styles = KIND_STYLES[card.kind];
             const Icon = styles.icon;
@@ -51,26 +51,24 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
                 key={card.id}
                 data-cy="evidencias-comunes-card"
                 onClick={() => handleCardClick(card)}
-                className={`w-28 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${styles.border} ${styles.bg} flex flex-col overflow-hidden relative cursor-pointer hover:brightness-125 transition-all`}
+                className={`w-20 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${styles.border} ${styles.bg} flex flex-col items-center justify-start cursor-pointer hover:brightness-110 transition-all shadow-lg relative overflow-hidden`}
               >
-                <div className="h-1/2 relative flex items-center justify-center border-b border-white/10">
+                <div className="w-full h-1/2 relative overflow-hidden border-b border-slate-800">
                   {card.imageUrl
                     ? <ImageWithFallback
                         src={card.imageUrl}
                         alt={card.name}
-                        className="w-full h-full object-cover"
-                        fallback={<Icon className="w-8 h-8 text-white/40" />}
+                        className="w-full h-full object-cover opacity-80"
+                        fallback={<div className="w-full h-full bg-slate-900 flex items-center justify-center"><Icon className="w-5 h-5 text-slate-400 opacity-80" /></div>}
                       />
-                    : <Icon className="w-8 h-8 text-white/40" />
+                    : <div className="w-full h-full bg-slate-900 flex items-center justify-center"><Icon className="w-5 h-5 text-slate-400 opacity-80" /></div>
                   }
-                  <div className={`absolute top-1 right-1 rounded-full p-0.5 ${styles.bg}`}>
+                  <div className="absolute top-0 right-0 w-6 h-6 bg-black/60 rounded-bl-full backdrop-blur-sm border-b border-l border-slate-700/50 flex items-start justify-end p-1">
                     <Icon className="w-3 h-3 text-white/70" />
                   </div>
                 </div>
-                <div className="flex-1 flex items-center justify-center px-1">
-                  <span className="text-white text-[10px] font-medium text-center line-clamp-2 leading-tight">
-                    {card.name}
-                  </span>
+                <div className="p-2 w-full flex-1 flex items-center justify-center">
+                  <span className="text-[9px] font-bold text-center leading-tight text-slate-200 uppercase px-1 line-clamp-2">{card.name}</span>
                 </div>
               </div>
             );

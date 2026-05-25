@@ -20,7 +20,7 @@ export function SpaceMotifModal({ space, onClose }: SpaceMotifModalProps) {
     >
       <div
         data-cy="space-motif-modal"
-        className="relative mx-4 max-w-xs w-full rounded-xl border border-amber-800/60 bg-slate-950/95 p-5 shadow-[0_0_40px_rgba(0,0,0,0.8)] backdrop-blur-sm"
+        className="relative mx-4 w-full max-w-[min(theme(spacing.80),calc(100vw-2rem))] max-h-[85dvh] overflow-y-auto rounded-xl border border-amber-800/60 bg-slate-950/95 p-5 shadow-[0_0_40px_rgba(0,0,0,0.8)] backdrop-blur-sm"
         onClick={(e) => e.stopPropagation()}
       >
         <button

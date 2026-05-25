@@ -417,7 +417,7 @@ export function LobbyView() {
                           <p className={`text-lg font-black uppercase tracking-[0.18em] sm:text-xl ${card.labelClass}`}>
                             {card.label}
                           </p>
-                          <p className={`text-sm font-semibold uppercase tracking-[0.14em] ${card.detailClass}`}>
+                          <p className={`text-[10px] font-semibold uppercase tracking-[0.08em] ${card.detailClass}`}>
                             {card.detail}
                           </p>
                         </div>

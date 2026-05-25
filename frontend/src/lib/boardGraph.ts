@@ -312,12 +312,14 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
     grid(17, 17),
     grid(17, 16),
     grid(18, 16),
-    grid(18, 15),
-    grid(19, 14),
+    grid(19, 16),
+    grid(19, 15),
+    grid(20, 15),
+    grid(20, 14),
     grid(20, 13),
   ],
   'pasillo-derecho-central->pasillo-derecho-superior': [grid(20, 11), grid(20, 10), grid(20, 9)],
-  'centro-este->pasillo-derecho-central': [grid(14, 12), grid(15, 12), grid(16, 12), grid(17, 12), grid(18, 12)],
+  'centro-este->pasillo-derecho-central': [grid(14, 12), grid(15, 12), grid(16, 12), grid(17, 12), grid(18, 12), grid(19, 12)],
   'spawn-amarillo->pasillo-derecho-superior': [grid(22, 6), grid(21, 6)],
 };
 
@@ -461,7 +463,7 @@ const ROOM_FOOTPRINT_GRID_KEYS = new Set(
 
 const EXCLUDED_SQUARE_GRID_POINTS = [
   ...columnRangePoints(0, [[7, 10], [13, 16]]),
-  ...rowRangePoints(12, [[1, 4], [16, 18]]),
+  ...rowRangePoints(12, [[1, 4]]),
   ...columnRangePoints(7, [[17, 17], [20, 22]]),
   ...columnRangePoints(8, [[2, 3], [5, 6], [8, 14], [20, 22]]),
   ...columnRangePoints(9, [[4, 4], [8, 8], [17, 19], [23, 23]]),
@@ -475,7 +477,6 @@ const EXCLUDED_SQUARE_GRID_POINTS = [
   ...columnRangePoints(17, [[19, 21]]),
   ...columnRangePoints(18, [[15, 15]]),
   ...columnRangePoints(19, [[14, 14]]),
-  ...columnRangePoints(20, [[9, 13]]),
   grid(3, 20),
 ] as const;
 
@@ -681,9 +682,13 @@ function addImageAlignedExtraSquares(
   connections: Record<string, string[]>,
   squareGridPointsByNodeId: Record<string, BoardGridPoint>
 ) {
-  const occupiedGridKeys = new Set(
-    Object.values(squareGridPointsByNodeId).map((gridPoint) => buildGridCellKey(gridPoint))
+  const baseNodeGridKeys = new Set(
+    Object.values(BASE_MOVEMENT_NODE_DEFINITIONS).map((def) => buildGridCellKey(def.gridPoint))
   );
+  const occupiedGridKeys = new Set([
+    ...Object.values(squareGridPointsByNodeId).map((gridPoint) => buildGridCellKey(gridPoint)),
+    ...baseNodeGridKeys,
+  ]);
 
   IMAGE_ALIGNED_EXTRA_GRID_POINTS.forEach((gridPoint) => {
     const gridCellKey = buildGridCellKey(gridPoint);

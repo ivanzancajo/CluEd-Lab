@@ -105,13 +105,24 @@ describe('SCRUM-112 · Matriz de validación de movimientos', () => {
       });
     });
 
-    it('las casillas excluidas de columna 20 (filas 9-13) no existen en el grafo', () => {
-      for (let row = 9; row <= 13; row++) {
-        const squaresAtCell = Object.values(BOARD_MOVEMENT_NODES).filter(
+    it('el corredor derecho (col 20, filas 9-13) forma parte del grafo y conecta pasillo-derecho-central con pasillo-derecho-superior', () => {
+      // Las celdas col=20 filas 9-11 son intermedios explícitos del corredor derecho
+      for (let row = 9; row <= 11; row++) {
+        const corridorSquares = Object.values(BOARD_MOVEMENT_NODES).filter(
           (n) => n.kind === 'square' && n.gridPosition?.col === 20 && n.gridPosition?.row === row
         );
-        expect(squaresAtCell).toHaveLength(0);
+        expect(corridorSquares.length).toBeGreaterThan(0);
       }
+      // pasillo-derecho-central existe como nodo de navegación en (20, 12)
+      expect(BOARD_MOVEMENT_NODES['pasillo-derecho-central']).toBeDefined();
+      expect(BOARD_MOVEMENT_NODES['pasillo-derecho-central']?.gridPosition).toEqual({ col: 20, row: 12 });
+      // El corredor conecta pasillo-derecho-superior con pasillo-derecho-central
+      const neighborIds = BOARD_MOVEMENT_CONNECTIONS['pasillo-derecho-superior'] ?? [];
+      const hasCorridorConnection = neighborIds.some((id) => {
+        const n = BOARD_MOVEMENT_NODES[id];
+        return n?.gridPosition?.col === 20 && n.gridPosition.row >= 7 && n.gridPosition.row <= 11;
+      });
+      expect(hasCorridorConnection).toBe(true);
     });
 
     it('ninguna celda excluida tiene conexiones en el grafo', () => {
@@ -760,6 +771,128 @@ describe('SCRUM-112 · Matriz de validación de movimientos', () => {
       });
 
       expect(violations).toHaveLength(0);
+    });
+  });
+
+  // ─── Grupo 8: Zona amarilla y corredor derecho (regresión) ────────────────
+
+  describe('zona amarilla y corredor derecho', () => {
+    it('spawn-amarillo existe y no tiene nodo square duplicado en la misma celda de grid (22,7)', () => {
+      const spawnAmarillo = BOARD_MOVEMENT_NODES['spawn-amarillo'];
+      expect(spawnAmarillo).toBeDefined();
+      expect(spawnAmarillo?.kind).toBe('spawn');
+
+      const duplicateAtGrid = Object.values(BOARD_MOVEMENT_NODES).find(
+        (n) => n.kind === 'square' && n.gridPosition?.col === 22 && n.gridPosition?.row === 7
+      );
+      expect(duplicateAtGrid).toBeUndefined();
+    });
+
+    it('findBoardMovementNodeByPosition con la posición de spawn-amarillo resuelve spawn-amarillo', () => {
+      const spawnAmarillo = BOARD_MOVEMENT_NODES['spawn-amarillo'];
+      expect(spawnAmarillo).toBeDefined();
+
+      const resolved = findBoardMovementNodeByPosition(spawnAmarillo!.positionX, spawnAmarillo!.positionY);
+      expect(resolved?.id).toBe('spawn-amarillo');
+      expect(resolved?.kind).toBe('spawn');
+    });
+
+    it('pasillo-derecho-central existe como nodo de navegación en la posición correcta (col=20, row=12)', () => {
+      const node = BOARD_MOVEMENT_NODES['pasillo-derecho-central'];
+      expect(node).toBeDefined();
+      expect(node?.kind).toBe('square');
+      expect(node?.gridPosition).toEqual({ col: 20, row: 12 });
+    });
+
+    it('spawn-amarillo conecta con pasillo-derecho-central a través del corredor derecho', () => {
+      function bfsDistance(from: string, to: string): number {
+        const visited = new Set([from]);
+        const queue: [string, number][] = [[from, 0]];
+        while (queue.length > 0) {
+          const [nodeId, dist] = queue.shift()!;
+          if (nodeId === to) return dist;
+          for (const neighbor of (BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? [])) {
+            if (!visited.has(neighbor)) {
+              visited.add(neighbor);
+              queue.push([neighbor, dist + 1]);
+            }
+          }
+        }
+        return -1;
+      }
+
+      const dist = bfsDistance('spawn-amarillo', 'pasillo-derecho-central');
+      expect(dist).toBeGreaterThan(0);
+      expect(dist).toBeLessThanOrEqual(10);
+    });
+
+    it('spawn-amarillo puede alcanzar spawn-blanco (corredor derecho completo navegable)', () => {
+      function bfsReachable(from: string, to: string): boolean {
+        const visited = new Set([from]);
+        const queue = [from];
+        while (queue.length > 0) {
+          const nodeId = queue.shift()!;
+          if (nodeId === to) return true;
+          for (const neighbor of (BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? [])) {
+            if (!visited.has(neighbor)) {
+              visited.add(neighbor);
+              queue.push(neighbor);
+            }
+          }
+        }
+        return false;
+      }
+
+      expect(bfsReachable('spawn-amarillo', 'spawn-blanco')).toBe(true);
+    });
+
+    it('centro-este conecta con pasillo-derecho-central en ≤ 8 pasos', () => {
+      function bfsDistance(from: string, to: string): number {
+        const visited = new Set([from]);
+        const queue: [string, number][] = [[from, 0]];
+        while (queue.length > 0) {
+          const [nodeId, dist] = queue.shift()!;
+          if (nodeId === to) return dist;
+          for (const neighbor of (BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? [])) {
+            if (!visited.has(neighbor)) {
+              visited.add(neighbor);
+              queue.push([neighbor, dist + 1]);
+            }
+          }
+        }
+        return -1;
+      }
+
+      const dist = bfsDistance('centro-este', 'pasillo-derecho-central');
+      expect(dist).toBeGreaterThan(0);
+      expect(dist).toBeLessThanOrEqual(8);
+    });
+
+    it('getReachableMoveNodes desde spawn-amarillo con tirada 1 a 6 devuelve destinos válidos del corredor', () => {
+      for (let dice = 1; dice <= 6; dice++) {
+        const destinations = getReachableMoveNodes('spawn-amarillo', [], dice);
+        expect(destinations.length).toBeGreaterThan(0);
+
+        destinations.forEach((dest) => {
+          expect(dest.kind).not.toBe('room');
+
+          if (dest.gridPosition) {
+            const key = gridKey(dest.gridPosition.col, dest.gridPosition.row);
+            expect(BOARD_EXCLUDED_GRID_KEYS.has(key)).toBe(false);
+          }
+        });
+      }
+    });
+
+    it('ningún nodo huérfano del corredor derecho: col 20 filas 7-11 conectan con el resto del grafo', () => {
+      const corridorNodes = Object.values(BOARD_MOVEMENT_NODES).filter(
+        (n) => n.gridPosition?.col === 20 && n.gridPosition.row >= 7 && n.gridPosition.row <= 11
+      );
+
+      corridorNodes.forEach((corridorNode) => {
+        const neighbors = BOARD_MOVEMENT_CONNECTIONS[corridorNode.id] ?? [];
+        expect(neighbors.length).toBeGreaterThan(0);
+      });
     });
   });
 });

@@ -72,6 +72,7 @@ import { ThemedBoard } from "../game/ThemedBoard";
 import { SpaceMotifModal } from "../game/SpaceMotifModal";
 import { EnvelopeAnimation } from "../game/EnvelopeAnimation";
 import { EvidenciasComunes } from "../game/EvidenciasComunes";
+import { ScrollArea } from "../ui/scroll-area";
 
 type BoardConnectionStatus = "idle" | "connecting" | "connected" | "error";
 type TeamSlotStatus = "free" | "connected" | "inactive" | "disconnected";
@@ -501,6 +502,7 @@ export function BoardView() {
           {connectionStatus === "connecting" ? <LoaderCircle className="w-4 h-4 animate-spin text-cyan-300" /> : null}
         </div>
 
+        <ScrollArea className="flex-1">
         <div className="p-6 border-b border-cyan-800/30 grid grid-cols-2 gap-4 bg-gradient-to-b from-cyan-950/10 to-transparent">
           <div className="flex flex-col gap-1 p-3 bg-slate-900 border border-slate-800 rounded-lg shadow-inner shadow-slate-950/50">
             <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><KeyRound className="w-3 h-3" /> Codigo Sesion</span>
@@ -702,14 +704,14 @@ export function BoardView() {
           </div>
         ) : null}
 
-        <div className="flex-1 flex flex-col p-6 overflow-hidden bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-slate-900 to-[#020617]">
+        <div className="p-6 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-slate-900 to-[#020617]">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xs uppercase text-cyan-600 flex items-center gap-2 font-bold tracking-widest">
               <History className="w-4 h-4" /> Registro de Partida
             </h3>
             <RefreshCw className={`w-3 h-3 text-cyan-800 ${connectionStatus === "connecting" ? "animate-spin" : ""}`} />
           </div>
-          <div className="flex-1 overflow-y-auto pr-2 space-y-3 scrollbar-thin scrollbar-thumb-cyan-900 scrollbar-track-transparent">
+          <div className="space-y-3 pr-2">
             {visibleEvents.map((event) => {
               const eventClass =
                 event.type === "team-disconnected"
@@ -736,6 +738,7 @@ export function BoardView() {
             })}
           </div>
         </div>
+        </ScrollArea>
       </div>
 
       <div className="flex-1 relative bg-[#020617] flex items-center justify-center p-8 overflow-hidden">

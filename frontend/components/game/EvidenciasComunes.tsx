@@ -32,7 +32,7 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
     <div data-cy="evidencias-comunes-panel" className="w-full">
       <div className="flex items-center gap-2 mb-2">
         <Database className="w-4 h-4 text-slate-400 flex-shrink-0" />
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
           Evidencias Comunes
         </span>
       </div>

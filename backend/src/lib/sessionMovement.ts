@@ -106,6 +106,8 @@ export function getReachableMoveNodes(currentNodeId: string, occupiedNodeIds: It
   const visitedSteps = new Map<string, number>([[currentNodeId, 0]]);
   const queue: Array<{ nodeId: string; steps: number }> = [{ nodeId: currentNodeId, steps: 0 }];
   const reachableNodes = new Map<string, BoardMovementNode>();
+  const startingNode = BOARD_MOVEMENT_NODES[currentNodeId];
+  const startingFromRoom = startingNode?.kind === 'room';
 
   while (queue.length > 0) {
     const current = queue.shift();
@@ -150,6 +152,13 @@ export function getReachableMoveNodes(currentNodeId: string, occupiedNodeIds: It
           ...node,
           stepsRequired: nextSteps,
         });
+        return;
+      }
+
+      // Si el nodo siguiente es una sala y no partimos de una sala, no exploramos
+      // más allá de ella: las salas solo son destino cuando la puerta es el último
+      // paso (lo resuelve resolveCommittedMoveTargetNode), no nodos de tránsito.
+      if (node.kind === 'room' && !startingFromRoom) {
         return;
       }
 

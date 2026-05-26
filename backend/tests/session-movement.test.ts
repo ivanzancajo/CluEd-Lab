@@ -891,4 +891,41 @@ describe('sessionMovement', () => {
       }
     });
   });
+
+  it('no permite atravesar una sala con múltiples puertas como nodo de tránsito', () => {
+    // sala-media-derecha tiene 2 puertas: square:grid:16:9 y square:centro-este::pasillo-derecho-central:2
+    // Desde puerta 1 con tirada 2:
+    //   paso 1 → sala-media-derecha [bug: BFS continuaba desde aquí]
+    //   paso 2 → puerta 2 ← NO debe ocurrir; solo debe ser alcanzable desde la propia sala (exit)
+    const door1NodeId = 'square:grid:16:9';
+    const door2NodeId = 'square:centro-este::pasillo-derecho-central:2';
+
+    expect(BOARD_MOVEMENT_NODES[door1NodeId]).toBeDefined();
+    expect(BOARD_MOVEMENT_NODES[door2NodeId]).toBeDefined();
+
+    const roll2FromDoor1 = getReachableMoveNodes(door1NodeId, [], 2).map((node) => node.id);
+
+    // Puerta 2 no debe ser alcanzable pasando por la sala
+    expect(roll2FromDoor1).not.toContain(door2NodeId);
+    expect(roll2FromDoor1).not.toContain('sala-media-derecha');
+  });
+
+  it('no permite atravesar sala-inferior-centro con sus 4 puertas como nodo de tránsito', () => {
+    // Desde cualquier puerta de sala-inferior-centro con tirada 2,
+    // las demás puertas de la misma sala NO deben ser alcanzables (paso 1 = sala, paso 2 = otra puerta).
+    const doorNodeIds = (BOARD_MOVEMENT_CONNECTIONS['sala-inferior-centro'] ?? []).filter(
+      (nodeId) => BOARD_MOVEMENT_NODES[nodeId]?.kind === 'square'
+    );
+
+    expect(doorNodeIds.length).toBeGreaterThan(1);
+
+    doorNodeIds.forEach((entryDoorId) => {
+      const roll2From = getReachableMoveNodes(entryDoorId, [], 2).map((n) => n.id);
+      const otherDoorIds = doorNodeIds.filter((id) => id !== entryDoorId);
+
+      otherDoorIds.forEach((otherDoorId) => {
+        expect(roll2From).not.toContain(otherDoorId);
+      });
+    });
+  });
 });

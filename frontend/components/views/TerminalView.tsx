@@ -2382,40 +2382,6 @@ export function TerminalView() {
                             </div>
                           </div>
                         </div>
-                      ) : refutationResult ? (
-                        <div data-cy="terminal-refutation-result" className="rounded-[26px] border border-emerald-700/70 bg-[linear-gradient(145deg,rgba(6,78,59,0.46),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_30px_rgba(6,78,59,0.2)]">
-                          <div className="flex items-start justify-between gap-4">
-                            <div>
-                              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-200">Resultado privado</p>
-                              <h4 className="mt-2 text-base font-black text-white">
-                                {refutationResult.outcome === "REFUTED" ? "Tu sugerencia fue refutada" : "Nadie pudo refutar tu sugerencia"}
-                              </h4>
-                              <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-100/90">
-                                {refutationResult.outcome === "REFUTED"
-                                  ? `${refutationResult.shownByTeamName ?? "Un equipo"} mostro una carta`
-                                  : "Sin cartas coincidentes"}
-                              </p>
-                            </div>
-                            <div className="rounded-2xl border border-emerald-600/70 bg-emerald-950/45 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-100">
-                              {refutationResult.outcome === "REFUTED" ? "Refutada" : "Sin refutar"}
-                            </div>
-                          </div>
-
-                          {refutationResult.shownCard ? (
-                            <div className="mt-4 rounded-2xl border border-emerald-700/60 bg-slate-950/55 p-4">
-                              <div className="flex items-center gap-3">
-                                <div className="rounded-xl border border-white/10 bg-slate-900/80 p-2">
-                                  {refutationResult.shownCard.kind === "SUJETO" ? <User className="h-4 w-4 text-cyan-300" /> : refutationResult.shownCard.kind === "OBJETO" ? <Box className="h-4 w-4 text-emerald-300" /> : <MapPin className="h-4 w-4 text-rose-300" />}
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Carta revelada</p>
-                                  <p className="mt-1 text-sm font-semibold text-white">{refutationResult.shownCard.name}</p>
-                                  <p className="mt-1 text-xs text-slate-400">{refutationResult.shownCard.desc}</p>
-                                </div>
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
                       ) : canComposeSuggestion ? (
                         <div data-cy="terminal-compose-suggestion" className="rounded-[26px] border border-emerald-700/60 bg-[linear-gradient(145deg,rgba(6,95,70,0.28),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_32px_rgba(6,95,70,0.16)]">
                           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2495,6 +2461,40 @@ export function TerminalView() {
                               {isEndingTurn ? "Cerrando..." : "Terminar turno"}
                             </button>
                           </div>
+                        </div>
+                      ) : refutationResult ? (
+                        <div data-cy="terminal-refutation-result" className="rounded-[26px] border border-emerald-700/70 bg-[linear-gradient(145deg,rgba(6,78,59,0.46),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_30px_rgba(6,78,59,0.2)]">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-200">Resultado privado</p>
+                              <h4 className="mt-2 text-base font-black text-white">
+                                {refutationResult.outcome === "REFUTED" ? "Tu sugerencia fue refutada" : "Nadie pudo refutar tu sugerencia"}
+                              </h4>
+                              <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-100/90">
+                                {refutationResult.outcome === "REFUTED"
+                                  ? `${refutationResult.shownByTeamName ?? "Un equipo"} mostro una carta`
+                                  : "Sin cartas coincidentes"}
+                              </p>
+                            </div>
+                            <div className="rounded-2xl border border-emerald-600/70 bg-emerald-950/45 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-100">
+                              {refutationResult.outcome === "REFUTED" ? "Refutada" : "Sin refutar"}
+                            </div>
+                          </div>
+
+                          {refutationResult.shownCard ? (
+                            <div className="mt-4 rounded-2xl border border-emerald-700/60 bg-slate-950/55 p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="rounded-xl border border-white/10 bg-slate-900/80 p-2">
+                                  {refutationResult.shownCard.kind === "SUJETO" ? <User className="h-4 w-4 text-cyan-300" /> : refutationResult.shownCard.kind === "OBJETO" ? <Box className="h-4 w-4 text-emerald-300" /> : <MapPin className="h-4 w-4 text-rose-300" />}
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Carta revelada</p>
+                                  <p className="mt-1 text-sm font-semibold text-white">{refutationResult.shownCard.name}</p>
+                                  <p className="mt-1 text-xs text-slate-400">{refutationResult.shownCard.desc}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
                       ) : (
                         <div data-cy="terminal-suggest-blocked" className="rounded-[26px] border border-slate-700/80 bg-[linear-gradient(145deg,rgba(15,23,42,0.92),rgba(2,6,23,0.98))] p-5">

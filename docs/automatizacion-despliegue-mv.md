@@ -86,7 +86,18 @@ Contenido recomendado para el usuario `usuario`:
 ```sudoers
 Runas_Alias TFG_POSTGRES = postgres
 Cmnd_Alias TFG_DEPLOY_POSTGRES = /usr/bin/psql -tAc *
-Cmnd_Alias TFG_DEPLOY_ROOT = /usr/bin/awk *, /usr/bin/stat *, /usr/bin/install *, /usr/bin/sed *, /usr/bin/systemctl restart postgresql, /usr/bin/grep *
+Cmnd_Alias TFG_DEPLOY_ROOT = \
+    /usr/bin/awk *, \
+    /usr/bin/stat *, \
+    /usr/bin/install *, \
+    /usr/bin/sed *, \
+    /usr/bin/grep *, \
+    /usr/bin/systemctl restart postgresql, \
+    /usr/bin/systemctl daemon-reload, \
+    /usr/bin/systemctl enable cloudflared-quick, \
+    /usr/bin/systemctl restart cloudflared-quick, \
+    /usr/bin/tee /etc/systemd/system/cloudflared-quick.service, \
+    /usr/bin/truncate -s 0 /tmp/cloudflared-quick.log
 usuario ALL=(TFG_POSTGRES) NOPASSWD: TFG_DEPLOY_POSTGRES
 usuario ALL=(root) NOPASSWD: TFG_DEPLOY_ROOT
 ```
@@ -106,6 +117,11 @@ sudo -k
 sudo -n -u postgres /usr/bin/psql -tAc 'show config_file'
 sudo -n -u postgres /usr/bin/psql -tAc 'show hba_file'
 sudo -n /usr/bin/systemctl restart postgresql
+sudo -n /usr/bin/systemctl daemon-reload
+sudo -n /usr/bin/systemctl enable cloudflared-quick
+sudo -n /usr/bin/systemctl restart cloudflared-quick
+echo test | sudo -n /usr/bin/tee /etc/systemd/system/cloudflared-quick.service > /dev/null
+sudo -n /usr/bin/truncate -s 0 /tmp/cloudflared-quick.log
 ```
 
 Si cualquiera de esos comandos pide contrasena o falla con `sudo: a password is required`, el `sudoers` restringido todavia no esta aplicado correctamente para CI/CD.

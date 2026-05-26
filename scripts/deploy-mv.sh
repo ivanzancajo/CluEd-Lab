@@ -186,6 +186,7 @@ FRONTEND_HOST_IP=$FRONTEND_HOST_IP
 FRONTEND_PUBLISHED_PORT=$FRONTEND_PUBLISHED_PORT
 BACKEND_HOST_IP=$BACKEND_HOST_IP
 BACKEND_PUBLISHED_PORT=$BACKEND_PUBLISHED_PORT
+CLOUDFLARE_TUNNEL_TOKEN=$CLOUDFLARE_TUNNEL_TOKEN
 EOF
 }
 
@@ -270,6 +271,8 @@ FRONTEND_HOST_IP="${FRONTEND_HOST_IP:-0.0.0.0}"
 FRONTEND_PUBLISHED_PORT="${FRONTEND_PUBLISHED_PORT:-80}"
 BACKEND_HOST_IP="${BACKEND_HOST_IP:-127.0.0.1}"
 BACKEND_PUBLISHED_PORT="${BACKEND_PUBLISHED_PORT:-4000}"
+CLOUDFLARE_TUNNEL_TOKEN="${CLOUDFLARE_TUNNEL_TOKEN:-}"
+CLOUDFLARE_TUNNEL_URL="${CLOUDFLARE_TUNNEL_URL:-}"
 
 require_env PORT
 require_env ADMIN_USER
@@ -292,6 +295,16 @@ KNOWN_RECOVERY_MIGRATION_FILE="$BACKEND_DIR/prisma/migrations/$KNOWN_RECOVERY_MI
 [[ -n "$DB_USER" ]] || fail 'No se pudo derivar el usuario de base de datos desde DATABASE_URL'
 [[ -n "$DB_NAME" ]] || fail 'No se pudo derivar la base de datos desde DATABASE_URL'
 
+if [[ -n "$CLOUDFLARE_TUNNEL_URL" ]]; then
+  ALLOWED_ORIGINS="$ALLOWED_ORIGINS,$CLOUDFLARE_TUNNEL_URL"
+  SOCKET_IO_CORS_ORIGIN="$SOCKET_IO_CORS_ORIGIN,$CLOUDFLARE_TUNNEL_URL"
+fi
+
+COMPOSE_PROFILE_ARGS=()
+if [[ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]]; then
+  COMPOSE_PROFILE_ARGS=(--profile tunnel)
+fi
+
 write_backend_env
 write_compose_env
 
@@ -303,8 +316,8 @@ run_sudo "$SED_BIN" -i "s/^#\\?listen_addresses.*/listen_addresses = '*'/" "$PG_
 run_sudo "$SED_BIN" -i "s/^#\\?port.*/port = 5432/" "$PG_CONF"
 
 log 'Construyendo imagenes y materializando la red de Docker Compose'
-docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" build
-docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" create
+docker compose --env-file "$COMPOSE_ENV_FILE" "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_SPEC_FILE" build
+docker compose --env-file "$COMPOSE_ENV_FILE" "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_SPEC_FILE" create
 
 SUBNET="$(docker network inspect ${COMPOSE_PROJECT_NAME}_default --format '{{(index .IPAM.Config 0).Subnet}}')"
 HOST_RULE="host    $DB_NAME    $DB_USER    $SUBNET    scram-sha-256"
@@ -345,8 +358,8 @@ unset DATABASE_URL
 popd >/dev/null
 
 log 'Levantando servicios productivos'
-docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" up -d --remove-orphans
-docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" ps
+docker compose --env-file "$COMPOSE_ENV_FILE" "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_SPEC_FILE" up -d --remove-orphans
+docker compose --env-file "$COMPOSE_ENV_FILE" "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_SPEC_FILE" ps
 
 log 'Validando healthcheck, proxy HTTP y Socket.IO locales'
 wait_for_http http://127.0.0.1:4000/health 'healthcheck del backend'

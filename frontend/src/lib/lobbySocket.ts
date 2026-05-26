@@ -214,7 +214,7 @@ export function createLobbySocketClient(options?: { admin?: boolean }): LobbySoc
     path,
     autoConnect: false,
     auth: token ? { token } : {},
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
   });
 }
 

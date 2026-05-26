@@ -30,3 +30,13 @@ services:
         published: "${FRONTEND_PUBLISHED_PORT:-8080}"
         host_ip: "${FRONTEND_HOST_IP:-0.0.0.0}"
         protocol: tcp
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    network_mode: host
+    restart: unless-stopped
+    profiles:
+      - tunnel

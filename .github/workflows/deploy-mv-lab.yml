@@ -38,6 +38,8 @@ jobs:
       DEPLOY_REF: ${{ github.event.inputs.git_ref || github.ref_name }}
       MV_SSH_PRIVATE_KEY: ${{ secrets.MV_SSH_PRIVATE_KEY }}
       MV_SSH_PRIVATE_KEY_B64: ${{ secrets.MV_SSH_PRIVATE_KEY_B64 }}
+      CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+      CLOUDFLARE_TUNNEL_URL: ${{ vars.CLOUDFLARE_TUNNEL_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -108,7 +110,11 @@ jobs:
 
       - name: Ejecutar despliegue remoto
         run: |
-          ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -p "${MV_PORT:-22}" "${MV_USER}@${MV_HOST}" bash -s -- "$DEPLOY_REF" "$MV_REPO_PATH" <<'EOF'
+          ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -p "${MV_PORT:-22}" "${MV_USER}@${MV_HOST}" \
+            env \
+              CLOUDFLARE_TUNNEL_TOKEN="${CLOUDFLARE_TUNNEL_TOKEN:-}" \
+              CLOUDFLARE_TUNNEL_URL="${CLOUDFLARE_TUNNEL_URL:-}" \
+            bash -s -- "$DEPLOY_REF" "$MV_REPO_PATH" <<'EOF'
           set -euo pipefail
 
           DEPLOY_REF="$1"

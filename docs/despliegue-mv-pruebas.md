@@ -287,9 +287,61 @@ El script:
 
 Para automatizarlo desde GitHub Actions por SSH, consulta [docs/automatizacion-despliegue-mv.md](./automatizacion-despliegue-mv.md).
 
-## Alternativa si la red de la MV no es alcanzable desde el cliente
+## Acceso desde Eduroam: Cloudflare Named Tunnel
 
-Si la MV funciona internamente pero no puedes abrir `http://IP_O_DNS_PUBLICO_DE_LA_MV:8080` desde tu equipo cliente, puedes levantar un tunel HTTPS saliente temporal sin tocar la red del hipervisor. El caso mas practico validado ha sido Cloudflare Tunnel.
+El puerto 20382 asignado por el laboratorio es no estandar y Eduroam lo bloquea antes de que el trafico llegue a nginx. La solucion es un tunel saliente: cloudflared abre una conexion desde la MV hacia la red de Cloudflare y publica la app en una URL HTTPS en el puerto 443, que Eduroam si permite. Al ser una conexion saliente no es necesario abrir puertos adicionales en el laboratorio.
+
+Este proceso se hace una sola vez. El token generado se guarda como secreto en GitHub y en `.deploy/mv.backend.env` para que cada despliegue automatico arranque el tunel y configure CORS correctamente.
+
+### Configuracion inicial del tunel (una sola vez)
+
+1. Crea una cuenta gratuita en cloudflare.com.
+2. Instala `cloudflared` en la MV (descarga desde la documentacion oficial de Cloudflare).
+3. Autentica cloudflared con tu cuenta: `cloudflared tunnel login`
+4. Crea el tunel: `cloudflared tunnel create cluedo-tfg`
+5. En el Cloudflare Dashboard, ve al tunel creado y añade un Public Hostname que apunte a `http://localhost:80` (HTTP, sin TLS entre cloudflared y nginx).
+6. Obtén el token del tunel: `cloudflared tunnel token cluedo-tfg`
+7. Anota la URL publica asignada al tunel (del tipo `https://cluedo-tfg.tudominio.workers.dev` o la que hayas configurado).
+
+### Añadir el token y la URL al entorno de despliegue
+
+En la MV, edita `.deploy/mv.backend.env` y añade al final:
+
+```dotenv
+CLOUDFLARE_TUNNEL_TOKEN=<token obtenido en el paso 6>
+CLOUDFLARE_TUNNEL_URL=https://<subdominio>.workers.dev
+```
+
+En GitHub → Settings del repositorio:
+
+- **Secrets** → añade `CLOUDFLARE_TUNNEL_TOKEN` con el mismo token.
+- **Variables** → añade `CLOUDFLARE_TUNNEL_URL` con la URL publica del tunel.
+
+### Como funciona en cada despliegue
+
+El script `deploy-mv.sh` detecta que `CLOUDFLARE_TUNNEL_TOKEN` esta definido y:
+
+1. Añade `CLOUDFLARE_TUNNEL_URL` a `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` del backend.
+2. Activa el perfil `tunnel` de Docker Compose, que arranca el servicio `cloudflared`.
+3. El servicio `cloudflared` se conecta automaticamente al tunel nombrado usando el token.
+
+Tras el despliegue la app queda accesible en la URL del tunel desde cualquier red, incluida Eduroam.
+
+### Verificacion desde Eduroam
+
+```bash
+curl -I https://<url-del-tunel>
+curl -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"incorrecta"}' \
+  https://<url-del-tunel>/api/auth/login   # debe devolver 401
+curl -i "https://<url-del-tunel>/socket.io/?EIO=4&transport=polling"   # debe devolver 200
+```
+
+---
+
+## Alternativa temporal si el tunel nombrado no esta configurado
+
+Si la MV funciona internamente pero no puedes abrir `http://IP_O_DNS_PUBLICO_DE_LA_MV:8080` desde tu equipo cliente, puedes levantar un tunel HTTPS saliente temporal sin tocar la red del hipervisor. El caso mas practico validado ha sido Cloudflare Tunnel en modo quick tunnel (sin cuenta).
 
 1. Arranca el tunel desde la MV:
 

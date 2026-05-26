@@ -226,8 +226,6 @@ export function LobbyView() {
       label: "Unidos",
       value: joinedCount,
       labelClass: "text-slate-100",
-      detail: joinedCount === 1 ? "equipo listo" : "equipos listos",
-      detailClass: "text-slate-300/90",
       valueClass: "text-white",
       borderClass: "border-slate-600/90",
       surfaceClass: "from-slate-200/8 via-slate-900/20 to-transparent",
@@ -237,8 +235,6 @@ export function LobbyView() {
       label: "Conectados",
       value: connectedCount,
       labelClass: "text-cyan-100",
-      detail: connectedCount === 1 ? "equipo activo" : "equipos activos",
-      detailClass: "text-cyan-100/90",
       valueClass: "text-cyan-300",
       borderClass: "border-cyan-700/80",
       surfaceClass: "from-cyan-300/12 via-cyan-950/22 to-transparent",
@@ -248,8 +244,6 @@ export function LobbyView() {
       label: "Inactivos",
       value: inactiveCount,
       labelClass: "text-amber-100",
-      detail: inactiveCount === 1 ? "equipo en espera" : "equipos en espera",
-      detailClass: "text-amber-100/90",
       valueClass: "text-amber-300",
       borderClass: "border-amber-700/80",
       surfaceClass: "from-amber-300/12 via-amber-950/22 to-transparent",
@@ -259,8 +253,6 @@ export function LobbyView() {
       label: "Libres",
       value: availableCount,
       labelClass: "text-emerald-100",
-      detail: availableCount === 1 ? "color disponible" : "colores disponibles",
-      detailClass: "text-emerald-100/90",
       valueClass: "text-emerald-300",
       borderClass: "border-emerald-700/80",
       surfaceClass: "from-emerald-300/12 via-emerald-950/22 to-transparent",
@@ -408,30 +400,27 @@ export function LobbyView() {
                   {lobbySummaryCards.map((card) => (
                     <div
                       key={card.label}
-                      className={`relative overflow-hidden rounded-[28px] border bg-slate-950/82 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_18px_30px_-22px_rgba(15,23,42,0.95)] backdrop-blur-sm ${card.borderClass}`}
+                      className={`relative overflow-hidden rounded-[24px] border bg-slate-950/82 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_18px_30px_-22px_rgba(15,23,42,0.95)] backdrop-blur-sm ${card.borderClass}`}
                     >
                       <div className={`absolute inset-0 bg-gradient-to-br ${card.surfaceClass}`}></div>
                       <div className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r ${card.glowClass}`}></div>
-                      <div className="relative flex h-full min-h-[132px] flex-col justify-between gap-5">
+                      <div className="relative flex flex-col gap-4">
+                        <p className={`text-sm font-black uppercase tracking-[0.18em] leading-tight ${card.labelClass}`}>
+                          {card.label}
+                        </p>
                         <div className="space-y-2">
-                          <p className={`text-lg font-black uppercase tracking-[0.18em] sm:text-xl ${card.labelClass}`}>
-                            {card.label}
-                          </p>
-                          <p className={`text-[10px] font-semibold uppercase tracking-[0.08em] ${card.detailClass}`}>
-                            {card.detail}
-                          </p>
-                        </div>
-                        <div className="space-y-3">
-                          <div className={`h-1.5 w-16 rounded-full bg-current opacity-90 ${card.valueClass}`}></div>
-                          <p className={`text-5xl font-black leading-none tabular-nums sm:text-6xl ${card.valueClass}`}>{card.value}</p>
+                          <div className={`h-1 w-10 rounded-full bg-current opacity-90 ${card.valueClass}`}></div>
+                          <p className={`text-5xl font-black leading-none tabular-nums ${card.valueClass}`}>{card.value}</p>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
-                <p className="mt-4 text-xs uppercase tracking-[0.22em] text-slate-500">
-                  Equipos sin senal reciente: {disconnectedCount}
-                </p>
+                {disconnectedCount > 0 && (
+                  <p className="mt-3 text-xs uppercase tracking-[0.22em] text-red-400/70">
+                    {disconnectedCount} sin senal reciente
+                  </p>
+                )}
               </div>
 
               <div className="w-full max-w-md rounded-[28px] border border-cyan-900/50 bg-slate-900/80 p-6 shadow-inner shadow-slate-950/60">

@@ -375,4 +375,5 @@ LOGIN_STATUS="$(curl --silent --show-error --output /dev/null --write-out '%{htt
 wait_for_http 'http://127.0.0.1/socket.io/?EIO=4&transport=polling' 'handshake de Socket.IO'
 
 log 'Despliegue completado correctamente'
-log 'Entrada publica esperada: http://virtual.lab.inf.uva.es:20382'
+log 'Entrada publica esperada:  http://tfg2038.virtual.lab.inf.uva.es:20382'
+log 'Acceso desde Eduroam:      http://vm2038.virtual.lab.inf.uva.es'

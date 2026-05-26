@@ -295,6 +295,57 @@ KNOWN_RECOVERY_MIGRATION_FILE="$BACKEND_DIR/prisma/migrations/$KNOWN_RECOVERY_MI
 [[ -n "$DB_USER" ]] || fail 'No se pudo derivar el usuario de base de datos desde DATABASE_URL'
 [[ -n "$DB_NAME" ]] || fail 'No se pudo derivar la base de datos desde DATABASE_URL'
 
+CLOUDFLARE_QUICK_LOG='/tmp/cloudflared-quick.log'
+
+setup_quick_tunnel() {
+  run_sudo tee /etc/systemd/system/cloudflared-quick.service > /dev/null <<'UNIT'
+[Unit]
+Description=Cloudflare Quick Tunnel (acceso desde Eduroam)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cloudflared tunnel --url http://localhost:80
+StandardOutput=append:/tmp/cloudflared-quick.log
+StandardError=append:/tmp/cloudflared-quick.log
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+  run_sudo "$SYSTEMCTL_BIN" daemon-reload
+  run_sudo "$SYSTEMCTL_BIN" enable cloudflared-quick
+  run_sudo truncate -s 0 "$CLOUDFLARE_QUICK_LOG" 2>/dev/null || true
+  run_sudo "$SYSTEMCTL_BIN" restart cloudflared-quick
+}
+
+wait_for_quick_tunnel_url() {
+  local url=''
+  local attempts=30
+
+  for ((i = 1; i <= attempts; i += 1)); do
+    url="$(grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' "$CLOUDFLARE_QUICK_LOG" 2>/dev/null | head -1 || true)"
+    [[ -n "$url" ]] && break
+    sleep 1
+  done
+
+  printf '%s' "$url"
+}
+
+if [[ -z "$CLOUDFLARE_TUNNEL_TOKEN" ]] && command -v cloudflared >/dev/null 2>&1; then
+  log 'cloudflared detectado — configurando quick tunnel para acceso desde Eduroam'
+  setup_quick_tunnel
+  DETECTED_URL="$(wait_for_quick_tunnel_url)"
+  if [[ -n "$DETECTED_URL" ]]; then
+    CLOUDFLARE_TUNNEL_URL="$DETECTED_URL"
+    log "Quick tunnel activo: $CLOUDFLARE_TUNNEL_URL"
+  else
+    log 'ADVERTENCIA: no se pudo obtener URL del quick tunnel, continuando sin él'
+  fi
+fi
+
 if [[ -n "$CLOUDFLARE_TUNNEL_URL" ]]; then
   ALLOWED_ORIGINS="$ALLOWED_ORIGINS,$CLOUDFLARE_TUNNEL_URL"
   SOCKET_IO_CORS_ORIGIN="$SOCKET_IO_CORS_ORIGIN,$CLOUDFLARE_TUNNEL_URL"
@@ -375,5 +426,7 @@ LOGIN_STATUS="$(curl --silent --show-error --output /dev/null --write-out '%{htt
 wait_for_http 'http://127.0.0.1/socket.io/?EIO=4&transport=polling' 'handshake de Socket.IO'
 
 log 'Despliegue completado correctamente'
-log 'Entrada publica esperada:  http://virtual.lab.inf.uva.es:20382'
-log 'Acceso desde Eduroam:      http://vm2038.virtual.lab.inf.uva.es'
+log 'Entrada publica esperada: http://virtual.lab.inf.uva.es:20382'
+if [[ -n "${CLOUDFLARE_TUNNEL_URL:-}" ]]; then
+  log "Acceso desde Eduroam:    $CLOUDFLARE_TUNNEL_URL"
+fi

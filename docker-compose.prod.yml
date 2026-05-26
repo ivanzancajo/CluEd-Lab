@@ -27,7 +27,11 @@ services:
       - backend
     ports:
       - target: 80
-        published: "${FRONTEND_PUBLISHED_PORT:-8080}"
+        published: "${FRONTEND_PUBLISHED_PORT:-80}"
+        host_ip: "${FRONTEND_HOST_IP:-0.0.0.0}"
+        protocol: tcp
+      - target: 20382
+        published: 20382
         host_ip: "${FRONTEND_HOST_IP:-0.0.0.0}"
         protocol: tcp
 

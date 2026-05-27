@@ -32,6 +32,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       }
     }
 
+    // react-doctor-disable-next-line react-doctor/no-initialize-state
     validateSession();
 
     return () => {

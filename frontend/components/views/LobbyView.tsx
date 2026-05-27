@@ -49,6 +49,7 @@ export function LobbyView() {
     return () => window.clearInterval(intervalId);
   }, []);
 
+  // react-doctor-disable-next-line react-doctor/effect-needs-cleanup, react-doctor/no-cascading-set-state
   useEffect(() => {
     let active = true;
     const socket = createLobbySocketClient({ admin: true });

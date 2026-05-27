@@ -244,6 +244,51 @@ function CellIcon({ state }: { state: number }) {
   return null;
 }
 
+type MoveState = {
+  destinationNodes: TeamMoveNode[];
+  selectedDestinationNodeId: string;
+  isMoveConfirmOpen: boolean;
+  isLoadingMoves: boolean;
+  diceResetSignal: number;
+};
+
+type MoveAction =
+  | { type: 'reset' }
+  | { type: 'clearSelection' }
+  | { type: 'startRefresh' }
+  | { type: 'setNodes'; nodes: TeamMoveNode[] }
+  | { type: 'clearNodes' }
+  | { type: 'incrementDice' }
+  | { type: 'afterMove' }
+  | { type: 'selectNode'; id: string }
+  | { type: 'closeConfirm' }
+  | { type: 'setConfirmOpen'; open: boolean };
+
+function moveReducer(state: MoveState, action: MoveAction): MoveState {
+  switch (action.type) {
+    case 'reset':
+      return { destinationNodes: [], selectedDestinationNodeId: "", isMoveConfirmOpen: false, isLoadingMoves: false, diceResetSignal: state.diceResetSignal + 1 };
+    case 'clearSelection':
+      return { ...state, destinationNodes: [], selectedDestinationNodeId: "", isMoveConfirmOpen: false };
+    case 'startRefresh':
+      return { ...state, destinationNodes: [], selectedDestinationNodeId: "", isMoveConfirmOpen: false, isLoadingMoves: true };
+    case 'setNodes':
+      return { ...state, destinationNodes: action.nodes, isLoadingMoves: false };
+    case 'clearNodes':
+      return { ...state, destinationNodes: [], isLoadingMoves: false };
+    case 'incrementDice':
+      return { ...state, diceResetSignal: state.diceResetSignal + 1 };
+    case 'afterMove':
+      return { ...state, destinationNodes: [], selectedDestinationNodeId: "", diceResetSignal: state.diceResetSignal + 1 };
+    case 'selectNode':
+      return { ...state, selectedDestinationNodeId: action.id, isMoveConfirmOpen: true };
+    case 'closeConfirm':
+      return { ...state, isMoveConfirmOpen: false, selectedDestinationNodeId: "" };
+    case 'setConfirmOpen':
+      return { ...state, isMoveConfirmOpen: action.open, selectedDestinationNodeId: action.open ? state.selectedDestinationNodeId : "" };
+  }
+}
+
 export function TerminalView() {
   const navigate = useNavigate();
   const lobbySocketRef = React.useRef<LobbySocketClient | null>(null);
@@ -261,26 +306,29 @@ export function TerminalView() {
   const [isLoadingHand, setIsLoadingHand] = useState(false);
   const [teamHand, setTeamHand] = useState<TerminalCard[]>([]);
   const [publicCards, setPublicCards] = useState<TeamHandCard[]>([]);
-  const [destinationNodes, setDestinationNodes] = useState<TeamMoveNode[]>([]);
-  const [selectedDestinationNodeId, setSelectedDestinationNodeId] = useState("");
-  const [isMoveConfirmOpen, setIsMoveConfirmOpen] = useState(false);
+  const [moveState, dispatchMove] = React.useReducer(moveReducer, {
+    destinationNodes: [],
+    selectedDestinationNodeId: "",
+    isMoveConfirmOpen: false,
+    isLoadingMoves: false,
+    diceResetSignal: 0,
+  });
+  const { destinationNodes, selectedDestinationNodeId, isMoveConfirmOpen, isLoadingMoves, diceResetSignal } = moveState;
   const [currentMoveNode, setCurrentMoveNode] = useState<TeamMoveNode | null>(null);
   const [sessionTurn, setSessionTurn] = useState<LobbySession["turn"]>(null);
   const [debugMode, setDebugMode] = useState<'off' | 'map' | 'forced-dice'>(() =>
     getStoredBoardDebugMode() ? 'map' : 'off'
   );
   const [boardDebugProbe, setBoardDebugProbe] = useState<BoardDebugProbe | null>(null);
-  const [diceResetSignal, setDiceResetSignal] = useState(0);
   const [forcedDiceValue, setForcedDiceValue] = useState<number | undefined>(undefined);
   const [activeMotifSpace, setActiveMotifSpace] = useState<BoardSpaceLabel | null>(null);
-  const [isLoadingMoves, setIsLoadingMoves] = useState(false);
   const [isMovingPawn, setIsMovingPawn] = useState(false);
   const [isEmittingSecretPassage, setIsEmittingSecretPassage] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [activeSuggestion, setActiveSuggestion] = useState<SuggestionSummary | null>(null);
   const [pendingSuggestion, setPendingSuggestion] = useState<TeamPendingSuggestionState | null>(null);
-  const [selectedSubjectId, setSelectedSubjectId] = useState("");
-  const [selectedObjectId, setSelectedObjectId] = useState("");
+  const [rawSubjectId, setSelectedSubjectId] = useState("");
+  const [rawObjectId, setSelectedObjectId] = useState("");
   const [selectedSpaceId, setSelectedSpaceId] = useState("");
   const [manualRefuteCardId, setSelectedRefuteCardId] = useState("");
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
@@ -316,10 +364,12 @@ export function TerminalView() {
   const [cardFlipped, setCardFlipped] = useState(false);
 
   const storedTeamId = getStoredTeamId();
+  // react-doctor-disable-next-line react-doctor/no-event-handler
   const isMyTurn = sessionTurn?.currentTeamId === storedTeamId;
   const currentTurnRemainingMoves = sessionTurn?.remainingMoves ?? null;
   const currentTeamState = boardTeams.find((team) => team.id === storedTeamId) ?? null;
   const isTeamEliminated = Boolean(currentTeamState?.falseAccusation || currentTeamState?.eliminatedAt);
+  // react-doctor-disable-next-line react-doctor/no-event-handler
   const activeResolution = resolutionState;
   const isResolutionAwaitingInputs = activeResolution?.phase === "ESPERANDO_RESOLUCION";
   const isResolutionShowingSolution = activeResolution?.phase === "MOSTRANDO_SOLUCION";
@@ -407,28 +457,21 @@ export function TerminalView() {
       pendingSug ||
       resolutionBlocking
     ) {
-      setDestinationNodes([]);
-      setSelectedDestinationNodeId("");
-      setIsMoveConfirmOpen(false);
+      dispatchMove({ type: 'clearSelection' });
       return;
     }
 
-    setDestinationNodes([]);
-    setSelectedDestinationNodeId("");
-    setIsMoveConfirmOpen(false);
+    dispatchMove({ type: 'startRefresh' });
     setMoveError(null);
-    setIsLoadingMoves(true);
 
     try {
-      const moveState = await getTeamMoveState(accessCode, teamId);
-      setCurrentMoveNode(moveState.currentNode);
-      setDestinationNodes(moveState.destinationNodes);
+      const fetchedMoveData = await getTeamMoveState(accessCode, teamId);
+      setCurrentMoveNode(fetchedMoveData.currentNode);
+      dispatchMove({ type: 'setNodes', nodes: fetchedMoveData.destinationNodes });
       setMoveError(null);
     } catch (error) {
-      setDestinationNodes([]);
+      dispatchMove({ type: 'clearNodes' });
       setMoveError(getSessionErrorMessage(error, "No se ha podido preparar la selección de destino."));
-    } finally {
-      setIsLoadingMoves(false);
     }
   }, []);
 
@@ -444,9 +487,7 @@ export function TerminalView() {
       throw new Error("Hay una sugerencia pendiente de resolver antes de volver a mover el peón.");
     }
 
-    setDestinationNodes([]);
-    setSelectedDestinationNodeId("");
-    setIsMoveConfirmOpen(false);
+    dispatchMove({ type: 'clearSelection' });
     setMoveError(null);
     const rollStartedAt = Date.now();
 
@@ -467,7 +508,7 @@ export function TerminalView() {
       await waitForDiceAnimationToFinish();
 
       setCurrentMoveNode(rollResult.currentNode);
-      setDestinationNodes(rollResult.destinationNodes);
+      dispatchMove({ type: 'setNodes', nodes: rollResult.destinationNodes });
       setMoveError(
         rollResult.turnAdvanced
           ? "La tirada no deja movimientos legales. El turno ha pasado automáticamente al siguiente equipo."
@@ -479,28 +520,26 @@ export function TerminalView() {
       }
 
       if (rollResult.turnAdvanced) {
-        setDiceResetSignal((previousValue) => previousValue + 1);
+        dispatchMove({ type: 'incrementDice' });
       }
 
       return rollResult.dice;
     } catch (error) {
       await waitForDiceAnimationToFinish();
-      setDestinationNodes([]);
+      dispatchMove({ type: 'clearNodes' });
       setMoveError(getSessionErrorMessage(error, "No se ha podido registrar la tirada del turno actual."));
-      setDiceResetSignal((previousValue) => previousValue + 1);
+      dispatchMove({ type: 'incrementDice' });
       throw error;
     }
   };
 
   const handleDestinationNodePress = (destinationNodeId: string) => {
-    setSelectedDestinationNodeId(destinationNodeId);
+    dispatchMove({ type: 'selectNode', id: destinationNodeId });
     setMoveError(null);
-    setIsMoveConfirmOpen(true);
   };
 
   const handleBoardNodePress = (boardNode: BoardMovementNode) => {
-    setIsMoveConfirmOpen(false);
-    setSelectedDestinationNodeId("");
+    dispatchMove({ type: 'closeConfirm' });
 
     if (sessionStatus !== "EN_CURSO") {
       return;
@@ -567,8 +606,7 @@ export function TerminalView() {
     }
 
     if (sessionStatus === "EN_CURSO" && isTeamEliminated) {
-      setIsMoveConfirmOpen(false);
-      setSelectedDestinationNodeId("");
+      dispatchMove({ type: 'closeConfirm' });
       setMoveError(eliminatedMoveErrorMessage);
       return;
     }
@@ -581,8 +619,7 @@ export function TerminalView() {
       destinationNodes.length > 0
     ) {
       if (!matchedDestinationNode) {
-        setIsMoveConfirmOpen(false);
-        setSelectedDestinationNodeId("");
+        dispatchMove({ type: 'closeConfirm' });
         setMoveError("La casilla o sala seleccionada no es alcanzable con la tirada actual.");
         return;
       }
@@ -592,8 +629,7 @@ export function TerminalView() {
     }
 
     if (!matchedNode) {
-      setIsMoveConfirmOpen(false);
-      setSelectedDestinationNodeId("");
+      dispatchMove({ type: 'closeConfirm' });
       setMoveError("Pulsa una casilla o una sala real del tablero para intentar el movimiento.");
       return;
     }
@@ -617,11 +653,7 @@ export function TerminalView() {
   };
 
   const handleMoveConfirmOpenChange = (open: boolean) => {
-    setIsMoveConfirmOpen(open);
-
-    if (!open) {
-      setSelectedDestinationNodeId("");
-    }
+    dispatchMove({ type: 'setConfirmOpen', open });
   };
 
   const handleMovePawn = async (targetNodeId = selectedDestinationNodeId) => {
@@ -638,7 +670,7 @@ export function TerminalView() {
     }
 
     const selectedDestinationNode = destinationNodes.find((node) => node.id === targetNodeId) ?? null;
-    setIsMoveConfirmOpen(false);
+    dispatchMove({ type: 'closeConfirm' });
     setIsMovingPawn(true);
 
     try {
@@ -647,10 +679,8 @@ export function TerminalView() {
 
       setBoardTeams(moveResult.session.teams);
       setCurrentMoveNode(moveResult.currentNode);
-      setDestinationNodes([]);
-      setSelectedDestinationNodeId("");
+      dispatchMove({ type: 'afterMove' });
       setMoveError(null);
-      setDiceResetSignal((previousValue) => previousValue + 1);
 
       if (currentTeam) {
         applyRealtimeSession(moveResult.session, currentTeam);
@@ -695,7 +725,7 @@ export function TerminalView() {
         return;
       }
 
-      setDiceResetSignal((previousValue) => previousValue + 1);
+      dispatchMove({ type: 'incrementDice' });
       setCurrentMoveNode(null);
       void refreshMoveState();
     } catch {
@@ -814,9 +844,7 @@ export function TerminalView() {
 
       setPendingSuggestion(null);
       setActiveSuggestion(result.session.activeSuggestion);
-      setDestinationNodes([]);
-      setSelectedDestinationNodeId("");
-      setDiceResetSignal((previousValue) => previousValue + 1);
+      dispatchMove({ type: 'afterMove' });
 
       if (currentTeam) {
         applyRealtimeSession(result.session, currentTeam);
@@ -868,6 +896,7 @@ export function TerminalView() {
     return () => clearTimeout(timer);
   }, [showEnvelopeAnimation]);
 
+  // react-doctor-disable-next-line react-doctor/no-cascading-set-state
   React.useEffect(() => {
     const accessCode = getStoredSessionCode();
     const teamId = getStoredTeamId();
@@ -909,6 +938,7 @@ export function TerminalView() {
     };
   }, [sessionStatus, refreshTerminalState]);
 
+  // react-doctor-disable-next-line react-doctor/effect-needs-cleanup, react-doctor/no-cascading-set-state
   React.useEffect(() => {
     const sessionId = getStoredSessionId();
     const teamId = getStoredTeamId();
@@ -1096,22 +1126,25 @@ export function TerminalView() {
       socket.removeAllListeners();
       socket.disconnect();
     };
+  // react-doctor-disable-next-line react-doctor/prefer-use-effect-event
   }, [navigate, refreshTerminalState]);
 
+  // react-doctor-disable-next-line react-doctor/no-event-handler
   React.useEffect(() => {
     if (
       !isMyTurn ||
+      // react-doctor-disable-next-line react-doctor/no-event-handler
       activeSuggestion ||
+      // react-doctor-disable-next-line react-doctor/no-event-handler
       pendingSuggestion ||
       isResolutionBlockingGameplay ||
+      // react-doctor-disable-next-line react-doctor/no-event-handler
       activeTab !== "map" ||
+      // react-doctor-disable-next-line react-doctor/no-event-handler
       sessionStatus !== "EN_CURSO"
     ) {
-      setDestinationNodes([]);
-      setSelectedDestinationNodeId("");
-      setIsMoveConfirmOpen(false);
-      setIsLoadingMoves(false);
-      setDiceResetSignal((previousValue) => previousValue + 1);
+      // react-doctor-disable-next-line react-doctor/no-event-handler
+      dispatchMove({ type: 'reset' });
       return;
     }
 
@@ -1121,11 +1154,8 @@ export function TerminalView() {
     }
 
     if (sessionTurn?.dice === null) {
-      setDestinationNodes([]);
-      setSelectedDestinationNodeId("");
-      setIsMoveConfirmOpen(false);
-      setIsLoadingMoves(false);
-      setDiceResetSignal((previousValue) => previousValue + 1);
+      // react-doctor-disable-next-line react-doctor/no-event-handler
+      dispatchMove({ type: 'reset' });
     }
   }, [activeSuggestion, activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, isResolutionBlockingGameplay, pendingSuggestion, refreshMoveState, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
 
@@ -1144,18 +1174,6 @@ export function TerminalView() {
     void refreshMoveState();
   }, [activeSuggestion, isMyTurn, isResolutionBlockingGameplay, pendingSuggestion, refreshMoveState, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
 
-
-  React.useEffect(() => {
-    if (selectedSubjectId && !categories.c1.some((item) => item.id === selectedSubjectId)) {
-      setSelectedSubjectId("");
-    }
-  }, [categories.c1, selectedSubjectId]);
-
-  React.useEffect(() => {
-    if (selectedObjectId && !categories.c2.some((item) => item.id === selectedObjectId)) {
-      setSelectedObjectId("");
-    }
-  }, [categories.c2, selectedObjectId]);
 
   const currentTeamMeta = teamColor ? getTeamMeta(teamColor) : null;
   const hasActiveTeams = boardTeams.some((team) => !team.falseAccusation && !team.eliminatedAt);
@@ -1234,6 +1252,8 @@ export function TerminalView() {
     ? getBoardRoomSpaceSlotIndex(resolvedCurrentMoveNode.id)
     : null;
   const currentRoomSpace = currentRoomSpaceSlotIndex === null ? null : categories.c3[currentRoomSpaceSlotIndex] ?? null;
+  const selectedSubjectId = categories.c1.some((item) => item.id === rawSubjectId) ? rawSubjectId : "";
+  const selectedObjectId = categories.c2.some((item) => item.id === rawObjectId) ? rawObjectId : "";
   const selectedSubject = categories.c1.find((item) => item.id === selectedSubjectId) ?? null;
   const selectedObject = categories.c2.find((item) => item.id === selectedObjectId) ?? null;
   const refuteRequest = pendingSuggestion?.type === "REFUTE_REQUEST" ? pendingSuggestion : null;

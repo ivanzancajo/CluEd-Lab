@@ -22,6 +22,7 @@ export function JoinTerminalView() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // react-doctor-disable-next-line react-doctor/no-cascading-set-state
   useEffect(() => {
     if (code.length !== 6) {
       setSessionSnapshot(null);

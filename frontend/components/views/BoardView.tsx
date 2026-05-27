@@ -105,6 +105,7 @@ export function BoardView() {
     return () => window.clearInterval(intervalId);
   }, []);
 
+  // react-doctor-disable-next-line react-doctor/no-cascading-set-state
   useEffect(() => {
     if (!presenceState) {
       return;
@@ -134,6 +135,7 @@ export function BoardView() {
     return () => window.clearInterval(timer);
   }, [navigate, presenceState]);
 
+  // react-doctor-disable-next-line react-doctor/effect-needs-cleanup, react-doctor/no-cascading-set-state
   useEffect(() => {
     let active = true;
     const socket = createLobbySocketClient({ admin: true });

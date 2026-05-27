@@ -761,8 +761,11 @@ export function BoardView() {
             {isBoardDebugEnabled ? (
               <div
                 data-cy="host-board-debug-surface"
+                role="button"
+                tabIndex={0}
                 className="absolute inset-0 z-20 cursor-crosshair"
                 onClick={handleBoardDebugSurfaceClick}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") (e.target as HTMLElement).click(); }}
               />
             ) : null}
             <SpaceMotifModal
@@ -882,10 +885,10 @@ export function BoardView() {
             </button>
           ) : null}
 
-          <div className="absolute top-0 left-0 size-8 border-t-4 border-l-4 border-cyan-800 -translate-x-4 -translate-y-4"></div>
-          <div className="absolute top-0 right-0 size-8 border-t-4 border-r-4 border-cyan-800 translate-x-4 -translate-y-4"></div>
-          <div className="absolute bottom-0 left-0 size-8 border-b-4 border-l-4 border-cyan-800 -translate-x-4 translate-y-4"></div>
-          <div className="absolute bottom-0 right-0 size-8 border-b-4 border-r-4 border-cyan-800 translate-x-4 translate-y-4"></div>
+          <div className="absolute top-0 left-0 size-8 border-t-2 border-l-2 border-cyan-800/70 -translate-x-2 -translate-y-2"></div>
+          <div className="absolute top-0 right-0 size-8 border-t-2 border-r-2 border-cyan-800/70 translate-x-2 -translate-y-2"></div>
+          <div className="absolute bottom-0 left-0 size-8 border-b-2 border-l-2 border-cyan-800/70 -translate-x-2 translate-y-2"></div>
+          <div className="absolute bottom-0 right-0 size-8 border-b-2 border-r-2 border-cyan-800/70 translate-x-2 translate-y-2"></div>
         </div>
 
         {showEnvelopeAnimation ? (

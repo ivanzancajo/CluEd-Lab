@@ -50,7 +50,10 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
               <div
                 key={card.id}
                 data-cy="evidencias-comunes-card"
+                role="button"
+                tabIndex={0}
                 onClick={() => handleCardClick(card)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleCardClick(card); }}
                 className={`w-20 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${styles.border} ${styles.bg} flex flex-col items-center justify-start cursor-pointer hover:brightness-110 transition-all shadow-lg relative overflow-hidden`}
               >
                 <div className="w-full h-1/2 relative overflow-hidden border-b border-slate-800">

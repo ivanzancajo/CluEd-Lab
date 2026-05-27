@@ -151,7 +151,7 @@ export function ThemedBoard({
         return (
           <motion.div
             key={team.id}
-            initial={{ scale: 0 }}
+            initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: team.opacity ?? 1 }}
             transition={{ type: 'spring', stiffness: 220, damping: 16 }}
             data-cy={`board-pawn-${team.color.toLowerCase()}`}
@@ -203,7 +203,7 @@ function BoardDebugOverlay({
   return (
     <div data-cy="board-debug-overlay" className="pointer-events-none absolute inset-0 z-[24] overflow-hidden">
       {BOARD_GRID_COLUMNS_PERCENT.map((positionX, columnIndex) => (
-        <div key={`debug-col-${columnIndex}`}>
+        <div key={`debug-col-${positionX}`}>
           <div
             data-cy={`board-debug-grid-col-${columnIndex}`}
             className="absolute inset-y-0 w-px bg-cyan-300/30"
@@ -219,7 +219,7 @@ function BoardDebugOverlay({
       ))}
 
       {BOARD_GRID_ROWS_PERCENT.map((positionY, rowIndex) => (
-        <div key={`debug-row-${rowIndex}`}>
+        <div key={`debug-row-${positionY}`}>
           <div
             data-cy={`board-debug-grid-row-${rowIndex}`}
             className="absolute inset-x-0 h-px bg-cyan-300/30"

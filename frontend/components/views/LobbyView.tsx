@@ -36,17 +36,13 @@ const MINIMUM_TEAMS_TO_START = 2;
 export function LobbyView() {
   const navigate = useNavigate();
   const socketRef = useRef<LobbySocketClient | null>(null);
-  const [sessionCode, setSessionCode] = useState("");
+  const [sessionCode, setSessionCode] = useState(() => getStoredSessionCode() || "N/A");
   const [presenceState, setPresenceState] = useState<LobbyPresenceState | null>(null);
   const [events, setEvents] = useState<LobbyEventMessage[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<LobbyConnectionStatus>("idle");
   const [lobbyError, setLobbyError] = useState<string | null>(null);
   const [isStartingGame, setIsStartingGame] = useState(false);
   const [monitoringNow, setMonitoringNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    setSessionCode(getStoredSessionCode() || "N/A");
-  }, []);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setMonitoringNow(Date.now()), 1000);

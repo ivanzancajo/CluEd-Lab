@@ -115,7 +115,7 @@ export function ThemedBoard({
                   type="button"
                   data-cy={`board-space-motif-${index + 1}`}
                   onClick={(e) => { e.stopPropagation(); onSpaceMotifClick?.(space); }}
-                  className="absolute top-0 right-0 z-30 flex h-5 w-5 items-center justify-center rounded-full bg-amber-900/70 text-[9px] font-black text-amber-100 shadow-sm backdrop-blur-sm border border-amber-700/60 hover:bg-amber-800/90 hover:scale-110 transition-all duration-150"
+                  className="absolute top-0 right-0 z-30 flex size-5 items-center justify-center rounded-full bg-amber-900/70 text-[9px] font-black text-amber-100 shadow-sm backdrop-blur-sm border border-amber-700/60 hover:bg-amber-800/90 hover:scale-110 transition-all duration-150"
                   title={space.motif}
                 >
                   M
@@ -273,7 +273,7 @@ function BoardDebugOverlay({
             />
           ) : null}
           <div
-            className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-fuchsia-100 bg-fuchsia-300/80 shadow-[0_0_10px_rgba(232,121,249,0.7)]"
+            className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-fuchsia-100 bg-fuchsia-300/80 shadow-[0_0_10px_rgba(232,121,249,0.7)]"
             style={{
               left: toBoardPercent(debugProbe.positionX),
               top: toBoardPercent(debugProbe.positionY),
@@ -303,7 +303,7 @@ function getBoardDebugMarkerClass(kind: string, isGeneratedSquare: boolean, isHi
     return 'h-3.5 w-3.5 bg-emerald-300/90';
   }
 
-  return isGeneratedSquare ? 'h-2 w-2 bg-cyan-200/80' : 'h-3 w-3 bg-cyan-300/90';
+  return isGeneratedSquare ? 'size-2 bg-cyan-200/80' : 'size-3 bg-cyan-300/90';
 }
 
 

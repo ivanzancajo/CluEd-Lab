@@ -161,6 +161,7 @@ export function LobbyView() {
       if (socketRef.current === socket) {
         socketRef.current = null;
       }
+      socket.removeAllListeners();
       socket.disconnect();
     };
   }, [navigate]);
@@ -279,23 +280,23 @@ export function LobbyView() {
       <div className="w-[380px] h-full bg-slate-900/40 border-r border-cyan-800/50 shadow-[4px_0_24px_-4px_rgba(6,182,212,0.15)] flex flex-col relative z-20 backdrop-blur-md">
         <div className="flex items-center gap-3 p-5 border-b border-cyan-800/50 bg-slate-900/60">
           <Link to="/" className="text-slate-500 hover:text-cyan-400 transition-colors p-2 rounded-md hover:bg-slate-800">
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="size-5" />
           </Link>
-          <RadioTower className="w-6 h-6 text-amber-400" />
+          <RadioTower className="size-6 text-amber-400" />
           <div className="flex-1">
             <h1 className="text-sm font-bold tracking-widest text-amber-300">SALA DE ESPERA</h1>
             <p className="text-[10px] text-slate-500">HOST CONTROL ROOM</p>
           </div>
-          {connectionStatus === "connecting" ? <LoaderCircle className="w-4 h-4 animate-spin text-cyan-300" /> : null}
+          {connectionStatus === "connecting" ? <LoaderCircle className="size-4 animate-spin text-cyan-300" /> : null}
         </div>
 
         <div className="p-6 border-b border-cyan-800/30 grid grid-cols-2 gap-4 bg-gradient-to-b from-amber-950/10 to-transparent">
           <div className="flex flex-col gap-1 p-3 bg-slate-900 border border-slate-800 rounded-lg shadow-inner shadow-slate-950/50">
-            <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><KeyRound className="w-3 h-3" /> Codigo Sesion</span>
+            <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><KeyRound className="size-3" /> Codigo Sesion</span>
             <span data-cy="lobby-session-code" className="text-xl font-mono font-bold tracking-widest text-emerald-400">{sessionCode}</span>
           </div>
           <div className="flex flex-col gap-1 p-3 bg-slate-900 border border-slate-800 rounded-lg shadow-inner shadow-slate-950/50">
-            <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><Users className="w-3 h-3" /> Estado Activo</span>
+            <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><Users className="size-3" /> Estado Activo</span>
             <span data-cy="lobby-connected-count" className="text-xl font-bold font-mono tracking-widest text-cyan-300">{connectedCount}/{joinedCount}</span>
           </div>
         </div>
@@ -308,7 +309,7 @@ export function LobbyView() {
 
         <div className="px-6 py-4 border-b border-cyan-800/30">
           <h3 className="text-xs uppercase text-cyan-600 mb-4 flex items-center gap-2 font-bold tracking-widest">
-            <Users className="w-4 h-4" /> Equipos del Lobby
+            <Users className="size-4" /> Equipos del Lobby
           </h3>
           <div className="mb-4 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest">
             <span className="rounded-full border border-cyan-900/60 bg-cyan-950/20 px-3 py-1 text-cyan-200">Conectados {connectedCount}</span>
@@ -332,15 +333,15 @@ export function LobbyView() {
                   data-cy={`lobby-team-slot-${team.color.toLowerCase()}`}
                   className={`flex items-center gap-2 p-2 rounded border transition-all ${cardClass}`}
                 >
-                  <div className="w-3 h-3 rounded-full shadow-[0_0_5px_rgba(255,255,255,0.2)]" style={{ backgroundColor: team.hexColor }}></div>
+                  <div className="size-3 rounded-full shadow-[0_0_5px_rgba(255,255,255,0.2)]" style={{ backgroundColor: team.hexColor }}></div>
                   <div className="flex flex-col min-w-0 flex-1">
                     <span data-cy="lobby-team-slot-name" className="text-xs font-bold text-slate-200 truncate">{team.team?.name ?? team.label}</span>
                     <span data-cy="lobby-team-slot-secondary" className="text-[9px] text-slate-500 truncate" title={team.location}>{team.secondaryText}</span>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <span data-cy="lobby-team-slot-status" className="text-[8px] font-bold uppercase tracking-widest text-slate-400">{team.statusLabel}</span>
-                    {team.status === "connected" ? <Activity className="w-3 h-3 text-cyan-400 animate-pulse" /> : null}
-                    {team.status === "inactive" ? <Activity className="w-3 h-3 text-amber-300" /> : null}
+                    {team.status === "connected" ? <Activity className="size-3 text-cyan-400 animate-pulse" /> : null}
+                    {team.status === "inactive" ? <Activity className="size-3 text-amber-300" /> : null}
                   </div>
                 </div>
               );
@@ -351,9 +352,9 @@ export function LobbyView() {
         <div className="flex-1 flex flex-col p-6 overflow-hidden bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-slate-900 to-[#020617]">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xs uppercase text-cyan-600 flex items-center gap-2 font-bold tracking-widest">
-              <History className="w-4 h-4" /> Registro del Lobby
+              <History className="size-4" /> Registro del Lobby
             </h3>
-            <RefreshCw className={`w-3 h-3 text-cyan-800 ${connectionStatus === "connecting" ? "animate-spin" : ""}`} />
+            <RefreshCw className={`size-3 text-cyan-800 ${connectionStatus === "connecting" ? "animate-spin" : ""}`} />
           </div>
           <div data-cy="lobby-event-list" className="flex-1 overflow-y-auto pr-2 space-y-3 scrollbar-thin scrollbar-thumb-cyan-900 scrollbar-track-transparent">
             {visibleEvents.map((event) => {
@@ -390,7 +391,7 @@ export function LobbyView() {
             <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-2xl">
                 <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-800/60 bg-amber-950/20 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.32em] text-amber-200/90">
-                  <ShieldCheck className="w-4 h-4" /> Lobby habilitado
+                  <ShieldCheck className="size-4" /> Lobby habilitado
                 </div>
                 <h2 className="text-4xl font-black uppercase tracking-tight text-white">Esperando a los equipos</h2>
                 <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300">
@@ -426,7 +427,7 @@ export function LobbyView() {
               <div className="w-full max-w-md rounded-[28px] border border-cyan-900/50 bg-slate-900/80 p-6 shadow-inner shadow-slate-950/60">
                 <div className="flex items-center gap-3">
                   <div className="rounded-2xl border border-cyan-900/50 bg-cyan-950/20 p-4">
-                    <Zap className="w-7 h-7 text-cyan-300" />
+                    <Zap className="size-7 text-cyan-300" />
                   </div>
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.28em] text-cyan-500">Codigo activo</p>
@@ -452,7 +453,7 @@ export function LobbyView() {
                   disabled={isStartBlocked}
                   className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-500 px-6 py-5 text-lg font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_30px_rgba(16,185,129,0.28)] transition-all hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none"
                 >
-                  {isStartingGame ? <LoaderCircle className="w-6 h-6 animate-spin" /> : <Play className="w-6 h-6" />}
+                  {isStartingGame ? <LoaderCircle className="size-6 animate-spin" /> : <Play className="size-6" />}
                   {isStartingGame ? "Iniciando..." : "Iniciar Partida"}
                 </button>
               </div>

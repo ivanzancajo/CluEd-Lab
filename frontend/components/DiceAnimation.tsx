@@ -11,11 +11,11 @@ interface DiceFaceProps {
   value: number;
 }
 
-const Dot = () => <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />;
+const Dot = () => <div className="size-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />;
 
 const DiceFace: React.FC<DiceFaceProps> = ({ value }) => {
   return (
-    <div className="w-12 h-12 bg-slate-900 border-2 border-cyan-800 rounded-lg shadow-inner shadow-black flex items-center justify-center p-1.5 relative">
+    <div className="size-12 bg-slate-900 border-2 border-cyan-800 rounded-lg shadow-inner shadow-black flex items-center justify-center p-1.5 relative">
       {value === 1 && <Dot />}
       {value === 2 && (
         <div className="flex flex-col justify-between w-full h-full">

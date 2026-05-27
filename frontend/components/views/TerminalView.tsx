@@ -157,31 +157,31 @@ function mapHandCardToTerminalCard(card: TeamHandCard, config: GameConfig): Term
 // Categorías convertidas a objetos dinámicos con avatares predefinidos (íconos tech)
 const CATEGORIES = {
   sujetos: [
-    { name: "Ada Lovelace", avatar: <User className="w-3 h-3 text-pink-400" />, color: "bg-pink-950/30 border-pink-800" },
-    { name: "Alan Turing", avatar: <Cpu className="w-3 h-3 text-blue-400" />, color: "bg-blue-950/30 border-blue-800" },
-    { name: "Nikola Tesla", avatar: <Zap className="w-3 h-3 text-yellow-400" />, color: "bg-yellow-950/30 border-yellow-800" },
-    { name: "Marie Curie", avatar: <Activity className="w-3 h-3 text-emerald-400" />, color: "bg-emerald-950/30 border-emerald-800" },
-    { name: "Hedy Lamarr", avatar: <Wifi className="w-3 h-3 text-cyan-400" />, color: "bg-cyan-950/30 border-cyan-800" },
-    { name: "Max Planck", avatar: <Database className="w-3 h-3 text-purple-400" />, color: "bg-purple-950/30 border-purple-800" }
+    { name: "Ada Lovelace", avatar: <User className="size-3 text-pink-400" />, color: "bg-pink-950/30 border-pink-800" },
+    { name: "Alan Turing", avatar: <Cpu className="size-3 text-blue-400" />, color: "bg-blue-950/30 border-blue-800" },
+    { name: "Nikola Tesla", avatar: <Zap className="size-3 text-yellow-400" />, color: "bg-yellow-950/30 border-yellow-800" },
+    { name: "Marie Curie", avatar: <Activity className="size-3 text-emerald-400" />, color: "bg-emerald-950/30 border-emerald-800" },
+    { name: "Hedy Lamarr", avatar: <Wifi className="size-3 text-cyan-400" />, color: "bg-cyan-950/30 border-cyan-800" },
+    { name: "Max Planck", avatar: <Database className="size-3 text-purple-400" />, color: "bg-purple-950/30 border-purple-800" }
   ],
   objetos: [
-    { name: "Osciloscopio", avatar: <Activity className="w-3 h-3 text-emerald-400" />, color: "bg-emerald-950/30 border-emerald-800" },
-    { name: "Cable de Fibra", avatar: <Radio className="w-3 h-3 text-orange-400" />, color: "bg-orange-950/30 border-orange-800" },
-    { name: "Diodo Láser", avatar: <Crosshair className="w-3 h-3 text-red-400" />, color: "bg-red-950/30 border-red-800" },
-    { name: "Soldador", avatar: <Zap className="w-3 h-3 text-amber-400" />, color: "bg-amber-950/30 border-amber-800" },
-    { name: "Batería C.", avatar: <Shield className="w-3 h-3 text-lime-400" />, color: "bg-lime-950/30 border-lime-800" },
-    { name: "Llave Inglesa", avatar: <Box className="w-3 h-3 text-slate-400" />, color: "bg-slate-800/50 border-slate-600" }
+    { name: "Osciloscopio", avatar: <Activity className="size-3 text-emerald-400" />, color: "bg-emerald-950/30 border-emerald-800" },
+    { name: "Cable de Fibra", avatar: <Radio className="size-3 text-orange-400" />, color: "bg-orange-950/30 border-orange-800" },
+    { name: "Diodo Láser", avatar: <Crosshair className="size-3 text-red-400" />, color: "bg-red-950/30 border-red-800" },
+    { name: "Soldador", avatar: <Zap className="size-3 text-amber-400" />, color: "bg-amber-950/30 border-amber-800" },
+    { name: "Batería C.", avatar: <Shield className="size-3 text-lime-400" />, color: "bg-lime-950/30 border-lime-800" },
+    { name: "Llave Inglesa", avatar: <Box className="size-3 text-slate-400" />, color: "bg-slate-800/50 border-slate-600" }
   ],
   espacios: [
-    { name: "Cámara Anecoica", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "Sala H. Lamarr", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "C. Conmutación", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "Seminario Haykin", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "Club de radio", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "L. Com. Ópticas", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "L. Electrónica", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "Seminario Maxwell", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "S. Torres Quevedo", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" }
+    { name: "Cámara Anecoica", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "Sala H. Lamarr", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "C. Conmutación", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "Seminario Haykin", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "Club de radio", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "L. Com. Ópticas", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "L. Electrónica", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "Seminario Maxwell", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "S. Torres Quevedo", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" }
   ]
 };
 
@@ -344,31 +344,40 @@ export function TerminalView() {
     setPublicCards(state.session.publicCards ?? []);
   };
 
-  const refreshTerminalState = React.useEffectEvent(async () => {
+  const refreshTerminalStateCtx = React.useRef({ sessionStatus });
+  refreshTerminalStateCtx.current = { sessionStatus };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const refreshTerminalState = React.useCallback(async () => {
     const accessCode = getStoredSessionCode();
     const teamId = getStoredTeamId();
 
-    if (!accessCode || !teamId || sessionStatus === "LOBBY") {
+    if (!accessCode || !teamId || refreshTerminalStateCtx.current.sessionStatus === "LOBBY") {
       return null;
     }
 
     const state = await getTeamTerminalState(accessCode, teamId);
     applyTerminalState(state);
     return state;
-  });
+  }, []);
 
-  const refreshMoveState = React.useEffectEvent(async () => {
+  const refreshMoveStateCtx = React.useRef({ sessionStatus, isMyTurn, activeSuggestion, pendingSuggestion, isResolutionBlockingGameplay });
+  refreshMoveStateCtx.current = { sessionStatus, isMyTurn, activeSuggestion, pendingSuggestion, isResolutionBlockingGameplay };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const refreshMoveState = React.useCallback(async () => {
+    const { sessionStatus: status, isMyTurn: myTurn, activeSuggestion: activeSug, pendingSuggestion: pendingSug, isResolutionBlockingGameplay: resolutionBlocking } = refreshMoveStateCtx.current;
     const accessCode = getStoredSessionCode();
     const teamId = getStoredTeamId();
 
     if (
       !accessCode ||
       !teamId ||
-      sessionStatus !== "EN_CURSO" ||
-      !isMyTurn ||
-      activeSuggestion ||
-      pendingSuggestion ||
-      isResolutionBlockingGameplay
+      status !== "EN_CURSO" ||
+      !myTurn ||
+      activeSug ||
+      pendingSug ||
+      resolutionBlocking
     ) {
       setDestinationNodes([]);
       setSelectedDestinationNodeId("");
@@ -393,7 +402,7 @@ export function TerminalView() {
     } finally {
       setIsLoadingMoves(false);
     }
-  });
+  }, []);
 
   const handleDiceRoll = async (forcedTotal?: number) => {
     const accessCode = getStoredSessionCode();
@@ -815,9 +824,9 @@ export function TerminalView() {
     };
 
     setCategories({
-      c1: mapItems(config.subjects || [], <User className="w-3 h-3 text-cyan-400" />, "bg-cyan-950/30 border-cyan-800"),
-      c2: mapItems(config.objects || [], <Box className="w-3 h-3 text-emerald-400" />, "bg-emerald-950/30 border-emerald-800"),
-      c3: mapItems(config.spaces || [], <MapPin className="w-3 h-3 text-red-500" />, "bg-red-950/20 border-red-900"),
+      c1: mapItems(config.subjects || [], <User className="size-3 text-cyan-400" />, "bg-cyan-950/30 border-cyan-800"),
+      c2: mapItems(config.objects || [], <Box className="size-3 text-emerald-400" />, "bg-emerald-950/30 border-emerald-800"),
+      c3: mapItems(config.spaces || [], <MapPin className="size-3 text-red-500" />, "bg-red-950/20 border-red-900"),
     });
 
     if (config.centerImage !== undefined) {
@@ -1071,6 +1080,7 @@ export function TerminalView() {
     return () => {
       window.clearInterval(heartbeatIntervalId);
       lobbySocketRef.current = null;
+      socket.removeAllListeners();
       socket.disconnect();
     };
   }, [navigate]);
@@ -1185,22 +1195,19 @@ export function TerminalView() {
   };
 
   const renderCellIcon = (state: number) => {
-    if (state === 1) return <HelpCircle className="w-4 h-4 text-orange-500" />;
-    if (state === 2) return <X className="w-4 h-4 text-red-500" />;
+    if (state === 1) return <HelpCircle className="size-4 text-orange-500" />;
+    if (state === 2) return <X className="size-4 text-red-500" />;
     return null;
   };
 
   const boardSpaces = mapBoardSpaces(boardTheme);
-  const boardPawns = boardTeams
-    .filter((team) => team.id === getStoredTeamId())
-    .map((team) => ({
-      id: team.id,
-      color: team.color,
-      positionX: team.positionX,
-      positionY: team.positionY,
-      opacity: 1,
-      isCurrent: true,
-    }));
+  const storedTeamIdForPawns = getStoredTeamId();
+  const boardPawns = boardTeams.reduce<{ id: string; color: string; positionX: number; positionY: number; opacity: number; isCurrent: boolean }[]>((acc, team) => {
+    if (team.id === storedTeamIdForPawns) {
+      acc.push({ id: team.id, color: team.color, positionX: team.positionX, positionY: team.positionY, opacity: 1, isCurrent: true });
+    }
+    return acc;
+  }, []);
   const selectedDestinationNode = destinationNodes.find((node) => node.id === selectedDestinationNodeId) ?? null;
   const resolvedCurrentMoveNode = currentMoveNode ?? resolveCurrentTeamBoardNode(boardTeams, storedTeamId);
   const secretPassageDestinationNode = resolvedCurrentMoveNode?.kind === "room"
@@ -1423,7 +1430,7 @@ export function TerminalView() {
       {/* Header */}
       <div className="flex items-center justify-between p-4 bg-slate-950/80 backdrop-blur-md border-b border-cyan-900/50 sticky top-0 z-50">
         <Link to="/" className="text-slate-500 hover:text-cyan-400 transition-colors">
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="size-5" />
         </Link>
         <div className="text-center flex flex-col items-center">
           <h2 className="text-xs font-bold text-emerald-400 tracking-widest uppercase flex items-center gap-2">
@@ -1440,7 +1447,7 @@ export function TerminalView() {
             {teamName.toUpperCase()} - {sessionStatusLabel} - {connectionLabel}
           </p>
         </div>
-        <div className={`w-3 h-3 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse ${isMyTurn ? 'bg-emerald-500 shadow-emerald-500/80' : 'bg-red-500 shadow-red-500/80'}`}></div>
+        <div className={`size-3 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse ${isMyTurn ? 'bg-emerald-500 shadow-emerald-500/80' : 'bg-red-500 shadow-red-500/80'}`}></div>
       </div>
 
       {!lobbyError ? (
@@ -1739,15 +1746,15 @@ export function TerminalView() {
                              <div className="w-full h-[60%] bg-black/40 border-b border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden">
                                {selectedCard.image
                                  ? <ImageWithFallback src={selectedCard.image} alt={selectedCard.name} className="w-full h-full object-cover opacity-90"
-                                     fallback={<div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
-                                       {selectedCard.kind === "SUJETO" && <User className="w-6 h-6 text-slate-300" />}
-                                       {selectedCard.kind === "OBJETO" && <Box className="w-6 h-6 text-slate-300" />}
-                                       {selectedCard.kind === "ESPACIO" && <MapPin className="w-6 h-6 text-slate-300" />}
+                                     fallback={<div className="size-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
+                                       {selectedCard.kind === "SUJETO" && <User className="size-6 text-slate-300" />}
+                                       {selectedCard.kind === "OBJETO" && <Box className="size-6 text-slate-300" />}
+                                       {selectedCard.kind === "ESPACIO" && <MapPin className="size-6 text-slate-300" />}
                                      </div>} />
-                                 : <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
-                                     {selectedCard.kind === "SUJETO" && <User className="w-6 h-6 text-slate-300" />}
-                                     {selectedCard.kind === "OBJETO" && <Box className="w-6 h-6 text-slate-300" />}
-                                     {selectedCard.kind === "ESPACIO" && <MapPin className="w-6 h-6 text-slate-300" />}
+                                 : <div className="size-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
+                                     {selectedCard.kind === "SUJETO" && <User className="size-6 text-slate-300" />}
+                                     {selectedCard.kind === "OBJETO" && <Box className="size-6 text-slate-300" />}
+                                     {selectedCard.kind === "ESPACIO" && <MapPin className="size-6 text-slate-300" />}
                                    </div>}
                              </div>
                              <div className="w-full flex-1 flex flex-col items-center justify-center p-2">
@@ -1886,7 +1893,7 @@ export function TerminalView() {
               {/* Inventory Cards List */}
               <div className="w-full flex-1 p-4 flex flex-col gap-3 min-h-[160px]">
                 <h3 className="text-[10px] font-bold tracking-widest uppercase text-slate-500 flex items-center gap-2">
-                  <Database className="w-3 h-3" /> INVENTARIO DE CARTAS
+                  <Database className="size-3" /> INVENTARIO DE CARTAS
                 </h3>
                 {isLoadingHand ? (
                   <div data-cy="terminal-hand-state" className="rounded-lg border border-cyan-900/40 bg-cyan-950/10 px-4 py-3 text-xs uppercase tracking-[0.2em] text-cyan-200">
@@ -1915,19 +1922,19 @@ export function TerminalView() {
                           {card.image
                             ? <ImageWithFallback src={card.image} alt={card.name} className="w-full h-full object-cover opacity-80"
                                 fallback={<div className="w-full h-full bg-slate-900 flex items-center justify-center">
-                                  {card.kind === "SUJETO" && <User className="w-5 h-5 text-slate-400 opacity-80" />}
-                                  {card.kind === "OBJETO" && <Box className="w-5 h-5 text-slate-400 opacity-80" />}
-                                  {card.kind === "ESPACIO" && <MapPin className="w-5 h-5 text-slate-400 opacity-80" />}
+                                  {card.kind === "SUJETO" && <User className="size-5 text-slate-400 opacity-80" />}
+                                  {card.kind === "OBJETO" && <Box className="size-5 text-slate-400 opacity-80" />}
+                                  {card.kind === "ESPACIO" && <MapPin className="size-5 text-slate-400 opacity-80" />}
                                 </div>} />
                             : <div className="w-full h-full bg-slate-900 flex items-center justify-center">
-                                {card.kind === "SUJETO" && <User className="w-5 h-5 text-slate-400 opacity-80" />}
-                                {card.kind === "OBJETO" && <Box className="w-5 h-5 text-slate-400 opacity-80" />}
-                                {card.kind === "ESPACIO" && <MapPin className="w-5 h-5 text-slate-400 opacity-80" />}
+                                {card.kind === "SUJETO" && <User className="size-5 text-slate-400 opacity-80" />}
+                                {card.kind === "OBJETO" && <Box className="size-5 text-slate-400 opacity-80" />}
+                                {card.kind === "ESPACIO" && <MapPin className="size-5 text-slate-400 opacity-80" />}
                               </div>}
-                          <div className="absolute top-0 right-0 w-6 h-6 bg-black/60 rounded-bl-full backdrop-blur-sm border-b border-l border-slate-700/50 flex items-start justify-end p-1">
-                            {card.kind === "SUJETO" && <User className="w-3 h-3 text-cyan-400" />}
-                            {card.kind === "OBJETO" && <Box className="w-3 h-3 text-emerald-400" />}
-                            {card.kind === "ESPACIO" && <MapPin className="w-3 h-3 text-red-400" />}
+                          <div className="absolute top-0 right-0 size-6 bg-black/60 rounded-bl-full backdrop-blur-sm border-b border-l border-slate-700/50 flex items-start justify-end p-1">
+                            {card.kind === "SUJETO" && <User className="size-3 text-cyan-400" />}
+                            {card.kind === "OBJETO" && <Box className="size-3 text-emerald-400" />}
+                            {card.kind === "ESPACIO" && <MapPin className="size-3 text-red-400" />}
                           </div>
                         </div>
                         <div className="p-2 w-full flex-1 flex items-center justify-center">
@@ -1967,7 +1974,7 @@ export function TerminalView() {
                       };
                       return (
                       <div key={team} className="w-10 flex-shrink-0 border-r border-slate-800 flex items-center justify-center p-1">
-                        <div className={`w-3 h-3 rounded-full ${getTeamColor(team)} opacity-80 shadow-[0_0_8px_currentColor]`}></div>
+                        <div className={`size-3 rounded-full ${getTeamColor(team)} opacity-80 shadow-[0_0_8px_currentColor]`}></div>
                       </div>
                     )})}
                   </div>
@@ -2007,7 +2014,7 @@ export function TerminalView() {
                                 type="button"
                                 data-cy={`matrix-space-motif-${item.id}`}
                                 onClick={() => setActiveMotifSpace({ id: item.id, name: item.name, motif: item.motif, desc: item.desc })}
-                                className="flex-shrink-0 w-4 h-4 rounded-full bg-amber-900/70 text-[8px] font-black text-amber-100 border border-amber-700/60 hover:bg-amber-800/90 transition-colors flex items-center justify-center"
+                                className="flex-shrink-0 size-4 rounded-full bg-amber-900/70 text-[8px] font-black text-amber-100 border border-amber-700/60 hover:bg-amber-800/90 transition-colors flex items-center justify-center"
                                 title={item.motif}
                               >
                                 M
@@ -2021,7 +2028,7 @@ export function TerminalView() {
                                 <button
                                   key={team}
                                   onClick={() => handleCellClick(rowName, team)}
-                                  className={`w-10 h-10 flex-shrink-0 border-r border-slate-800 flex items-center justify-center transition-colors ${
+                                  className={`size-10 flex-shrink-0 border-r border-slate-800 flex items-center justify-center transition-colors ${
                                     state === 2 ? 'bg-red-950/20' : state === 1 ? 'bg-orange-950/10' : 'bg-transparent'
                                   }`}
                                 >
@@ -2287,9 +2294,9 @@ export function TerminalView() {
 
                           <div className="mt-4 grid gap-3 sm:grid-cols-3">
                             {[
-                              { label: catNames.c1, element: activeSuggestion.subject, tone: "border-cyan-700/70 bg-cyan-950/30 text-cyan-100", icon: <User className="h-4 w-4 text-cyan-300" /> },
-                              { label: catNames.c2, element: activeSuggestion.object, tone: "border-emerald-700/70 bg-emerald-950/30 text-emerald-100", icon: <Box className="h-4 w-4 text-emerald-300" /> },
-                              { label: catNames.c3, element: activeSuggestion.space, tone: "border-rose-700/70 bg-rose-950/30 text-rose-100", icon: <MapPin className="h-4 w-4 text-rose-300" /> },
+                              { label: catNames.c1, element: activeSuggestion.subject, tone: "border-cyan-700/70 bg-cyan-950/30 text-cyan-100", icon: <User className="size-4 text-cyan-300" /> },
+                              { label: catNames.c2, element: activeSuggestion.object, tone: "border-emerald-700/70 bg-emerald-950/30 text-emerald-100", icon: <Box className="size-4 text-emerald-300" /> },
+                              { label: catNames.c3, element: activeSuggestion.space, tone: "border-rose-700/70 bg-rose-950/30 text-rose-100", icon: <MapPin className="size-4 text-rose-300" /> },
                             ].map((item) => (
                               <div key={item.label} className={`rounded-2xl border p-3 ${item.tone}`}>
                                 <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em]">
@@ -2343,7 +2350,7 @@ export function TerminalView() {
                                 >
                                   <div className="flex items-center gap-3">
                                     <div className="rounded-xl border border-white/10 bg-slate-950/60 p-2">
-                                      {card.kind === "SUJETO" ? <User className="h-4 w-4 text-cyan-300" /> : card.kind === "OBJETO" ? <Box className="h-4 w-4 text-emerald-300" /> : <MapPin className="h-4 w-4 text-rose-300" />}
+                                      {card.kind === "SUJETO" ? <User className="size-4 text-cyan-300" /> : card.kind === "OBJETO" ? <Box className="size-4 text-emerald-300" /> : <MapPin className="size-4 text-rose-300" />}
                                     </div>
                                     <div className="flex-1">
                                       <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-300">{card.kind}</p>
@@ -2485,7 +2492,7 @@ export function TerminalView() {
                             <div className="mt-4 rounded-2xl border border-emerald-700/60 bg-slate-950/55 p-4">
                               <div className="flex items-center gap-3">
                                 <div className="rounded-xl border border-white/10 bg-slate-900/80 p-2">
-                                  {refutationResult.shownCard.kind === "SUJETO" ? <User className="h-4 w-4 text-cyan-300" /> : refutationResult.shownCard.kind === "OBJETO" ? <Box className="h-4 w-4 text-emerald-300" /> : <MapPin className="h-4 w-4 text-rose-300" />}
+                                  {refutationResult.shownCard.kind === "SUJETO" ? <User className="size-4 text-cyan-300" /> : refutationResult.shownCard.kind === "OBJETO" ? <Box className="size-4 text-emerald-300" /> : <MapPin className="size-4 text-rose-300" />}
                                 </div>
                                 <div>
                                   <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Carta revelada</p>
@@ -2600,7 +2607,7 @@ export function TerminalView() {
                 : "text-slate-600 hover:text-slate-400"
             }`}
           >
-            <tab.icon className="w-6 h-6" strokeWidth={activeTab === tab.id ? 2.5 : 1.5} />
+            <tab.icon className="size-6" strokeWidth={activeTab === tab.id ? 2.5 : 1.5} />
             <span className="text-[9px] font-bold tracking-widest uppercase">{tab.label}</span>
           </button>
         ))}

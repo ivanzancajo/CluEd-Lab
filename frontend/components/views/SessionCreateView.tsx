@@ -289,11 +289,11 @@ export function SessionCreateView() {
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(8,145,178,0.18),_transparent_28%),linear-gradient(180deg,#020617_0%,#020617_38%,#000000_100%)] px-6 py-10 text-slate-100 sm:px-8">
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+CjxyZWN0IHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0ibm9uZSIvPgo8cGF0aCBkPSJNMCAyMGgyMHYtMUgwem0xOSAwSDIwaC0xdjIwSDB6IiBmaWxsPSJyZ2JhKDMsIDEwNSwgMTYxLCAwLjA1KSIvPgo8L3N2Zz4=')] opacity-50 z-0"></div>
-      <div className="absolute -left-16 top-20 h-56 w-56 rounded-full bg-cyan-500/10 blur-3xl"></div>
-      <div className="absolute bottom-10 right-0 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl"></div>
+      <div className="absolute -left-16 top-20 size-56 rounded-full bg-cyan-500/10 blur-3xl"></div>
+      <div className="absolute bottom-10 right-0 size-72 rounded-full bg-emerald-500/10 blur-3xl"></div>
 
       <Link to="/" className="absolute top-8 left-8 z-10 text-slate-500 hover:text-cyan-400 transition-colors p-2 rounded-md hover:bg-slate-800 flex items-center gap-2 text-sm font-bold tracking-widest uppercase">
-        <ArrowLeft className="w-5 h-5" /> Volver
+        <ArrowLeft className="size-5" /> Volver
       </Link>
       <button data-cy="session-create-logout-button" onClick={handleLogout} className="absolute top-8 right-8 z-10 text-red-300 hover:text-red-200 border border-red-900/60 hover:border-red-500 transition-colors px-4 py-2 rounded-md bg-slate-950/60 text-xs font-bold tracking-widest uppercase">
         Cerrar sesión
@@ -309,12 +309,12 @@ export function SessionCreateView() {
 
           <div className="flex flex-col items-center gap-5 text-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-800/60 bg-slate-950/70 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.35em] text-cyan-300 shadow-[0_0_30px_rgba(6,182,212,0.12)] backdrop-blur-sm">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.9)]"></span>
+              <span className="size-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.9)]"></span>
               Control de partida
             </div>
 
             <div className="rounded-full border border-cyan-800 bg-cyan-950/30 p-4 shadow-[0_0_30px_rgba(6,182,212,0.15)]">
-              <Zap className="h-14 w-14 text-cyan-400" />
+              <Zap className="size-14 text-cyan-400" />
             </div>
 
             <div className="space-y-3">
@@ -330,7 +330,7 @@ export function SessionCreateView() {
           <div className="mt-8 flex flex-col gap-6 rounded-2xl border border-slate-800 bg-slate-950/75 p-6 shadow-inner shadow-black/30">
             <div className="space-y-3">
               <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-cyan-400">
-                <FileText className="h-4 w-4" /> Seleccionar CluedoSkin para la partida
+                <FileText className="size-4" /> Seleccionar CluedoSkin para la partida
               </label>
 
               {isLoadingConfigs ? (
@@ -408,7 +408,7 @@ export function SessionCreateView() {
               className="w-full rounded-xl bg-emerald-600 py-5 text-lg font-black uppercase tracking-widest text-slate-950 shadow-[0_0_30px_rgba(16,185,129,0.3)] transition-all active:scale-95 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-emerald-800/60 disabled:text-slate-300"
             >
               <span className="flex items-center justify-center gap-3">
-                <MonitorPlay className="h-6 w-6" />
+                <MonitorPlay className="size-6" />
                 {isCreatingSession ? "Habilitando partida..." : "Habilitar Partida"}
               </span>
             </button>

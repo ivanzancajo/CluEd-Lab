@@ -590,9 +590,10 @@ function buildExpandedMovementGraph() {
     Object.keys(nodes).map((nodeId) => [nodeId, []])
   );
   const squareGridPointsByNodeId: Record<string, BoardGridPoint> = Object.fromEntries(
-    Object.values(BASE_MOVEMENT_NODE_DEFINITIONS)
-      .filter((nodeDefinition) => nodeDefinition.kind === 'square')
-      .map((nodeDefinition) => [nodeDefinition.id, nodeDefinition.gridPoint])
+    Object.values(BASE_MOVEMENT_NODE_DEFINITIONS).reduce<[string, BoardGridPoint][]>((acc, nodeDefinition) => {
+      if (nodeDefinition.kind === 'square') acc.push([nodeDefinition.id, nodeDefinition.gridPoint]);
+      return acc;
+    }, [])
   );
   const processedEdges = new Set<string>();
 
@@ -802,13 +803,12 @@ function pruneExcludedSquareNodes(
   connections: Record<string, string[]>
 ) {
   const removedNodeIds = new Set(
-    Object.entries(nodes)
-      .filter(([_nodeId, node]) =>
-        node.kind === 'square' &&
-        node.gridPosition &&
-        EXCLUDED_SQUARE_GRID_KEYS.has(buildGridCellKey(node.gridPosition))
-      )
-      .map(([nodeId]) => nodeId)
+    Object.entries(nodes).reduce<string[]>((acc, [nodeId, node]) => {
+      if (node.kind === 'square' && node.gridPosition && EXCLUDED_SQUARE_GRID_KEYS.has(buildGridCellKey(node.gridPosition))) {
+        acc.push(nodeId);
+      }
+      return acc;
+    }, [])
   );
 
   if (removedNodeIds.size === 0) {

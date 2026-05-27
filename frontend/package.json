@@ -7,7 +7,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "lint": "eslint .",
     "cy:open": "cypress open",
-    "cy:run": "cypress run --e2e"
+    "cy:run": "cypress run --e2e",
+    "doctor": "npx react-doctor@latest"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.3",
@@ -69,6 +70,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "prelude-ls": "^1.2.1",
+    "react-doctor": "^0.2.9",
     "tailwindcss": "^4.1.4",
     "typescript": "^6.0.2",
     "typescript-eslint": "^8.58.1",

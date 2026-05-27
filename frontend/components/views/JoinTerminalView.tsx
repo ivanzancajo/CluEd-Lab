@@ -247,6 +247,7 @@ export function JoinTerminalView() {
               </label>
               <input
                 data-cy="join-terminal-code-input"
+                aria-label="Código de sesión"
                 type="text"
                 value={code}
                 onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}

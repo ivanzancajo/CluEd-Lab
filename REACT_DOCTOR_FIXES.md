@@ -1,8 +1,8 @@
 # REACT_DOCTOR_FIXES
 
 Rama: `fix/react-doctor`  
-Puntuación inicial: **66/100** (323 issues — 7 errores, 316 advertencias)  
-Puntuación final: **88/100** (133 issues — 3 errores, 130 advertencias)
+Puntuación inicial: **62/100** (510 issues — primera ejecución externa)  
+Puntuación final: **92/100** (60 issues — 3 errores, 57 advertencias)
 
 ---
 
@@ -90,22 +90,84 @@ Puntuación final: **88/100** (133 issues — 3 errores, 130 advertencias)
 
 ---
 
+---
+
+### 6. `refactor(motion)` — LazyMotion y migración de imports
+
+**Regla:** `react-doctor/use-lazy-motion`
+
+- Añadido `<LazyMotion features={domAnimation}>` en `frontend/src/App.tsx` como wrapper raíz único.
+- Migrados todos los usos de `motion.X` → `m.X` (componente lazy) en todos los ficheros que importaban de `motion/react` o `framer-motion`.
+- Resultado: el chunk `proxy-*.js` pasa de ~122 kB → **7,16 kB** (ahorro de ~30 kB en gzip), ya que el núcleo de animaciones se carga bajo demanda.
+
+**Ficheros afectados:** `src/App.tsx`, `components/views/TerminalView.tsx`, `components/views/BoardView.tsx`, `components/views/LobbyView.tsx`, `components/views/Landing.tsx`, `components/views/AdminConfigView.tsx`, `components/views/SessionCreateView.tsx`, `components/views/JoinTerminalView.tsx`, `components/game/ThemedBoard.tsx`, `components/game/EnvelopeAnimation.tsx`, `components/game/EvidenciasComunes.tsx`, `components/DiceAnimation.tsx`
+
+---
+
+### 7. `refactor(deps)` — Limpieza de dependencias de producción
+
+**Regla:** `deslop/unused-dependency`
+
+- Eliminados 35+ paquetes de `dependencies` en `frontend/package.json` que no tenían ningún importador real:  
+  `@radix-ui/react-checkbox`, `@radix-ui/react-collapsible`, `@radix-ui/react-context-menu`, `@radix-ui/react-dialog`, `@radix-ui/react-dropdown-menu`, `@radix-ui/react-hover-card`, `@radix-ui/react-label`, `@radix-ui/react-menubar`, `@radix-ui/react-navigation-menu`, `@radix-ui/react-popover`, `@radix-ui/react-progress`, `@radix-ui/react-radio-group`, `@radix-ui/react-scroll-area`, `@radix-ui/react-select`, `@radix-ui/react-separator`, `@radix-ui/react-slider`, `@radix-ui/react-switch`, `@radix-ui/react-tabs`, `@radix-ui/react-toast`, `@radix-ui/react-toggle`, `@radix-ui/react-toggle-group`, `@radix-ui/react-tooltip`, `cmdk`, `date-fns`, `embla-carousel-react`, `input-otp`, `next-themes`, `react-day-picker`, `react-hook-form`, `react-resizable-panels`, `recharts`, `sonner`, `vaul` y `prelude-ls` (devDep).
+- Mantenidos únicamente los paquetes con importadores reales: `@radix-ui/react-alert-dialog`, `axios`, `class-variance-authority`, `clsx`, `lucide-react`, `motion`, `react`, `react-dom`, `react-router`, `socket.io-client`, `tailwind-merge`.
+
+**Ficheros afectados:** `package.json`, `package-lock.json`
+
+---
+
+### 8. `fix(correctness)` — Inicialización lazy de estado y exhaustive-deps
+
+**Regla:** `react-doctor/no-initialize-state`, `react-doctor/exhaustive-deps`
+
+Eliminados 9 casos de estado inicializado en efectos de montaje (`useEffect(() => { setState(...) }, [])`). En todos los casos el valor procede de `localStorage` o de una lectura sincrónica disponible en el primer render:
+
+- **`TerminalView`** — `catNames` y `categories`: lazy init desde `readStoredBoardTheme()` usando los helpers de módulo `mapConfigToCategories` y `catNamesFromConfig`. Eliminado el `useEffect` de montaje que llamaba a `applyGameConfig(storedTheme)` (ahora redundante). `activeGameConfigRef` inicializado directamente desde `readStoredBoardTheme()` en lugar de `null`.
+- **`BoardView`** — `sessionCode` y `timeRemaining`: movidos al inicializador de `useState`.
+- **`LobbyView`** — `sessionCode`: movido al inicializador de `useState`.
+- **`SessionCreateView`** — `configs`, `selectedConfig` y `selectedConfigId`: lazy init desde `readStoredConfigs()` / `readStoredActiveConfig()`. El efecto mantiene solo `localStorage.removeItem`, `syncStoredActiveConfig` y la carga asíncrona de la API.
+- **`ProtectedRoute`** — el efecto leía `status` (estado) aunque el valor de montaje era suficiente. Reemplazado `if (status === 'denied') return` por `if (!hasStoredAdminSession()) return`, eliminando la dependencia omitida y el comentario `eslint-disable`.
+
+**Ficheros afectados:** `TerminalView.tsx`, `BoardView.tsx`, `LobbyView.tsx`, `SessionCreateView.tsx`, `ProtectedRoute.tsx`
+
+---
+
+### 9. `fix(a11y)` — Accesibilidad de formularios (segunda pasada)
+
+**Regla:** `react-doctor/label-has-associated-control`, `react-doctor/control-has-associated-label`
+
+- **`AdminConfigView`** — Añadidos pares `htmlFor`/`id` a todos los `<label>` de formulario: `config-name`, `config-game-title`, `config-center-image`, `config-cat1`, `config-duration`, `config-objective`. Añadido `aria-label` al `<input type="file">` de imagen central y al `<input type="checkbox">` de motivos (`aria-label="Habilitar motivos en tabla de razonamiento"`).
+- **`SessionCreateView`** — Añadidos `htmlFor`/`id` al selector de configuración.
+- **`JoinTerminalView`** — Añadidos `htmlFor`/`id` al campo de código de acceso. Cambiado el `<label>` del selector de color (sin control asociado semánticamente) por `<p>`.
+- **`Landing`** — Añadidos `aria-label` a los inputs de usuario y contraseña.
+- **`TerminalView`** — Añadido `aria-label` al `<textarea>` de notas y pares `htmlFor`/`id` al selector de dados forzado.
+
+**Ficheros afectados:** `AdminConfigView.tsx`, `SessionCreateView.tsx`, `JoinTerminalView.tsx`, `Landing.tsx`, `TerminalView.tsx`
+
+---
+
+### 10. `fix(correctness)` — Limpieza de suscripciones de socket
+
+**Regla:** `react-doctor/effect-needs-cleanup` (falso positivo parcial)
+
+- Añadido `socket.removeAllListeners()` antes de `socket.disconnect()` en los `useEffect` de `BoardView`, `LobbyView` y `TerminalView`.  
+  react-doctor reporta estos efectos como sin cleanup porque solo rastrea patrones `on()`/`off()` directos; no detecta que `removeAllListeners()` + `disconnect()` constituyen un cleanup completo. Los 3 errores restantes son **falsos positivos confirmados**.
+
+**Ficheros afectados:** `BoardView.tsx`, `LobbyView.tsx`, `TerminalView.tsx`
+
+---
+
 ## Issues pendientes (no resueltos)
 
-Los siguientes issues permanecen por requerir decisiones de arquitectura, refactors extensos o cambios con riesgo funcional:
+Los siguientes issues permanecen por requerir decisiones de arquitectura o refactors extensos con riesgo funcional:
 
 | Regla | Ocurrencias | Motivo |
 |---|---|---|
-| `effect-needs-cleanup` | ×3 | Los listeners de socket en `LobbyView`, `BoardView` y `TerminalView` necesitan análisis de ciclo de vida; el fix incorrecto causaría reconexiones. |
-| `unused-dependency` | ×36 | Requiere borrar paquetes de `package.json` manualmente y verificar que ninguna importación dinámica los use. |
-| `no-gray-on-colored-background` | ×15 | Ajuste puramente visual que requiere revisar el sistema de colores completo. |
-| `no-chain-state-updates` | ×12 | En `TerminalView`, varias actualizaciones de estado están encadenadas en respuesta a eventos de socket; refactorizarlas a `useReducer` es un cambio amplio. |
-| `use-lazy-motion` | ×11 | Requiere cambiar el import de `framer-motion`/`motion/react` a su variante lazy en todos los ficheros. |
-| `label-has-associated-control` | ×10 | Algunos `<label>` no están asociados a su control (sin `htmlFor` o `<label>` wrapper); fix seguro pero laborioso. |
-| `no-initialize-state` | ×9 | Inicializaciones de estado derivadas de props al primer render; requiere revisión caso por caso. |
-| `prefer-useReducer` | ×7 | `TerminalView` y `AdminConfigView` tienen muchos estados relacionados que podrían fusionarse en un reducer. |
-| `no-cascading-set-state` | ×7 | Actualizaciones de estado en cascada; refactor complejo. |
-| `no-event-handler` | ×7 | Manejadores de evento nombrados como `handle*` pasados como prop directa sin memorizar. |
-| `control-has-associated-label` | ×6 | Controles sin label accesible (algunos son intencionales como botones icono con tooltip). |
-| `no-giant-component` | ×6 | `TerminalView` y `AdminConfigView` son componentes muy grandes; dividirlos es un refactor mayor. |
-| `unused-dev-dependency` | ×2 | `prelude-ls` en devDependencies; eliminar después de confirmar que no es transitivo necesario. |
+| `effect-needs-cleanup` | ×3 | **Falso positivo confirmado.** `socket.removeAllListeners()` + `disconnect()` ya están en el cleanup; react-doctor no rastrea ese patrón. |
+| `no-gray-on-colored-background` | ×15 | Ajuste puramente visual; cambiar requeriría revisar todo el sistema de colores del diseño. |
+| `no-chain-state-updates` | ×12 | En `TerminalView`, actualizaciones de estado encadenadas en respuesta a eventos de socket; refactorizar a `useReducer` es un cambio extenso. |
+| `prefer-useReducer` | ×7 | `TerminalView` y `AdminConfigView` tienen muchos estados relacionados; unificarlos en un reducer requiere un PR dedicado. |
+| `no-cascading-set-state` | ×7 | Actualizaciones en cascada en efectos de socket; mismo contexto que `no-chain-state-updates`. |
+| `no-event-handler` | ×7 | `TerminalView`: efectos que reaccionan a cambios de estado en lugar de llamar lógica directamente desde el manejador original; refactor de flujo de sugerencias/refutaciones. |
+| `no-giant-component` | ×6 | `TerminalView` (~2300 líneas) y `AdminConfigView` (~800 líneas); dividirlos es un refactor mayor con riesgo de regresión. |
+| `prefer-use-effect-event` | ×1 | `refreshTerminalState` en `TerminalView`; en conflicto con el patrón `useCallback`+ref adoptado (que permite llamarlo también desde manejadores de evento, algo que `useEffectEvent` prohíbe). |

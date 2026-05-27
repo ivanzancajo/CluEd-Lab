@@ -335,7 +335,7 @@ export function SessionCreateView() {
 
               {isLoadingConfigs ? (
                 <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 text-sm text-slate-400">
-                  Cargando configuraciones disponibles...
+                  Cargando configuraciones disponibles…
                 </div>
               ) : configs.length > 0 ? (
                 <select
@@ -376,11 +376,11 @@ export function SessionCreateView() {
               </div>
             ) : isLoadingSelectedConfig ? (
               <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 text-sm text-slate-400">
-                Cargando los detalles de la CluedoSkin seleccionada...
+                Cargando los detalles de la CluedoSkin seleccionada…
               </div>
             ) : null}
 
-            <div className="rounded-2xl border border-emerald-900/40 bg-emerald-950/20 px-4 py-4 text-sm leading-6 text-emerald-100">
+            <div className="rounded-2xl border border-emerald-900/40 bg-emerald-950/20 p-4 text-sm leading-6 text-emerald-100">
               Al habilitar la partida entrarás directamente en la sala de espera para ver los equipos conectados y arrancar el tablero cuando quieras.
             </div>
 

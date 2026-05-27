@@ -13,13 +13,11 @@ export function SpaceMotifModal({ space, onClose }: SpaceMotifModalProps) {
   }
 
   return (
-    <div
+    <button
+      type="button"
       data-cy="space-motif-modal-overlay"
-      role="button"
-      tabIndex={0}
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-[2px]"
       onClick={onClose}
-      onKeyDown={(e) => { if (e.key === "Escape" || e.key === "Enter") onClose(); }}
       aria-label="Cerrar modal"
     >
       <div
@@ -68,6 +66,6 @@ export function SpaceMotifModal({ space, onClose }: SpaceMotifModalProps) {
           </p>
         )}
       </div>
-    </div>
+    </button>
   );
 }

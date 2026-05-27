@@ -45,7 +45,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (status === 'checking') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-cyan-300 font-mono uppercase tracking-[0.2em]">
-        Verificando acceso...
+        Verificando acceso…
       </div>
     );
   }

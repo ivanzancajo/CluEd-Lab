@@ -407,6 +407,10 @@ const EditableItemList = memo(function EditableItemList({
   );
 });
 
+const SUBJECT_ICON = <User className="size-4" />;
+const OBJECT_ICON = <Box className="size-4" />;
+const SPACE_ICON = <MapPin className="size-4" />;
+
 export function AdminConfigView() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("list");
   const [configs, setConfigs] = useState<SkinSummary[]>([]);
@@ -822,13 +826,13 @@ export function AdminConfigView() {
         <div className="mb-6 flex max-w-4xl flex-col gap-4">
           {listLoading ? (
             <div className="rounded-xl border border-cyan-900/60 bg-cyan-950/20 px-4 py-3 text-sm text-cyan-100">
-              Cargando configuraciones disponibles...
+              Cargando configuraciones disponibles…
             </div>
           ) : null}
 
           {detailLoading ? (
             <div className="rounded-xl border border-indigo-900/60 bg-indigo-950/20 px-4 py-3 text-sm text-indigo-100">
-              Cargando el detalle completo de la configuración seleccionada...
+              Cargando el detalle completo de la configuración seleccionada…
             </div>
           ) : null}
 
@@ -915,14 +919,12 @@ export function AdminConfigView() {
               {configs.length > 0 ? (
                 <div data-cy="admin-config-list" className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {configs.map((config) => (
-                    <div
+                    <button
+                      type="button"
                       key={config.id}
-                      role="button"
-                      tabIndex={0}
                       onClick={() => void loadConfig(config.id)}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void loadConfig(config.id); }}
                       data-cy="admin-config-card"
-                      className={`group relative rounded-xl border border-slate-700 bg-slate-900/60 p-6 transition-all ${
+                      className={`group relative w-full rounded-xl border border-slate-700 bg-slate-900/60 p-6 text-left transition-all ${
                         isBusy ? "cursor-wait opacity-70" : "cursor-pointer hover:border-indigo-500"
                       }`}
                     >
@@ -950,7 +952,7 @@ export function AdminConfigView() {
                           <span className="flex items-center gap-1"><MapPin className="size-3 text-red-500" /> {config.spaceCount}</span>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               ) : null}
@@ -1145,7 +1147,7 @@ export function AdminConfigView() {
                 <p className="text-sm text-slate-400">Define entre {COLLECTION_CONSTRAINTS.subjects.min} y {COLLECTION_CONSTRAINTS.subjects.max} sujetos para la skin.</p>
               </div>
 
-              <EditableItemList items={subjects} setItems={setSubjects} icon={<User className="size-4" />} type="Sujeto" collectionKey="subjects" minItems={COLLECTION_CONSTRAINTS.subjects.min} maxItems={COLLECTION_CONSTRAINTS.subjects.max} showMotif={false} errorItems={itemErrors.subjects} fieldsDisabled={fieldsDisabled} />
+              <EditableItemList items={subjects} setItems={setSubjects} icon={SUBJECT_ICON} type="Sujeto" collectionKey="subjects" minItems={COLLECTION_CONSTRAINTS.subjects.min} maxItems={COLLECTION_CONSTRAINTS.subjects.max} showMotif={false} errorItems={itemErrors.subjects} fieldsDisabled={fieldsDisabled} />
             </motion.div>
           ) : null}
 
@@ -1164,7 +1166,7 @@ export function AdminConfigView() {
                 <p className="text-sm text-slate-400">Define entre {COLLECTION_CONSTRAINTS.objects.min} y {COLLECTION_CONSTRAINTS.objects.max} objetos para la skin.</p>
               </div>
 
-              <EditableItemList items={objects} setItems={setObjects} icon={<Box className="size-4" />} type="Objeto" collectionKey="objects" minItems={COLLECTION_CONSTRAINTS.objects.min} maxItems={COLLECTION_CONSTRAINTS.objects.max} showMotif={false} errorItems={itemErrors.objects} fieldsDisabled={fieldsDisabled} />
+              <EditableItemList items={objects} setItems={setObjects} icon={OBJECT_ICON} type="Objeto" collectionKey="objects" minItems={COLLECTION_CONSTRAINTS.objects.min} maxItems={COLLECTION_CONSTRAINTS.objects.max} showMotif={false} errorItems={itemErrors.objects} fieldsDisabled={fieldsDisabled} />
             </motion.div>
           ) : null}
 
@@ -1185,7 +1187,7 @@ export function AdminConfigView() {
                 </p>
               </div>
 
-              <EditableItemList items={spaces} setItems={setSpaces} icon={<MapPin className="size-4" />} type={cat3Name} collectionKey="spaces" minItems={COLLECTION_CONSTRAINTS.spaces.min} maxItems={COLLECTION_CONSTRAINTS.spaces.max} showMotif={hasMotifs} errorItems={itemErrors.spaces} fieldsDisabled={fieldsDisabled} />
+              <EditableItemList items={spaces} setItems={setSpaces} icon={SPACE_ICON} type={cat3Name} collectionKey="spaces" minItems={COLLECTION_CONSTRAINTS.spaces.min} maxItems={COLLECTION_CONSTRAINTS.spaces.max} showMotif={hasMotifs} errorItems={itemErrors.spaces} fieldsDisabled={fieldsDisabled} />
             </motion.div>
           ) : null}
         </AnimatePresence>

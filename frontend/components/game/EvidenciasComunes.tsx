@@ -47,13 +47,11 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
             const styles = KIND_STYLES[card.kind];
             const Icon = styles.icon;
             return (
-              <div
+              <button
+                type="button"
                 key={card.id}
                 data-cy="evidencias-comunes-card"
-                role="button"
-                tabIndex={0}
                 onClick={() => handleCardClick(card)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleCardClick(card); }}
                 className={`w-20 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${styles.border} ${styles.bg} flex flex-col items-center justify-start cursor-pointer hover:brightness-110 transition-all shadow-lg relative overflow-hidden`}
               >
                 <div className="w-full h-1/2 relative overflow-hidden border-b border-slate-800">
@@ -73,7 +71,7 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
                 <div className="p-2 w-full flex-1 flex items-center justify-center">
                   <span className="text-[9px] font-bold text-center leading-tight text-slate-200 uppercase px-1 line-clamp-2">{card.name}</span>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>

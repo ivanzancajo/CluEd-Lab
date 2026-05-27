@@ -1089,7 +1089,7 @@ export function TerminalView() {
       socket.removeAllListeners();
       socket.disconnect();
     };
-  }, [navigate]);
+  }, [navigate, refreshTerminalState]);
 
   React.useEffect(() => {
     if (
@@ -1120,7 +1120,7 @@ export function TerminalView() {
       setIsLoadingMoves(false);
       setDiceResetSignal((previousValue) => previousValue + 1);
     }
-  }, [activeSuggestion, activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, isResolutionBlockingGameplay, pendingSuggestion, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
+  }, [activeSuggestion, activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, isResolutionBlockingGameplay, pendingSuggestion, refreshMoveState, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
 
   // Carga la posición actual del equipo al inicio del turno (dado=null) para detectar sala esquina
   React.useEffect(() => {
@@ -1484,7 +1484,7 @@ export function TerminalView() {
           {resolutionCountdownLabel ? (
             <div
               data-cy="terminal-final-chance-countdown"
-              className={`rounded-2xl border px-4 py-4 ${
+              className={`rounded-2xl border p-4 ${
                 resolutionCountdownSeconds === 0
                   ? "border-red-700/60 bg-red-950/25"
                   : "border-amber-700/60 bg-amber-950/20"
@@ -1514,7 +1514,7 @@ export function TerminalView() {
             <div className="grid gap-3">
               <div className="rounded-2xl border border-rose-800/60 bg-slate-900/70 p-4">
                 <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-rose-200">
-                  <MapPin className="h-3.5 w-3.5" />
+                  <MapPin className="size-3.5" />
                   {catNames.c3}
                 </label>
                 <select
@@ -1523,7 +1523,7 @@ export function TerminalView() {
                   onChange={(event) => setSelectedSpaceId(event.target.value)}
                   className="mt-3 w-full rounded-xl border border-rose-800/70 bg-slate-900/80 p-3 text-sm text-rose-100 outline-none focus:border-rose-400"
                 >
-                  <option value="" disabled>Selecciona...</option>
+                  <option value="" disabled>Selecciona…</option>
                   {BOARD_SPACE_SLOTS.map((slot, index) => {
                     const space = categories.c3[index];
                     const optionLabel = space?.name ?? `Sala ${index + 1}`;
@@ -1540,7 +1540,7 @@ export function TerminalView() {
 
               <div className="rounded-2xl border border-cyan-800/60 bg-slate-900/70 p-4">
                 <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
-                  <User className="h-3.5 w-3.5" />
+                  <User className="size-3.5" />
                   {catNames.c1}
                 </label>
                 <select
@@ -1549,7 +1549,7 @@ export function TerminalView() {
                   onChange={(event) => setSelectedSubjectId(event.target.value)}
                   className="mt-3 w-full rounded-xl border border-cyan-800/70 bg-slate-900/80 p-3 text-sm text-cyan-100 outline-none focus:border-cyan-400"
                 >
-                  <option value="" disabled>Selecciona...</option>
+                  <option value="" disabled>Selecciona…</option>
                   {categories.c1.map((item) => (
                     <option key={item.id} value={item.id}>{item.name}</option>
                   ))}
@@ -1558,7 +1558,7 @@ export function TerminalView() {
 
               <div className="rounded-2xl border border-emerald-800/60 bg-slate-900/70 p-4">
                 <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">
-                  <Box className="h-3.5 w-3.5" />
+                  <Box className="size-3.5" />
                   {catNames.c2}
                 </label>
                 <select
@@ -1567,7 +1567,7 @@ export function TerminalView() {
                   onChange={(event) => setSelectedObjectId(event.target.value)}
                   className="mt-3 w-full rounded-xl border border-emerald-800/70 bg-slate-900/80 p-3 text-sm text-emerald-100 outline-none focus:border-emerald-400"
                 >
-                  <option value="" disabled>Selecciona...</option>
+                  <option value="" disabled>Selecciona…</option>
                   {categories.c2.map((item) => (
                     <option key={item.id} value={item.id}>{item.name}</option>
                   ))}
@@ -1585,13 +1585,13 @@ export function TerminalView() {
                 data-cy="terminal-final-chance-submit"
                 onClick={() => void handleFinalAccusation({ resolutionMode: true })}
                 disabled={isSubmittingAccusation || !selectedSubjectId || !selectedObjectId || !selectedSpaceId}
-                className="w-full rounded-2xl bg-amber-500 px-4 py-4 text-sm font-black uppercase tracking-[0.22em] text-slate-950 shadow-[0_0_24px_rgba(245,158,11,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-2xl bg-amber-500 p-4 text-sm font-black uppercase tracking-[0.22em] text-slate-950 shadow-[0_0_24px_rgba(245,158,11,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmittingAccusation ? "Enviando acusacion..." : "Enviar acusacion final"}
               </button>
             </div>
           ) : (
-            <div className="rounded-2xl border border-amber-700/60 bg-amber-950/25 px-4 py-4 text-sm text-amber-50">
+            <div className="rounded-2xl border border-amber-700/60 bg-amber-950/25 p-4 text-sm text-amber-50">
               {hasSubmittedResolution
                 ? accusationFeedback ?? "Esperando al resto de equipos..."
                 : "Permanece atento al revelado final de la solución."}
@@ -1616,7 +1616,7 @@ export function TerminalView() {
               className="absolute inset-0 pb-20 bg-[#380b0b] flex flex-col items-center justify-start overflow-y-auto"
             >
               {/* Tablero sobre base cuadrada fija para mantener coordenadas y áreas clicables consistentes */}
-              <div className="relative h-[clamp(18rem,88vw,26rem)] w-[clamp(18rem,88vw,26rem)] bg-black/50 rounded-b-xl border-b-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex-shrink-0 overflow-hidden">
+              <div className="relative size-[clamp(18rem,88vw,26rem)] bg-black/50 rounded-b-xl border-b-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex-shrink-0 overflow-hidden">
                  {import.meta.env.DEV && (
                    <div className="absolute right-3 top-3 z-40 flex flex-col items-end gap-1.5">
                      <div className="flex gap-1">
@@ -1644,7 +1644,7 @@ export function TerminalView() {
                      {debugMode === 'forced-dice' && isMyTurn && sessionTurn?.dice === null && (
                        <div
                          data-cy="debug-forced-dice-panel"
-                         className="flex flex-col items-end gap-1.5 rounded-md border border-amber-700/60 bg-amber-950/85 px-2 py-2 shadow-[0_0_12px_rgba(245,158,11,0.25)]"
+                         className="flex flex-col items-end gap-1.5 rounded-md border border-amber-700/60 bg-amber-950/85 p-2 shadow-[0_0_12px_rgba(245,158,11,0.25)]"
                        >
                          <label className="font-mono text-[9px] uppercase tracking-widest text-amber-400">
                            Forzar dado
@@ -1688,13 +1688,12 @@ export function TerminalView() {
                    onSpaceMotifClick={setActiveMotifSpace}
                  >
                    {sessionStatus === "EN_CURSO" ? (
-                     <div
+                     <button
+                       type="button"
                        data-cy="terminal-board-surface"
-                       role="button"
-                       tabIndex={0}
+                       aria-label="Superficie del tablero"
                        className="absolute inset-0 z-20 cursor-crosshair"
                        onClick={handleBoardSurfaceClick}
-                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") (e.target as HTMLElement).click(); }}
                      />
                    ) : null}
 
@@ -1830,7 +1829,7 @@ export function TerminalView() {
                       </div>
                     ) : isLoadingMoves ? (
                       <p className="mt-3 text-[11px] text-cyan-200 uppercase tracking-[0.18em]">
-                        Preparando selector de destino...
+                        Preparando selector de destino…
                       </p>
                     ) : destinationNodes.length === 0 ? (
                       <p className="mt-3 text-[11px] text-slate-400">
@@ -1891,7 +1890,7 @@ export function TerminalView() {
                 </h3>
                 {isLoadingHand ? (
                   <div data-cy="terminal-hand-state" className="rounded-lg border border-cyan-900/40 bg-cyan-950/10 px-4 py-3 text-xs uppercase tracking-[0.2em] text-cyan-200">
-                    Cargando cartas del equipo...
+                    Cargando cartas del equipo…
                   </div>
                 ) : handError ? (
                   <div data-cy="terminal-hand-state" className="rounded-lg border border-red-900/60 bg-red-950/20 px-4 py-3 text-xs text-red-100">
@@ -1906,13 +1905,11 @@ export function TerminalView() {
                 ) : (
                   <div data-cy="terminal-hand-list" className="flex gap-4 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory">
                     {teamHand.map(card => (
-                      <div
+                      <button
+                        type="button"
                         data-cy="terminal-hand-card"
                         key={card.id}
-                        role="button"
-                        tabIndex={0}
                         onClick={() => { setSelectedCard(card); setCardFlipped(false); }}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setSelectedCard(card); setCardFlipped(false); } }}
                         className={`w-36 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${card.color} ${card.bg} flex flex-col items-center justify-start cursor-pointer snap-center hover:brightness-110 transition-all shadow-lg relative overflow-hidden`}
                       >
                         <div className="w-full h-1/2 relative overflow-hidden border-b border-slate-800">
@@ -1937,7 +1934,7 @@ export function TerminalView() {
                         <div className="p-2 w-full flex-1 flex items-center justify-center">
                           <span className="text-[9px] font-bold text-center leading-tight text-slate-200 uppercase px-1 line-clamp-2">{card.name}</span>
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -2079,7 +2076,7 @@ export function TerminalView() {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <div className="inline-flex items-center gap-2 rounded-full border border-cyan-900/60 bg-cyan-950/20 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-200">
-                        <MessageSquare className="h-3.5 w-3.5" />
+                        <MessageSquare className="size-3.5" />
                         Canal de deduccion
                       </div>
                       <h3 className="mt-3 text-lg font-black uppercase tracking-[0.2em] text-emerald-300">
@@ -2127,14 +2124,14 @@ export function TerminalView() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-2xl border border-cyan-900/50 bg-cyan-950/20 p-3">
                       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-300">
-                        <MapPin className="h-3.5 w-3.5" />
+                        <MapPin className="size-3.5" />
                         Sala actual
                       </div>
                       <p className="mt-2 text-sm font-semibold text-white">{currentRoomSpace?.name ?? currentRoomLabel ?? "Sin sala activa"}</p>
                     </div>
                     <div className="rounded-2xl border border-emerald-900/50 bg-emerald-950/20 p-3">
                       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-300">
-                        <Shield className="h-3.5 w-3.5" />
+                        <Shield className="size-3.5" />
                         Turno
                       </div>
                       <p className="mt-2 text-sm font-semibold text-white">{isMyTurn ? "Control local" : currentTurnLabel}</p>
@@ -2190,7 +2187,7 @@ export function TerminalView() {
                       <div className="mt-5 grid gap-3">
                         <div className="rounded-2xl border border-rose-800/60 bg-slate-950/45 p-4">
                           <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-rose-200">
-                            <MapPin className="h-3.5 w-3.5" />
+                            <MapPin className="size-3.5" />
                             {catNames.c3}
                           </label>
                           <select
@@ -2199,7 +2196,7 @@ export function TerminalView() {
                             onChange={(event) => setSelectedSpaceId(event.target.value)}
                             className="mt-3 w-full rounded-xl border border-rose-800/70 bg-slate-900/80 p-3 text-sm text-rose-100 outline-none focus:border-rose-400"
                           >
-                            <option value="" disabled>Selecciona...</option>
+                            <option value="" disabled>Selecciona…</option>
                             {BOARD_SPACE_SLOTS.map((slot, index) => {
                               const space = categories.c3[index];
                               const optionLabel = space?.name ?? `Sala ${index + 1}`;
@@ -2216,7 +2213,7 @@ export function TerminalView() {
 
                         <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/45 p-4">
                           <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
-                            <User className="h-3.5 w-3.5" />
+                            <User className="size-3.5" />
                             {catNames.c1}
                           </label>
                           <select
@@ -2225,7 +2222,7 @@ export function TerminalView() {
                             onChange={(event) => setSelectedSubjectId(event.target.value)}
                             className="mt-3 w-full rounded-xl border border-cyan-800/70 bg-slate-900/80 p-3 text-sm text-cyan-100 outline-none focus:border-cyan-400"
                           >
-                            <option value="" disabled>Selecciona...</option>
+                            <option value="" disabled>Selecciona…</option>
                             {categories.c1.map((item) => (
                               <option key={item.id} value={item.id}>{item.name}</option>
                             ))}
@@ -2234,7 +2231,7 @@ export function TerminalView() {
 
                         <div className="rounded-2xl border border-emerald-800/60 bg-slate-950/45 p-4">
                           <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">
-                            <Box className="h-3.5 w-3.5" />
+                            <Box className="size-3.5" />
                             {catNames.c2}
                           </label>
                           <select
@@ -2243,7 +2240,7 @@ export function TerminalView() {
                             onChange={(event) => setSelectedObjectId(event.target.value)}
                             className="mt-3 w-full rounded-xl border border-emerald-800/70 bg-slate-900/80 p-3 text-sm text-emerald-100 outline-none focus:border-emerald-400"
                           >
-                            <option value="" disabled>Selecciona...</option>
+                            <option value="" disabled>Selecciona…</option>
                             {categories.c2.map((item) => (
                               <option key={item.id} value={item.id}>{item.name}</option>
                             ))}
@@ -2267,7 +2264,7 @@ export function TerminalView() {
                           !selectedObjectId ||
                           !selectedSpaceId
                         }
-                        className="mt-5 w-full rounded-2xl bg-red-600 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(239,68,68,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                        className="mt-5 w-full rounded-2xl bg-red-600 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(239,68,68,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {isSubmittingAccusation ? "Resolviendo acusacion..." : "Realizar acusacion"}
                       </button>
@@ -2365,7 +2362,7 @@ export function TerminalView() {
                             type="button"
                             onClick={() => void handleSubmitRefutation()}
                             disabled={!selectedRefuteCard || isSubmittingRefutation || !canUseRealtimeSuggestion}
-                            className="mt-5 w-full rounded-2xl bg-red-500 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(239,68,68,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                            className="mt-5 w-full rounded-2xl bg-red-500 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(239,68,68,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {isSubmittingRefutation ? "Mostrando carta..." : selectedRefuteCard ? `Mostrar ${selectedRefuteCard.name}` : "Selecciona una carta"}
                           </button>
@@ -2402,7 +2399,7 @@ export function TerminalView() {
                           <div className="mt-3 grid gap-3">
                             <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/45 p-4">
                               <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
-                                <User className="h-3.5 w-3.5" />
+                                <User className="size-3.5" />
                                 {catNames.c1}
                               </label>
                               <select
@@ -2411,7 +2408,7 @@ export function TerminalView() {
                                 onChange={(event) => setSelectedSubjectId(event.target.value)}
                                 className="mt-3 w-full rounded-xl border border-cyan-800/70 bg-slate-900/80 p-3 text-sm text-cyan-100 outline-none focus:border-cyan-400"
                               >
-                                <option value="" disabled>Selecciona...</option>
+                                <option value="" disabled>Selecciona…</option>
                                 {categories.c1.map((item) => (
                                   <option key={item.id} value={item.id}>{item.name}</option>
                                 ))}
@@ -2420,7 +2417,7 @@ export function TerminalView() {
 
                             <div className="rounded-2xl border border-emerald-800/60 bg-slate-950/45 p-4">
                               <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">
-                                <Box className="h-3.5 w-3.5" />
+                                <Box className="size-3.5" />
                                 {catNames.c2}
                               </label>
                               <select
@@ -2429,7 +2426,7 @@ export function TerminalView() {
                                 onChange={(event) => setSelectedObjectId(event.target.value)}
                                 className="mt-3 w-full rounded-xl border border-emerald-800/70 bg-slate-900/80 p-3 text-sm text-emerald-100 outline-none focus:border-emerald-400"
                               >
-                                <option value="" disabled>Selecciona...</option>
+                                <option value="" disabled>Selecciona…</option>
                                 {categories.c2.map((item) => (
                                   <option key={item.id} value={item.id}>{item.name}</option>
                                 ))}
@@ -2452,7 +2449,7 @@ export function TerminalView() {
                               type="button"
                               onClick={() => void handleSubmitSuggestion()}
                               disabled={!suggestionPreview || isSubmittingSuggestion || isResolutionBlockingGameplay || !canUseRealtimeSuggestion}
-                              className="rounded-2xl bg-cyan-500 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.3)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                              className="rounded-2xl bg-cyan-500 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.3)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {isSubmittingSuggestion ? "Enviando sugerencia..." : "Lanzar sugerencia"}
                             </button>
@@ -2461,7 +2458,7 @@ export function TerminalView() {
                               type="button"
                               onClick={() => void handleEndTurnFromRoom()}
                               disabled={isEndingTurn || isResolutionBlockingGameplay}
-                              className="rounded-2xl border border-slate-600 bg-slate-900/75 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                              className="rounded-2xl border border-slate-600 bg-slate-900/75 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {isEndingTurn ? "Cerrando..." : "Terminar turno"}
                             </button>

@@ -515,7 +515,7 @@ export function BoardView() {
               {formatTime(timeRemaining)}
             </span>
           </div>
-          <div className="col-span-2 rounded-lg border border-cyan-800/40 bg-cyan-950/10 px-4 py-4">
+          <div className="col-span-2 rounded-lg border border-cyan-800/40 bg-cyan-950/10 p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <span className="text-[10px] text-slate-500 uppercase tracking-widest">Turno actual</span>
@@ -532,13 +532,13 @@ export function BoardView() {
               </span>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/60 px-3 py-3">
+              <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/60 p-3">
                 <span className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">Estado</span>
                 <span className="mt-2 block text-sm font-black text-cyan-100">
                   {formatSessionStatusLabel(presenceState?.status ?? "EN_CURSO")}
                 </span>
               </div>
-              <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/60 px-3 py-3 text-right">
+              <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/60 p-3 text-right">
                 <span className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">Dados</span>
                 <span className="mt-2 block text-lg font-black text-emerald-300">
                   {presenceState?.status === "FINALIZADA"
@@ -550,7 +550,7 @@ export function BoardView() {
               </div>
             </div>
           </div>
-          <div data-cy="board-session-controls" className="col-span-2 rounded-lg border border-cyan-800/40 bg-cyan-950/10 px-4 py-4">
+          <div data-cy="board-session-controls" className="col-span-2 rounded-lg border border-cyan-800/40 bg-cyan-950/10 p-4">
             <div className="flex items-start justify-between gap-3">
               <span className="text-[10px] text-slate-500 uppercase tracking-widest">Control de partida</span>
               <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] ${boardControlStatusTone}`}>
@@ -759,13 +759,12 @@ export function BoardView() {
             onSpaceMotifClick={setActiveMotifSpace}
           >
             {isBoardDebugEnabled ? (
-              <div
+              <button
+                type="button"
                 data-cy="host-board-debug-surface"
-                role="button"
-                tabIndex={0}
+                aria-label="Superficie de depuración del tablero"
                 className="absolute inset-0 z-20 cursor-crosshair"
                 onClick={handleBoardDebugSurfaceClick}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") (e.target as HTMLElement).click(); }}
               />
             ) : null}
             <SpaceMotifModal
@@ -862,7 +861,7 @@ export function BoardView() {
                           </div>
                         )}
                       </div>
-                      <div className="px-4 py-4 text-left">
+                      <div className="p-4 text-left">
                         <span className="block text-[10px] font-bold uppercase tracking-[0.26em] opacity-75">{item.label}</span>
                         <p className="mt-3 text-2xl font-black leading-[1.05] text-white break-words">{item.name}</p>
                       </div>

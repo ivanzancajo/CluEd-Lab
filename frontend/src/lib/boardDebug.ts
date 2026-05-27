@@ -1,4 +1,4 @@
-export const BOARD_DEBUG_MODE_STORAGE_KEY = 'boardDebugMode';
+const BOARD_DEBUG_MODE_STORAGE_KEY = 'boardDebugMode';
 
 export type BoardDebugProbe = {
   positionX: number;

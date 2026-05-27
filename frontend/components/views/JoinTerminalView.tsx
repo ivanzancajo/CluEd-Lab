@@ -293,15 +293,15 @@ export function JoinTerminalView() {
               </label>
               <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-widest">
                 <span className="inline-flex items-center gap-2 rounded-full border border-emerald-900/60 bg-emerald-950/20 px-3 py-1 text-emerald-200">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
+                  <span className="size-2.5 rounded-full bg-emerald-400"></span>
                   Libre
                 </span>
                 <span className="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-950/70 px-3 py-1 text-slate-400">
-                  <span className="h-2.5 w-2.5 rounded-full bg-slate-500"></span>
+                  <span className="size-2.5 rounded-full bg-slate-500"></span>
                   Ocupado
                 </span>
                 <span className="inline-flex items-center gap-2 rounded-full border border-cyan-900/60 bg-cyan-950/20 px-3 py-1 text-cyan-200">
-                  <span className="h-2.5 w-2.5 rounded-full bg-cyan-300"></span>
+                  <span className="size-2.5 rounded-full bg-cyan-300"></span>
                   Tu equipo
                 </span>
               </div>

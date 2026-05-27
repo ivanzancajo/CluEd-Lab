@@ -169,9 +169,9 @@ export function ThemedBoard({
             }}
           >
             {team.isCurrent ? (
-              <Crosshair className="h-[56%] w-[56%] text-white" />
+              <Crosshair className="size-[56%] text-white" />
             ) : (
-              <div className="h-[30%] w-[30%] rounded-full bg-white/45 backdrop-blur-sm" />
+              <div className="size-[30%] rounded-full bg-white/45 backdrop-blur-sm" />
             )}
           </motion.div>
         );

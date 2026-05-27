@@ -3,8 +3,8 @@ import type { LobbyPresenceTeam } from './lobbySocket';
 export type TeamMonitoringStatus = 'connected' | 'inactive' | 'disconnected';
 
 export const TEAM_HEARTBEAT_INTERVAL_MS = 10_000;
-export const TEAM_INACTIVE_AFTER_MS = 15_000;
-export const TEAM_DISCONNECTED_AFTER_MS = 30_000;
+const TEAM_INACTIVE_AFTER_MS = 15_000;
+const TEAM_DISCONNECTED_AFTER_MS = 30_000;
 
 export function getTeamMonitoringStatus(
   team: Pick<LobbyPresenceTeam, 'connected' | 'lastSeenAt'>,
@@ -31,7 +31,7 @@ export function getTeamMonitoringStatus(
   return 'connected';
 }
 
-export function getTeamLastSeenSeconds(lastSeenAt: number | null, now = Date.now()) {
+function getTeamLastSeenSeconds(lastSeenAt: number | null, now = Date.now()) {
   if (lastSeenAt === null) {
     return null;
   }

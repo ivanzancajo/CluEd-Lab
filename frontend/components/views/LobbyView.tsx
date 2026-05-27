@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import {
   Activity,
   ArrowLeft,
@@ -362,7 +362,7 @@ export function LobbyView() {
                   : "bg-slate-900/50 border-slate-800 text-slate-400 font-bold";
 
               return (
-                <motion.div
+                <m.div
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   key={event.id}
@@ -373,7 +373,7 @@ export function LobbyView() {
                     <span className="text-[10px] opacity-60 font-mono">{formatEventTime(event.occurredAt)}</span>
                   </div>
                   <span data-cy="lobby-event-message">{event.message}</span>
-                </motion.div>
+                </m.div>
               );
             })}
           </div>

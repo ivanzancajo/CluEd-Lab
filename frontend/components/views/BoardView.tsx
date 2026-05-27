@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import {
   Activity,
   ArrowLeft,
@@ -83,8 +83,10 @@ export function BoardView() {
   const shouldAnimateOnMount = !!(location.state as { showEnvelopeAnimation?: boolean } | null)?.showEnvelopeAnimation;
   const hasAnimatedRef = useRef(shouldAnimateOnMount);
   const [showEnvelopeAnimation, setShowEnvelopeAnimation] = useState(shouldAnimateOnMount);
-  const [timeRemaining, setTimeRemaining] = useState(0);
-  const [sessionCode, setSessionCode] = useState("");
+  const [timeRemaining, setTimeRemaining] = useState(() =>
+    calculateRemainingSeconds(getStoredSessionStartedAt(), getStoredSessionDurationSeconds() ?? 0)
+  );
+  const [sessionCode, setSessionCode] = useState(() => getStoredSessionCode() || "N/A");
   const [boardConfig, setBoardConfig] = useState(() => readStoredActiveBoardConfig());
   const [presenceState, setPresenceState] = useState<LobbyPresenceState | null>(null);
   const [events, setEvents] = useState<LobbyEventMessage[]>([]);
@@ -97,14 +99,6 @@ export function BoardView() {
   const [boardDebugProbe, setBoardDebugProbe] = useState<BoardDebugProbe | null>(null);
   const [activeMotifSpace, setActiveMotifSpace] = useState<BoardSpaceLabel | null>(null);
   const [monitoringNow, setMonitoringNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    setSessionCode(getStoredSessionCode() || "N/A");
-    setBoardConfig(readStoredActiveBoardConfig());
-    setTimeRemaining(
-      calculateRemainingSeconds(getStoredSessionStartedAt(), getStoredSessionDurationSeconds() ?? 0)
-    );
-  }, []);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setMonitoringNow(Date.now()), 1000);
@@ -723,7 +717,7 @@ export function BoardView() {
                   : "bg-slate-900/50 border-slate-800 text-slate-400 font-bold";
 
               return (
-                <motion.div
+                <m.div
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   key={event.id}
@@ -733,7 +727,7 @@ export function BoardView() {
                     <span className="text-[10px] opacity-60 font-mono">{formatEventTime(event.occurredAt)}</span>
                   </div>
                   {event.message}
-                </motion.div>
+                </m.div>
               );
             })}
           </div>
@@ -774,7 +768,7 @@ export function BoardView() {
           </ThemedBoard>
 
           {isBoardSolutionVisible && activeResolution?.solution ? (
-            <motion.div
+            <m.div
               key={`board-solution-${activeResolution.mode}`}
               data-cy="board-solution-reveal"
               initial={{ opacity: 0, scale: 0.97 }}
@@ -814,7 +808,7 @@ export function BoardView() {
 
                 <div className="mt-6 grid gap-3 sm:grid-cols-3">
                   {boardSolutionCards.map((item, index) => (
-                    <motion.div
+                    <m.div
                       key={item.key}
                       data-cy={`board-solution-card-${item.key}`}
                       initial={{ opacity: 0, y: 28, rotateX: -12 }}
@@ -865,11 +859,11 @@ export function BoardView() {
                         <span className="block text-[10px] font-bold uppercase tracking-[0.26em] opacity-75">{item.label}</span>
                         <p className="mt-3 text-2xl font-black leading-[1.05] text-white break-words">{item.name}</p>
                       </div>
-                    </motion.div>
+                    </m.div>
                   ))}
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           ) : null}
 
           {import.meta.env.DEV && !isBoardSolutionVisible ? (

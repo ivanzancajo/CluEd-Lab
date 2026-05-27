@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { ArrowLeft, MonitorPlay, Zap, FileText } from "lucide-react";
 import { clearAdminSession } from "../../src/lib/auth";
 import { storeHostLobbySession } from "../../src/lib/lobbyStorage";
@@ -109,9 +109,17 @@ function toStoredSummary(config: GameConfig): SkinSummary {
 
 export function SessionCreateView() {
   const navigate = useNavigate();
-  const [configs, setConfigs] = useState<SkinSummary[]>([]);
-  const [selectedConfigId, setSelectedConfigId] = useState<string>("");
-  const [selectedConfig, setSelectedConfig] = useState<GameConfig | null>(null);
+  const [configs, setConfigs] = useState<SkinSummary[]>(() => {
+    const stored = readStoredConfigs();
+    return stored.length > 0 ? stored.map(toStoredSummary) : [];
+  });
+  const [selectedConfigId, setSelectedConfigId] = useState<string>(() => {
+    const fallback = readStoredActiveConfig() ?? readStoredConfigs()[0] ?? null;
+    return fallback?.id ?? "";
+  });
+  const [selectedConfig, setSelectedConfig] = useState<GameConfig | null>(() => {
+    return readStoredActiveConfig() ?? readStoredConfigs()[0] ?? null;
+  });
   const [isLoadingConfigs, setIsLoadingConfigs] = useState(false);
   const [isLoadingSelectedConfig, setIsLoadingSelectedConfig] = useState(false);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
@@ -124,13 +132,7 @@ export function SessionCreateView() {
     const storedActiveConfig = readStoredActiveConfig();
     const fallbackConfig = storedActiveConfig ?? storedConfigs[0] ?? null;
 
-    if (storedConfigs.length > 0) {
-      setConfigs(storedConfigs.map(toStoredSummary));
-    }
-
     if (fallbackConfig) {
-      setSelectedConfig(fallbackConfig);
-      setSelectedConfigId(fallbackConfig.id);
       syncStoredActiveConfig(fallbackConfig);
     }
 
@@ -299,7 +301,7 @@ export function SessionCreateView() {
         Cerrar sesión
       </button>
 
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         className="relative z-10 w-full max-w-2xl"
@@ -329,7 +331,7 @@ export function SessionCreateView() {
 
           <div className="mt-8 flex flex-col gap-6 rounded-2xl border border-slate-800 bg-slate-950/75 p-6 shadow-inner shadow-black/30">
             <div className="space-y-3">
-              <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-cyan-400">
+              <label htmlFor="session-config-select" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-cyan-400">
                 <FileText className="size-4" /> Seleccionar CluedoSkin para la partida
               </label>
 
@@ -339,6 +341,7 @@ export function SessionCreateView() {
                 </div>
               ) : configs.length > 0 ? (
                 <select
+                  id="session-config-select"
                   value={selectedConfigId}
                   onChange={(event) => setSelectedConfigId(event.target.value)}
                   className="w-full cursor-pointer rounded-lg border border-cyan-900/40 bg-slate-900 p-3 text-sm text-cyan-100 outline-none transition-colors focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500"
@@ -415,7 +418,7 @@ export function SessionCreateView() {
             </button>
           </div>
         </div>
-      </motion.div>
+      </m.div>
     </div>
   );
 }

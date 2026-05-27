@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { 
   Map as MapIcon, 
   Search, 
@@ -187,6 +187,24 @@ const CATEGORIES = {
 
 const TEAMS = ["Rojo", "Amarillo", "Azul", "Verde", "Morado", "Blanco"];
 
+function mapConfigToCategories(config: GameConfig): { c1: ElementoItem[]; c2: ElementoItem[]; c3: ElementoItem[] } {
+  const showMotifs = config.hasMotifs === true;
+  const mapItems = (items: RawItem[], defaultIcon: React.ReactNode, defaultColor: string): ElementoItem[] =>
+    items.map((item) => ({ id: item.id, name: item.name, desc: item.desc, motif: showMotifs ? item.motif : undefined, avatar: defaultIcon, color: defaultColor }));
+  return {
+    c1: mapItems(config.subjects || [], <User className="size-3 text-cyan-400" />, "bg-cyan-950/30 border-cyan-800"),
+    c2: mapItems(config.objects || [], <Box className="size-3 text-emerald-400" />, "bg-emerald-950/30 border-emerald-800"),
+    c3: mapItems(config.spaces || [], <MapPin className="size-3 text-red-500" />, "bg-red-950/20 border-red-900"),
+  };
+}
+
+function catNamesFromConfig(config: GameConfig | null) {
+  return {
+    c1: config?.cat1Name || "Sujetos",
+    c2: config?.cat2Name || "Objetos",
+    c3: config?.cat3Name || "Espacios",
+  };
+}
 
 function resolveCurrentTeamBoardNode(teams: LobbySession["teams"], teamId: string | null): TeamMoveNode | null {
   if (!teamId) {
@@ -229,9 +247,9 @@ function CellIcon({ state }: { state: number }) {
 export function TerminalView() {
   const navigate = useNavigate();
   const lobbySocketRef = React.useRef<LobbySocketClient | null>(null);
-  const activeGameConfigRef = React.useRef<GameConfig | null>(null);
+  const activeGameConfigRef = React.useRef<GameConfig | null>(readStoredBoardTheme() as GameConfig | null);
   const [activeTab, setActiveTab] = useState("map");
-  const [centerImage, setCenterImage] = useState("");
+  const [centerImage, setCenterImage] = useState(() => localStorage.getItem("centerImage") ?? "");
   const [boardTheme, setBoardTheme] = useState<StoredBoardTheme | null>(() => readStoredBoardTheme());
   const [boardTeams, setBoardTeams] = useState<LobbySession["teams"]>([]);
   const [teamName, setTeamName] = useState(getStoredTeamName() || "Equipo sin asignar");
@@ -284,12 +302,16 @@ export function TerminalView() {
     c1: ElementoItem[];
     c2: ElementoItem[];
     c3: ElementoItem[];
-  }>({
-    c1: CATEGORIES.sujetos.map(s => ({ id: s.name, ...s, desc: "Descripción", motif: "" })),
-    c2: CATEGORIES.objetos.map(o => ({ id: o.name, ...o, desc: "Descripción", motif: "" })),
-    c3: CATEGORIES.espacios.map(e => ({ id: e.name, ...e, desc: "Descripción", motif: "" }))
+  }>(() => {
+    const theme = readStoredBoardTheme() as GameConfig | null;
+    if (!theme) return {
+      c1: CATEGORIES.sujetos.map(s => ({ id: s.name, ...s, desc: "Descripción", motif: "" })),
+      c2: CATEGORIES.objetos.map(o => ({ id: o.name, ...o, desc: "Descripción", motif: "" })),
+      c3: CATEGORIES.espacios.map(e => ({ id: e.name, ...e, desc: "Descripción", motif: "" })),
+    };
+    return mapConfigToCategories(theme);
   });
-  const [catNames, setCatNames] = useState({ c1: "Sujetos", c2: "Objetos", c3: "Espacios" });
+  const [catNames, setCatNames] = useState(() => catNamesFromConfig(readStoredBoardTheme() as GameConfig | null));
   const [selectedCard, setSelectedCard] = useState<TerminalCard | null>(null);
   const [cardFlipped, setCardFlipped] = useState(false);
 
@@ -846,21 +868,6 @@ export function TerminalView() {
     return () => clearTimeout(timer);
   }, [showEnvelopeAnimation]);
 
-  // Fetch active config and map to Terminal's internal state
-  React.useEffect(() => {
-    const storedTheme = readStoredBoardTheme();
-
-    if (storedTheme) {
-      applyGameConfig(storedTheme as GameConfig);
-      return;
-    }
-
-    const savedImg = localStorage.getItem("centerImage");
-    if (savedImg) {
-      setCenterImage(savedImg);
-    }
-  }, []);
-
   React.useEffect(() => {
     const accessCode = getStoredSessionCode();
     const teamId = getStoredTeamId();
@@ -1135,7 +1142,7 @@ export function TerminalView() {
       return;
     }
     void refreshMoveState();
-  }, [activeSuggestion, isMyTurn, isResolutionBlockingGameplay, pendingSuggestion, refreshMoveState, sessionStatus, sessionTurn?.currentTeamId]);
+  }, [activeSuggestion, isMyTurn, isResolutionBlockingGameplay, pendingSuggestion, refreshMoveState, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
 
 
   React.useEffect(() => {
@@ -1610,7 +1617,7 @@ export function TerminalView() {
           
           {/* MAP & DICE TAB */}
           {activeTab === "map" && (
-            <motion.div 
+            <m.div 
               key="map"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="absolute inset-0 pb-20 bg-[#380b0b] flex flex-col items-center justify-start overflow-y-auto"
@@ -1646,10 +1653,11 @@ export function TerminalView() {
                          data-cy="debug-forced-dice-panel"
                          className="flex flex-col items-end gap-1.5 rounded-md border border-amber-700/60 bg-amber-950/85 p-2 shadow-[0_0_12px_rgba(245,158,11,0.25)]"
                        >
-                         <label className="font-mono text-[9px] uppercase tracking-widest text-amber-400">
+                         <label htmlFor="debug-forced-dice-select" className="font-mono text-[9px] uppercase tracking-widest text-amber-400">
                            Forzar dado
                          </label>
                          <select
+                           id="debug-forced-dice-select"
                            data-cy="debug-forced-dice-select"
                            value={forcedDiceValue ?? ''}
                            onChange={(e) => setForcedDiceValue(e.target.value ? Number(e.target.value) : undefined)}
@@ -1722,12 +1730,12 @@ export function TerminalView() {
                    {/* Card Modal Overlay */}
                    <AnimatePresence>
                      {selectedCard && (
-                       <motion.div
+                       <m.div
                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 backdrop-blur-sm"
                          onClick={() => { setSelectedCard(null); setCardFlipped(false); }}
                        >
-                         <motion.div
+                         <m.div
                            initial={{ scale: 0.8, y: 20 }}
                            animate={{ scale: 1, y: 0, rotateY: cardFlipped ? 180 : 0 }}
                            exit={{ scale: 0.8, opacity: 0 }}
@@ -1760,8 +1768,8 @@ export function TerminalView() {
                              <p className="text-xs text-slate-400 leading-relaxed font-mono">{selectedCard.desc}</p>
                              <div className="mt-auto text-[8px] text-cyan-500 uppercase tracking-widest animate-pulse">Toca para voltear</div>
                            </div>
-                         </motion.div>
-                       </motion.div>
+                         </m.div>
+                       </m.div>
                      )}
                    </AnimatePresence>
                  </ThemedBoard>
@@ -1943,12 +1951,12 @@ export function TerminalView() {
               <div className="w-full px-4 pb-4">
                 <EvidenciasComunes publicCards={publicCards} />
               </div>
-            </motion.div>
+            </m.div>
           )}
 
           {/* MATRIX TAB */}
           {activeTab === "matrix" && (
-            <motion.div 
+            <m.div 
               key="matrix"
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
               className="p-2 pb-24"
@@ -2038,19 +2046,20 @@ export function TerminalView() {
                   )})}
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           )}
 
           {/* NOTES TAB */}
           {activeTab === "notes" && (
-            <motion.div 
+            <m.div 
               key="notes"
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
               className="p-4 pb-24 h-full flex flex-col"
             >
               <div className="flex-1 bg-slate-900/50 border border-slate-800 rounded-xl p-1 relative overflow-hidden">
                 <div className="absolute top-0 left-8 bottom-0 w-[1px] bg-red-900/30 z-0"></div>
-                <textarea 
+                <textarea
+                  aria-label="Notas de análisis lógico"
                   className="w-full h-full bg-transparent resize-none p-4 pl-12 text-sm text-cyan-200 focus:outline-none z-10 relative font-mono leading-[32px] placeholder:text-slate-600"
                   style={{
                     backgroundImage: 'repeating-linear-gradient(transparent, transparent 31px, rgba(15, 23, 42, 0.8) 31px, rgba(15, 23, 42, 0.8) 32px)',
@@ -2060,12 +2069,12 @@ export function TerminalView() {
                   spellCheck="false"
                 ></textarea>
               </div>
-            </motion.div>
+            </m.div>
           )}
 
           {/* SUGGEST TAB */}
           {activeTab === "suggest" && (
-            <motion.div
+            <m.div
               key="suggest"
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
               className="p-4 pb-24 flex flex-col gap-3 bg-[radial-gradient(circle_at_top,_rgba(6,182,212,0.16),_transparent_34%),linear-gradient(180deg,_rgba(8,47,73,0.18),_rgba(2,6,23,0.96)_72%)]"
@@ -2509,7 +2518,7 @@ export function TerminalView() {
                   )}
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           )}
 
         </AnimatePresence>
@@ -2517,7 +2526,7 @@ export function TerminalView() {
 
       <AnimatePresence>
         {isResolutionShowingSolution && activeResolution?.solution ? (
-          <motion.div
+          <m.div
             key="terminal-solution-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -2525,7 +2534,7 @@ export function TerminalView() {
             className="absolute inset-0 z-[70] flex flex-col items-center justify-center gap-6 bg-slate-950/95 px-6 text-center"
             data-cy="terminal-solution-reveal"
           >
-            <motion.div
+            <m.div
               initial={{ y: 24, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               className="space-y-2"
@@ -2536,7 +2545,7 @@ export function TerminalView() {
               <h3 className="text-2xl font-black uppercase tracking-[0.14em] text-white">
                 Caso cerrado
               </h3>
-            </motion.div>
+            </m.div>
 
             <div className="grid w-full max-w-xl gap-4 sm:grid-cols-3">
               {[
@@ -2544,7 +2553,7 @@ export function TerminalView() {
                 { key: "object", label: catNames.c2, card: activeResolution.solution.object, tone: "border-emerald-700/70 bg-emerald-950/25 text-emerald-100" },
                 { key: "space", label: catNames.c3, card: activeResolution.solution.space, tone: "border-rose-700/70 bg-rose-950/25 text-rose-100" },
               ].map((item, index) => (
-                <motion.div
+                <m.div
                   key={item.key}
                   data-cy={`terminal-solution-${item.key}`}
                   initial={{ opacity: 0, rotateY: -90, scale: 0.85 }}
@@ -2554,11 +2563,11 @@ export function TerminalView() {
                 >
                   <span className="block text-[10px] font-bold uppercase tracking-[0.22em] opacity-70">{item.label}</span>
                   <p className="mt-3 text-lg font-black text-white">{item.card.name}</p>
-                </motion.div>
+                </m.div>
               ))}
             </div>
 
-            <motion.div
+            <m.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.45, duration: 0.3 }}
@@ -2569,8 +2578,8 @@ export function TerminalView() {
                 : activeResolution.winningTeams.length === 1
                 ? `Equipo ganador: ${activeResolution.winningTeams[0]?.name ?? "Sin determinar"}.`
                 : `Equipos ganadores: ${activeResolution.winningTeams.map((team) => team.name).join(", ")}.`}
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         ) : null}
       </AnimatePresence>
 

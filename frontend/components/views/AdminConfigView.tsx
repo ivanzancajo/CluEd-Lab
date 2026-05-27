@@ -12,7 +12,7 @@ import {
   type SetStateAction,
 } from "react";
 import { Link } from "react-router";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import {
   ArrowLeft,
   Box,
@@ -341,6 +341,7 @@ const EditableItemList = memo(function EditableItemList({
                   <input
                     type="file"
                     accept="image/*"
+                    aria-label="Subir imagen local"
                     className="hidden"
                     disabled={fieldsDisabled}
                     onChange={(event) => {
@@ -878,7 +879,7 @@ export function AdminConfigView() {
 
         <AnimatePresence mode="wait">
           {activeTab === "list" ? (
-            <motion.div
+            <m.div
               key="list"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -956,11 +957,11 @@ export function AdminConfigView() {
                   ))}
                 </div>
               ) : null}
-            </motion.div>
+            </m.div>
           ) : null}
 
           {activeTab === "general" ? (
-            <motion.div
+            <m.div
               key="general"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -978,10 +979,11 @@ export function AdminConfigView() {
 
               <div className="flex flex-col gap-6 rounded-xl border border-cyan-900/50 bg-slate-900/50 p-6 shadow-[0_0_30px_-5px_rgba(0,0,0,0.5)]">
                 <div className="flex flex-col gap-2 border-b border-slate-800 pb-6">
-                  <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-indigo-400">
+                  <label htmlFor="config-name" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-indigo-400">
                     <FileText className="size-4" /> Nombre de la cluedoskin
                   </label>
                   <input
+                    id="config-name"
                     type="text"
                     aria-label="Nombre de la cluedoskin"
                     value={configName}
@@ -994,10 +996,11 @@ export function AdminConfigView() {
                 </div>
 
                 <div className="flex flex-col gap-2 border-b border-slate-800 pb-6">
-                  <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-cyan-500">
+                  <label htmlFor="config-game-title" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-cyan-500">
                     <Settings className="size-4" /> Título de la Partida Pública
                   </label>
                   <input
+                    id="config-game-title"
                     type="text"
                     aria-label="Título de la partida pública"
                     value={gameTitle}
@@ -1010,11 +1013,12 @@ export function AdminConfigView() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-cyan-500">
+                  <label htmlFor="config-center-image" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-cyan-500">
                     <KeyRound className="size-4" /> Imagen Central del Mapa (Logo)
                   </label>
                   <div className="flex gap-4">
                     <input
+                      id="config-center-image"
                       type="text"
                       aria-label="URL de la imagen central del mapa"
                       value={centerImage}
@@ -1033,19 +1037,20 @@ export function AdminConfigView() {
                     >
                       <Upload className="mb-1 size-4" />
                       Subir
-                      <input type="file" accept="image/*" className="hidden" disabled={fieldsDisabled} onChange={handleCenterImageUpload} />
+                      <input type="file" accept="image/*" aria-label="Subir imagen central del mapa" className="hidden" disabled={fieldsDisabled} onChange={handleCenterImageUpload} />
                     </label>
                   </div>
                 </div>
 
                 <div className="mt-4 flex flex-col gap-4 border-t border-slate-800 pt-6">
-                  <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-purple-400">
+                  <label htmlFor="config-cat1" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-purple-400">
                     <Target className="size-4" /> Nombres de Categorías (Ternas)
                   </label>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div>
                       <span className="mb-1 block text-[9px] uppercase text-slate-500">Terna 1</span>
                       <input
+                        id="config-cat1"
                         type="text"
                         aria-label="Nombre de la primera categoría (Terna 1)"
                         value={cat1Name}
@@ -1087,6 +1092,7 @@ export function AdminConfigView() {
                     <input
                       type="checkbox"
                       id="hasMotifs"
+                      aria-label="Habilitar motivos en tabla de razonamiento"
                       checked={hasMotifs}
                       disabled={fieldsDisabled}
                       data-cy="admin-config-has-motifs-input"
@@ -1100,10 +1106,11 @@ export function AdminConfigView() {
                 </div>
 
                 <div className="mt-4 flex flex-col gap-2 border-t border-slate-800 pt-6">
-                  <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-cyan-500">
+                  <label htmlFor="config-duration" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-cyan-500">
                     <Clock className="size-4" /> Duración Estimada (Minutos)
                   </label>
                   <input
+                    id="config-duration"
                     type="number"
                     aria-label="Duración estimada en minutos"
                     value={duration}
@@ -1115,10 +1122,11 @@ export function AdminConfigView() {
                 </div>
 
                 <div className="mt-4 flex flex-col gap-2 border-t border-slate-800 pt-6">
-                  <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-cyan-500">
+                  <label htmlFor="config-objective" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-cyan-500">
                     <Target className="size-4" /> Objetivo de Evaluación
                   </label>
                   <textarea
+                    id="config-objective"
                     aria-label="Objetivo de evaluación"
                     value={objective}
                     disabled={fieldsDisabled}
@@ -1129,11 +1137,11 @@ export function AdminConfigView() {
                   ></textarea>
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           ) : null}
 
           {activeTab === "sujetos" ? (
-            <motion.div
+            <m.div
               key="sujetos"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1148,11 +1156,11 @@ export function AdminConfigView() {
               </div>
 
               <EditableItemList items={subjects} setItems={setSubjects} icon={SUBJECT_ICON} type="Sujeto" collectionKey="subjects" minItems={COLLECTION_CONSTRAINTS.subjects.min} maxItems={COLLECTION_CONSTRAINTS.subjects.max} showMotif={false} errorItems={itemErrors.subjects} fieldsDisabled={fieldsDisabled} />
-            </motion.div>
+            </m.div>
           ) : null}
 
           {activeTab === "objetos" ? (
-            <motion.div
+            <m.div
               key="objetos"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1167,11 +1175,11 @@ export function AdminConfigView() {
               </div>
 
               <EditableItemList items={objects} setItems={setObjects} icon={OBJECT_ICON} type="Objeto" collectionKey="objects" minItems={COLLECTION_CONSTRAINTS.objects.min} maxItems={COLLECTION_CONSTRAINTS.objects.max} showMotif={false} errorItems={itemErrors.objects} fieldsDisabled={fieldsDisabled} />
-            </motion.div>
+            </m.div>
           ) : null}
 
           {activeTab === "espacios" ? (
-            <motion.div
+            <m.div
               key="espacios"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1188,7 +1196,7 @@ export function AdminConfigView() {
               </div>
 
               <EditableItemList items={spaces} setItems={setSpaces} icon={SPACE_ICON} type={cat3Name} collectionKey="spaces" minItems={COLLECTION_CONSTRAINTS.spaces.min} maxItems={COLLECTION_CONSTRAINTS.spaces.max} showMotif={hasMotifs} errorItems={itemErrors.spaces} fieldsDisabled={fieldsDisabled} />
-            </motion.div>
+            </m.div>
           ) : null}
         </AnimatePresence>
       </div>

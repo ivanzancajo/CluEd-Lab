@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { isAxiosError } from "axios";
 import { Link, useNavigate } from "react-router";
 import { Monitor, Terminal as TerminalIcon, Cpu, Fingerprint, Settings, Zap, Lock, X } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import api from "../../src/lib/api";// Importamos nuestra instancia de Axios configurada
 import { hasStoredAdminSession, storeAdminToken } from "../../src/lib/auth";
 
@@ -69,7 +69,7 @@ export function Landing() {
       <div className="absolute -left-16 top-20 size-56 rounded-full bg-cyan-500/10 blur-3xl"></div>
       <div className="absolute bottom-10 right-0 size-72 rounded-full bg-emerald-500/10 blur-3xl"></div>
 
-      <motion.div 
+      <m.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="relative z-10 flex max-w-3xl flex-col items-center gap-5 text-center"
@@ -87,7 +87,7 @@ export function Landing() {
         <p className="max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
           Centro de control para administrar la experiencia, abrir sesiones y lanzar la partida desde una interfaz unificada con acceso protegido para el Game Master.
         </p>
-      </motion.div>
+      </m.div>
 
       <div className="relative z-10 mt-6 grid w-full max-w-6xl grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
         {/* Botones protegidos: Usamos onClick en lugar de Link directo */}
@@ -147,14 +147,14 @@ export function Landing() {
       {/* Modal de Login */}
       <AnimatePresence>
         {showLogin && (
-          <motion.div 
+          <m.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
             data-cy="landing-login-modal"
           >
-            <motion.div 
+            <m.div 
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
@@ -178,10 +178,11 @@ export function Landing() {
 
               <form onSubmit={handleLogin} className="flex flex-col gap-4">
                 <div>
-                  <input 
+                  <input
                     data-cy="landing-login-username-input"
-                    type="text" 
-                    placeholder="Identificador" 
+                    aria-label="Identificador de Game Master"
+                    type="text"
+                    placeholder="Identificador"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 transition-colors"
@@ -189,10 +190,11 @@ export function Landing() {
                   />
                 </div>
                 <div>
-                  <input 
+                  <input
                     data-cy="landing-login-password-input"
-                    type="password" 
-                    placeholder="Clave de seguridad" 
+                    aria-label="Clave de seguridad"
+                    type="password"
+                    placeholder="Clave de seguridad"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 transition-colors"
@@ -215,8 +217,8 @@ export function Landing() {
                   {isLoading ? 'Autenticando...' : 'Validar'}
                 </button>
               </form>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

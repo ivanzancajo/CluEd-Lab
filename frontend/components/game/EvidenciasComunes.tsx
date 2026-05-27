@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { Database, User, Box, MapPin } from 'lucide-react';
 import type { TeamHandCard, TeamElementKind } from '../../src/lib/sessionApi';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
@@ -82,7 +82,7 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
           const styles = KIND_STYLES[selectedCard.kind];
           const Icon = styles.icon;
           return (
-            <motion.div
+            <m.div
               key="evidencias-comunes-modal"
               data-cy="evidencias-comunes-modal"
               initial={{ opacity: 0 }}
@@ -91,7 +91,7 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
               className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 backdrop-blur-sm"
               onClick={handleCloseModal}
             >
-              <motion.div
+              <m.div
                 data-cy="evidencias-comunes-modal-card"
                 initial={{ scale: 0.8, y: 20 }}
                 animate={{ scale: 1, y: 0, rotateY: cardFlipped ? 180 : 0 }}
@@ -133,8 +133,8 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
                     Toca para voltear
                   </div>
                 </div>
-              </motion.div>
-            </motion.div>
+              </m.div>
+            </m.div>
           );
         })()}
       </AnimatePresence>

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { User, Box, MapPin, Mail } from 'lucide-react';
 
 interface EnvelopeAnimationProps {
@@ -24,7 +24,7 @@ export function EnvelopeAnimation({ onComplete }: EnvelopeAnimationProps) {
     <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">
       <div className="relative flex items-center justify-center size-64">
         {CARDS.map(({ id, icon: Icon, color, from, delay }) => (
-          <motion.div
+          <m.div
             key={id}
             className={`absolute w-16 aspect-[2.5/3.5] rounded-lg border-2 ${color} flex flex-col items-center justify-center gap-1 shadow-lg`}
             initial={{ x: from.x, y: from.y, opacity: 1, scale: 1 }}
@@ -32,25 +32,25 @@ export function EnvelopeAnimation({ onComplete }: EnvelopeAnimationProps) {
             transition={{ duration: 1.2, delay, ease: 'easeInOut' }}
           >
             <Icon className="size-6 opacity-80" />
-          </motion.div>
+          </m.div>
         ))}
 
-        <motion.div
+        <m.div
           className="absolute flex flex-col items-center justify-center"
           initial={{ opacity: 0, scale: 0.5 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, delay: 1.6, ease: 'easeOut' }}
         >
           <Mail className="size-20 text-cyan-400 drop-shadow-[0_0_20px_rgba(34,211,238,0.5)]" strokeWidth={1.5} />
-          <motion.p
+          <m.p
             className="mt-2 text-cyan-300 text-sm font-semibold tracking-widest uppercase"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 2.2, duration: 0.4 }}
           >
             Solución sellada
-          </motion.p>
-        </motion.div>
+          </m.p>
+        </m.div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { ArrowLeft, KeyRound, LoaderCircle, MonitorSmartphone, ShieldAlert, Cpu } from "lucide-react";
 import { clearStoredTeamContext, getStoredJoinedLobbyContext, storeJoinedLobbySession } from "../../src/lib/lobbyStorage";
 import { TEAM_METADATA } from "../../src/lib/teamMeta";
@@ -227,7 +227,7 @@ export function JoinTerminalView() {
           <ArrowLeft className="size-6" />
         </Link>
 
-        <motion.div
+        <m.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           className="w-full max-w-sm bg-slate-900/80 backdrop-blur-md border border-cyan-800/50 rounded-2xl p-8 shadow-[0_0_40px_-10px_rgba(6,182,212,0.3)]"
@@ -242,10 +242,11 @@ export function JoinTerminalView() {
 
           <form onSubmit={handleJoin} className="flex flex-col gap-6">
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] uppercase text-cyan-500 flex items-center gap-2 font-bold tracking-widest">
+              <label htmlFor="join-code-input" className="text-[10px] uppercase text-cyan-500 flex items-center gap-2 font-bold tracking-widest">
                 <KeyRound className="size-3" /> Código de Sesión
               </label>
               <input
+                id="join-code-input"
                 data-cy="join-terminal-code-input"
                 aria-label="Código de sesión"
                 type="text"
@@ -288,9 +289,9 @@ export function JoinTerminalView() {
             ) : null}
 
             <div className="flex flex-col gap-3">
-              <label className="text-[10px] uppercase text-slate-500 font-bold tracking-widest">
-                Seleccion de color
-              </label>
+              <p className="text-[10px] uppercase text-slate-500 font-bold tracking-widest">
+                Selección de color
+              </p>
               <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-widest">
                 <span className="inline-flex items-center gap-2 rounded-full border border-emerald-900/60 bg-emerald-950/20 px-3 py-1 text-emerald-200">
                   <span className="size-2.5 rounded-full bg-emerald-400"></span>
@@ -395,7 +396,7 @@ export function JoinTerminalView() {
               </button>
             </div>
           </form>
-        </motion.div>
+        </m.div>
       </div>
 
       <div className="absolute bottom-4 left-0 right-0 text-center text-[10px] text-slate-600 flex items-center justify-center gap-2">

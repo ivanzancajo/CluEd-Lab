@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 
 type DiceRollResult = {
   valueOne: number;
@@ -109,19 +109,19 @@ export const DiceAnimation = ({
       className={`relative z-30 p-3 rounded-xl bg-slate-950/60 backdrop-blur-sm border border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.3)] flex flex-col items-center justify-center transition-all duration-300 ${isRolling ? 'scale-110' : 'hover:scale-105 active:scale-95'} ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
     >
       <div className="flex flex-col gap-3">
-        <motion.div
+        <m.div
           animate={isRolling ? { rotateX: 360, rotateY: 360, rotateZ: 360 } : { rotateX: 0, rotateY: 0, rotateZ: 0 }}
           transition={{ duration: 0.5, repeat: isRolling ? Infinity : 0, ease: "linear" }}
         >
           <DiceFace value={dice1} />
-        </motion.div>
+        </m.div>
         
-        <motion.div
+        <m.div
           animate={isRolling ? { rotateX: -360, rotateY: 360, rotateZ: -360 } : { rotateX: 0, rotateY: 0, rotateZ: 0 }}
           transition={{ duration: 0.4, repeat: isRolling ? Infinity : 0, ease: "linear" }}
         >
           <DiceFace value={dice2} />
-        </motion.div>
+        </m.div>
       </div>
 
       {!isRolling && !hasRolled && (
@@ -131,13 +131,13 @@ export const DiceAnimation = ({
       )}
 
       {!isRolling && hasRolled && (
-        <motion.span 
+        <m.span 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className="absolute -bottom-10 text-2xl font-black text-cyan-400 drop-shadow-[0_0_15px_rgba(6,182,212,1)] bg-slate-950/80 px-4 py-1 rounded-lg border border-cyan-500/50"
         >
           {dice1 + dice2}
-        </motion.span>
+        </m.span>
       )}
     </button>
     </div>

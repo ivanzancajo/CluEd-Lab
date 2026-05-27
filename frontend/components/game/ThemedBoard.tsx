@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Crosshair } from 'lucide-react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import {
   BOARD_GRID_COLUMNS_PERCENT,
   BOARD_GRID_ROWS_PERCENT,
@@ -149,7 +149,7 @@ export function ThemedBoard({
         const teamMeta = getTeamMeta(team.color);
 
         return (
-          <motion.div
+          <m.div
             key={team.id}
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: team.opacity ?? 1 }}
@@ -173,7 +173,7 @@ export function ThemedBoard({
             ) : (
               <div className="size-[30%] rounded-full bg-white/45 backdrop-blur-sm" />
             )}
-          </motion.div>
+          </m.div>
         );
       })}
 

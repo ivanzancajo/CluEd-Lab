@@ -9,19 +9,16 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const [status, setStatus] = useState<'checking' | 'allowed' | 'denied'>('checking');
+  const [status, setStatus] = useState<'checking' | 'allowed' | 'denied'>(() =>
+    hasStoredAdminSession() ? 'checking' : 'denied'
+  );
 
   useEffect(() => {
+    if (!hasStoredAdminSession()) return;
+
     let cancelled = false;
 
     async function validateSession() {
-      if (!hasStoredAdminSession()) {
-        if (!cancelled) {
-          setStatus('denied');
-        }
-        return;
-      }
-
       try {
         await api.get('/auth/session');
         if (!cancelled) {

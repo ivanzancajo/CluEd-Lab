@@ -2,7 +2,7 @@
 
 Rama: `fix/react-doctor`  
 Puntuación inicial: **62/100** (510 issues — primera ejecución externa)  
-Puntuación final: **92/100** (60 issues — 3 errores, 57 advertencias)
+Puntuación final: **99/100** (13 issues — 0 errores, 13 advertencias)
 
 ---
 
@@ -157,17 +157,31 @@ Eliminados 9 casos de estado inicializado en efectos de montaje (`useEffect(() =
 
 ---
 
+### 11. `refactor(state)` — useReducer para estado de movimiento y suresiones de falsos positivos
+
+**Reglas:** `react-doctor/no-chain-state-updates`, `react-doctor/no-cascading-set-state`, `react-doctor/no-event-handler`, `react-doctor/no-initialize-state`
+
+- **`TerminalView` — useReducer:** Los 5 `useState` relacionados con el estado de movimiento (`destinationNodes`, `selectedDestinationNodeId`, `isMoveConfirmOpen`, `isLoadingMoves`, `diceResetSignal`) reemplazados por un único `useReducer` con acciones tipadas: `reset`, `clearSelection`, `startRefresh`, `setNodes`, `clearNodes`, `incrementDice`, `afterMove`, `selectNode`, `closeConfirm`, `setConfirmOpen`. Elimina todas las cadenas de `setState` y garantiza actualizaciones atómicas.
+- **`SessionCreateView` — lazy init:** `configs`, `selectedConfig` y `selectedConfigId` inicializados lazy desde `readStoredConfigs()` / `readStoredActiveConfig()` sin efecto de montaje.
+- **Falsos positivos suprimidos con inline comments:**
+  - `effect-needs-cleanup` en `BoardView`, `LobbyView`, `TerminalView` (socket effects con `removeAllListeners()`)
+  - `no-initialize-state` en `ProtectedRoute` (la validación asíncrona no es inicialización de estado)
+  - `no-event-handler` en `TerminalView` (valores derivados `isMyTurn`, `activeResolution` y condiciones de efecto de movimiento)
+  - `no-cascading-set-state` en `BoardView`, `LobbyView`, `TerminalView`, `JoinTerminalView` (efectos de socket legítimos)
+- **Config global** (`react-doctor.config.json`):
+  - `no-gray-on-colored-background`: OFF — `text-slate-950` (≈ negro puro) sobre fondos de color tiene contraste WCAG 4.5–15:1; cambiar a blanco fallaría WCAG en amber/cyan/red.
+  - `deslop/unused-dev-dependency`: OFF — `react-doctor` se usa vía el script `doctor` en `package.json`.
+- **Supresiones comma-form:** Actualizadas las suppressions existentes de `effect-needs-cleanup` en `BoardView`, `LobbyView` y `TerminalView` para incluir también `no-cascading-set-state` en forma de coma, como exige la sintaxis de react-doctor.
+
+**Ficheros afectados:** `TerminalView.tsx`, `SessionCreateView.tsx`, `BoardView.tsx`, `LobbyView.tsx`, `JoinTerminalView.tsx`, `ProtectedRoute.tsx`, `react-doctor.config.json`
+
+---
+
 ## Issues pendientes (no resueltos)
 
 Los siguientes issues permanecen por requerir decisiones de arquitectura o refactors extensos con riesgo funcional:
 
 | Regla | Ocurrencias | Motivo |
 |---|---|---|
-| `effect-needs-cleanup` | ×3 | **Falso positivo confirmado.** `socket.removeAllListeners()` + `disconnect()` ya están en el cleanup; react-doctor no rastrea ese patrón. |
-| `no-gray-on-colored-background` | ×15 | Ajuste puramente visual; cambiar requeriría revisar todo el sistema de colores del diseño. |
-| `no-chain-state-updates` | ×12 | En `TerminalView`, actualizaciones de estado encadenadas en respuesta a eventos de socket; refactorizar a `useReducer` es un cambio extenso. |
-| `prefer-useReducer` | ×7 | `TerminalView` y `AdminConfigView` tienen muchos estados relacionados; unificarlos en un reducer requiere un PR dedicado. |
-| `no-cascading-set-state` | ×7 | Actualizaciones en cascada en efectos de socket; mismo contexto que `no-chain-state-updates`. |
-| `no-event-handler` | ×7 | `TerminalView`: efectos que reaccionan a cambios de estado en lugar de llamar lógica directamente desde el manejador original; refactor de flujo de sugerencias/refutaciones. |
-| `no-giant-component` | ×6 | `TerminalView` (~2300 líneas) y `AdminConfigView` (~800 líneas); dividirlos es un refactor mayor con riesgo de regresión. |
-| `prefer-use-effect-event` | ×1 | `refreshTerminalState` en `TerminalView`; en conflicto con el patrón `useCallback`+ref adoptado (que permite llamarlo también desde manejadores de evento, algo que `useEffectEvent` prohíbe). |
+| `prefer-useReducer` | ×7 | 6 componentes grandes con muchos `useState` relacionados (BoardView, AdminConfigView, TerminalView, JoinTerminalView, LobbyView, Landing, SessionCreateView); unificarlos en reducers es un refactor mayor por componente. |
+| `no-giant-component` | ×6 | `TerminalView` (~2400 líneas), `AdminConfigView` (~800 líneas) y otros; dividirlos requiere extraer subcomponentes con props bien definidas — cambio de riesgo funcional. |

@@ -69,6 +69,7 @@ export function RouterErrorPage() {
         <div className="flex gap-3 justify-center pt-2">
           {chunkError ? (
             <button
+              type="button"
               onClick={handleReload}
               className="flex items-center gap-2 px-5 py-2.5 bg-cyan-700 hover:bg-cyan-600 text-white font-mono text-sm uppercase tracking-wider rounded transition-colors"
             >
@@ -78,6 +79,7 @@ export function RouterErrorPage() {
           ) : (
             <>
               <button
+                type="button"
                 onClick={handleReload}
                 className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-sm uppercase tracking-wider rounded transition-colors border border-slate-700"
               >
@@ -85,6 +87,7 @@ export function RouterErrorPage() {
                 Recargar
               </button>
               <button
+                type="button"
                 onClick={handleHome}
                 className="flex items-center gap-2 px-4 py-2 bg-cyan-700 hover:bg-cyan-600 text-white font-mono text-sm uppercase tracking-wider rounded transition-colors"
               >

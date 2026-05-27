@@ -295,7 +295,7 @@ export function SessionCreateView() {
       <Link to="/" className="absolute top-8 left-8 z-10 text-slate-500 hover:text-cyan-400 transition-colors p-2 rounded-md hover:bg-slate-800 flex items-center gap-2 text-sm font-bold tracking-widest uppercase">
         <ArrowLeft className="size-5" /> Volver
       </Link>
-      <button data-cy="session-create-logout-button" onClick={handleLogout} className="absolute top-8 right-8 z-10 text-red-300 hover:text-red-200 border border-red-900/60 hover:border-red-500 transition-colors px-4 py-2 rounded-md bg-slate-950/60 text-xs font-bold tracking-widest uppercase">
+      <button type="button" data-cy="session-create-logout-button" onClick={handleLogout} className="absolute top-8 right-8 z-10 text-red-300 hover:text-red-200 border border-red-900/60 hover:border-red-500 transition-colors px-4 py-2 rounded-md bg-slate-950/60 text-xs font-bold tracking-widest uppercase">
         Cerrar sesión
       </button>
 
@@ -318,7 +318,7 @@ export function SessionCreateView() {
             </div>
 
             <div className="space-y-3">
-              <h1 className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400 uppercase sm:text-5xl">
+              <h1 className="text-4xl font-black tracking-tighter text-cyan-300 uppercase sm:text-5xl">
                 Habilitar Partida
               </h1>
               <p className="mx-auto max-w-xl text-sm leading-7 text-slate-300 md:text-base">
@@ -397,6 +397,7 @@ export function SessionCreateView() {
             ) : null}
 
             <button
+              type="button"
               onClick={handleEnableGame}
               disabled={
                 !selectedConfig ||

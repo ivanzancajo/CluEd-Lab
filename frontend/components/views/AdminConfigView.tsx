@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -110,11 +111,7 @@ function buildItemErrorMap(
 }
 
 function areCollectionsEqual(left: SkinItem[], right: SkinItemPayload[]) {
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return left.every((item, index) => {
+  return left.length === right.length && left.every((item, index) => {
     const candidate = right[index];
     return (
       item.id === candidate.id &&
@@ -207,6 +204,208 @@ async function syncStoredConfigsFromRemote(summaries: SkinSummary[]) {
 
   storeConfigList(nextStoredConfigs);
 }
+
+type EditableItemListProps = {
+  items: EditableSkinItem[];
+  setItems: Dispatch<SetStateAction<EditableSkinItem[]>>;
+  icon: ReactNode;
+  type: string;
+  collectionKey: "subjects" | "objects" | "spaces";
+  minItems: number;
+  maxItems: number;
+  showMotif: boolean;
+  errorItems: Map<string, ("name" | "motif")[]>;
+  fieldsDisabled: boolean;
+};
+
+const EditableItemList = memo(function EditableItemList({
+  items,
+  setItems,
+  icon,
+  type,
+  collectionKey,
+  minItems,
+  maxItems,
+  showMotif,
+  errorItems,
+  fieldsDisabled,
+}: EditableItemListProps) {
+  const updateItem = (localId: string, updater: (item: EditableSkinItem) => EditableSkinItem) => {
+    setItems((currentItems) => currentItems.map((item) => (item.localId === localId ? updater(item) : item)));
+  };
+
+  const removeItem = (localId: string) => {
+    setItems((currentItems) => currentItems.filter((item) => item.localId !== localId));
+  };
+
+  const addItem = () => {
+    if (items.length >= maxItems || fieldsDisabled) {
+      return;
+    }
+
+    setItems((currentItems) => [
+      ...currentItems,
+      {
+        localId: createLocalItemId(),
+        name: "",
+        desc: "",
+        imageUrl: "",
+        ...(showMotif ? { motif: "" } : {}),
+      },
+    ]);
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-300">
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-cyan-300">
+          {type}s configurados: {items.length}/{minItems === maxItems ? maxItems : `${minItems}-${maxItems}`}
+        </div>
+        {showMotif ? (
+          <p>Cuando los motivos están habilitados, la tabla de razonamiento mostrará el motivo en lugar del nombre del espacio.</p>
+        ) : minItems === maxItems ? (
+          <p>Edita los elementos de esta terna y completa exactamente {maxItems} para poder guardar la skin.</p>
+        ) : (
+          <p>Edita los elementos de esta terna y completa entre {minItems} y {maxItems} para poder guardar la skin.</p>
+        )}
+      </div>
+
+      {items.map((item, index) => (
+        <div
+          key={item.localId}
+          data-cy={`admin-config-${collectionKey}-item`}
+          className="group relative flex gap-4 rounded-lg border border-slate-800 bg-slate-900 p-4 transition-colors hover:border-cyan-800"
+        >
+          <div className="relative flex size-20 flex-shrink-0 items-center justify-center overflow-hidden rounded border border-slate-700 bg-slate-950">
+            {item.imageUrl ? (
+              <img src={item.imageUrl} alt={item.name || `${type} ${index + 1}`} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex flex-col items-center gap-1 text-slate-700">
+                {icon}
+                <span className="text-[8px] uppercase">Sin Imagen</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-1 flex-col gap-3">
+            <div className="flex items-center gap-2 text-cyan-500">
+              {icon}
+              <span className="text-xs font-bold uppercase">{type} {index + 1}</span>
+              <button
+                type="button"
+                onClick={() => removeItem(item.localId)}
+                disabled={fieldsDisabled}
+                data-cy={`admin-config-${collectionKey}-remove-button`}
+                className="ml-auto text-xs font-bold uppercase tracking-widest text-slate-600 hover:text-red-500 disabled:text-slate-700"
+              >
+                Remover
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                type="text"
+                aria-label={`Nombre del ${type.toLowerCase()}`}
+                value={item.name}
+                disabled={fieldsDisabled}
+                data-cy={`admin-config-${collectionKey}-name-input`}
+                onChange={(event) => updateItem(item.localId, (currentItem) => ({ ...currentItem, name: event.target.value }))}
+                className={`w-full rounded border bg-slate-950 p-3 font-bold text-cyan-100 outline-none disabled:opacity-60 ${
+                  errorItems.get(item.localId)?.includes("name")
+                    ? "border-red-500 ring-1 ring-red-500"
+                    : "border-slate-700 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500"
+                }`}
+                placeholder={`Nombre del ${type.toLowerCase()}...`}
+              />
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  aria-label={`URL de imagen del ${type.toLowerCase()}`}
+                  value={item.imageUrl ?? ""}
+                  disabled={fieldsDisabled}
+                  data-cy={`admin-config-${collectionKey}-image-input`}
+                  onChange={(event) => updateItem(item.localId, (currentItem) => ({ ...currentItem, imageUrl: event.target.value }))}
+                  className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 p-3 font-mono text-xs text-cyan-100 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
+                  placeholder="URL de imagen..."
+                />
+                <label
+                  className={`flex items-center justify-center rounded border px-3 ${
+                    fieldsDisabled
+                      ? "cursor-not-allowed border-slate-800 bg-slate-900 text-slate-600"
+                      : "cursor-pointer border-slate-700 bg-slate-800 text-slate-400 hover:border-cyan-500 hover:bg-cyan-900 hover:text-cyan-400"
+                  }`}
+                  title="Subir imagen local"
+                >
+                  <Upload className="size-4" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={fieldsDisabled}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) {
+                        return;
+                      }
+
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        updateItem(item.localId, (currentItem) => ({
+                          ...currentItem,
+                          imageUrl: typeof reader.result === "string" ? reader.result : "",
+                        }));
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {showMotif ? (
+              <input
+                type="text"
+                aria-label="Motivo del espacio"
+                value={item.motif ?? ""}
+                disabled={fieldsDisabled}
+                data-cy={`admin-config-${collectionKey}-motif-input`}
+                onChange={(event) => updateItem(item.localId, (currentItem) => ({ ...currentItem, motif: event.target.value }))}
+                className={`w-full rounded border bg-slate-950 p-3 text-xs outline-none disabled:opacity-60 ${
+                  errorItems.get(item.localId)?.includes("motif")
+                    ? "border-red-500 ring-1 ring-red-500 text-red-200"
+                    : "border-purple-900/50 text-purple-200 focus:border-purple-400 focus:ring-1 focus:ring-purple-500"
+                }`}
+                placeholder="Motivo asociado a este espacio..."
+              />
+            ) : null}
+
+            <textarea
+              aria-label={`Descripción del ${type.toLowerCase()}`}
+              value={item.desc}
+              disabled={fieldsDisabled}
+              data-cy={`admin-config-${collectionKey}-desc-input`}
+              onChange={(event) => updateItem(item.localId, (currentItem) => ({ ...currentItem, desc: event.target.value }))}
+              rows={3}
+              className="w-full resize-none rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
+              placeholder="Descripción o pista..."
+            ></textarea>
+          </div>
+        </div>
+      ))}
+
+      <button
+        type="button"
+        onClick={addItem}
+        disabled={fieldsDisabled || items.length >= maxItems}
+        data-cy={`admin-config-${collectionKey}-add-button`}
+        className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-slate-700 p-4 text-xs font-bold uppercase tracking-widest text-slate-500 transition-all hover:border-cyan-500 hover:bg-slate-900/50 hover:text-cyan-400 disabled:border-slate-800 disabled:bg-transparent disabled:text-slate-700"
+      >
+        <Plus className="size-4" /> Añadir {type}
+      </button>
+    </div>
+  );
+});
 
 export function AdminConfigView() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("list");
@@ -500,188 +699,6 @@ export function AdminConfigView() {
     window.location.assign("/");
   };
 
-  const renderEditableItemList = (
-    items: EditableSkinItem[],
-    setItems: Dispatch<SetStateAction<EditableSkinItem[]>>,
-    icon: ReactNode,
-    type: string,
-    collectionKey: "subjects" | "objects" | "spaces",
-    minItems: number,
-    maxItems: number,
-    showMotif: boolean,
-    errorItems: Map<string, ("name" | "motif")[]>
-  ) => {
-    const updateItem = (localId: string, updater: (item: EditableSkinItem) => EditableSkinItem) => {
-      setItems((currentItems) => currentItems.map((item) => (item.localId === localId ? updater(item) : item)));
-    };
-
-    const removeItem = (localId: string) => {
-      setItems((currentItems) => currentItems.filter((item) => item.localId !== localId));
-    };
-
-    const addItem = () => {
-      if (items.length >= maxItems || fieldsDisabled) {
-        return;
-      }
-
-      setItems((currentItems) => [
-        ...currentItems,
-        {
-          localId: createLocalItemId(),
-          name: "",
-          desc: "",
-          imageUrl: "",
-          ...(showMotif ? { motif: "" } : {}),
-        },
-      ]);
-    };
-
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-300">
-          <div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-cyan-300">
-            {type}s configurados: {items.length}/{minItems === maxItems ? maxItems : `${minItems}-${maxItems}`}
-          </div>
-          {showMotif ? (
-            <p>Cuando los motivos están habilitados, la tabla de razonamiento mostrará el motivo en lugar del nombre del espacio.</p>
-          ) : minItems === maxItems ? (
-            <p>Edita los elementos de esta terna y completa exactamente {maxItems} para poder guardar la skin.</p>
-          ) : (
-            <p>Edita los elementos de esta terna y completa entre {minItems} y {maxItems} para poder guardar la skin.</p>
-          )}
-        </div>
-
-        {items.map((item, index) => (
-          <div
-            key={item.localId}
-            data-cy={`admin-config-${collectionKey}-item`}
-            className="group relative flex gap-4 rounded-lg border border-slate-800 bg-slate-900 p-4 transition-colors hover:border-cyan-800"
-          >
-            <div className="relative flex size-20 flex-shrink-0 items-center justify-center overflow-hidden rounded border border-slate-700 bg-slate-950">
-              {item.imageUrl ? (
-                <img src={item.imageUrl} alt={item.name || `${type} ${index + 1}`} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex flex-col items-center gap-1 text-slate-700">
-                  {icon}
-                  <span className="text-[8px] uppercase">Sin Imagen</span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-1 flex-col gap-3">
-              <div className="flex items-center gap-2 text-cyan-500">
-                {icon}
-                <span className="text-xs font-bold uppercase">{type} {index + 1}</span>
-                <button
-                  onClick={() => removeItem(item.localId)}
-                  disabled={fieldsDisabled}
-                  data-cy={`admin-config-${collectionKey}-remove-button`}
-                  className="ml-auto text-xs font-bold uppercase tracking-widest text-slate-600 hover:text-red-500 disabled:text-slate-700"
-                >
-                  Remover
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  value={item.name}
-                  disabled={fieldsDisabled}
-                  data-cy={`admin-config-${collectionKey}-name-input`}
-                  onChange={(event) => updateItem(item.localId, (currentItem) => ({ ...currentItem, name: event.target.value }))}
-                  className={`w-full rounded border bg-slate-950 p-3 font-bold text-cyan-100 outline-none disabled:opacity-60 ${
-                    errorItems.get(item.localId)?.includes("name")
-                      ? "border-red-500 ring-1 ring-red-500"
-                      : "border-slate-700 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500"
-                  }`}
-                  placeholder={`Nombre del ${type.toLowerCase()}...`}
-                />
-
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={item.imageUrl ?? ""}
-                    disabled={fieldsDisabled}
-                    data-cy={`admin-config-${collectionKey}-image-input`}
-                    onChange={(event) => updateItem(item.localId, (currentItem) => ({ ...currentItem, imageUrl: event.target.value }))}
-                    className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 p-3 font-mono text-xs text-cyan-100 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
-                    placeholder="URL de imagen..."
-                  />
-                  <label
-                    className={`flex items-center justify-center rounded border px-3 ${
-                      fieldsDisabled
-                        ? "cursor-not-allowed border-slate-800 bg-slate-900 text-slate-600"
-                        : "cursor-pointer border-slate-700 bg-slate-800 text-slate-400 hover:border-cyan-500 hover:bg-cyan-900 hover:text-cyan-400"
-                    }`}
-                    title="Subir imagen local"
-                  >
-                    <Upload className="size-4" />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      disabled={fieldsDisabled}
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (!file) {
-                          return;
-                        }
-
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          updateItem(item.localId, (currentItem) => ({
-                            ...currentItem,
-                            imageUrl: typeof reader.result === "string" ? reader.result : "",
-                          }));
-                        };
-                        reader.readAsDataURL(file);
-                      }}
-                    />
-                  </label>
-                </div>
-              </div>
-
-              {showMotif ? (
-                <input
-                  type="text"
-                  value={item.motif ?? ""}
-                  disabled={fieldsDisabled}
-                  data-cy={`admin-config-${collectionKey}-motif-input`}
-                  onChange={(event) => updateItem(item.localId, (currentItem) => ({ ...currentItem, motif: event.target.value }))}
-                  className={`w-full rounded border bg-slate-950 p-3 text-xs outline-none disabled:opacity-60 ${
-                    errorItems.get(item.localId)?.includes("motif")
-                      ? "border-red-500 ring-1 ring-red-500 text-red-200"
-                      : "border-purple-900/50 text-purple-200 focus:border-purple-400 focus:ring-1 focus:ring-purple-500"
-                  }`}
-                  placeholder="Motivo asociado a este espacio..."
-                />
-              ) : null}
-
-              <textarea
-                value={item.desc}
-                disabled={fieldsDisabled}
-                data-cy={`admin-config-${collectionKey}-desc-input`}
-                onChange={(event) => updateItem(item.localId, (currentItem) => ({ ...currentItem, desc: event.target.value }))}
-                rows={3}
-                className="w-full resize-none rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
-                placeholder="Descripción o pista..."
-              ></textarea>
-            </div>
-          </div>
-        ))}
-
-        <button
-          onClick={addItem}
-          disabled={fieldsDisabled || items.length >= maxItems}
-          data-cy={`admin-config-${collectionKey}-add-button`}
-          className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-slate-700 p-4 text-xs font-bold uppercase tracking-widest text-slate-500 transition-all hover:border-cyan-500 hover:bg-slate-900/50 hover:text-cyan-400 disabled:border-slate-800 disabled:bg-transparent disabled:text-slate-700"
-        >
-          <Plus className="size-4" /> Añadir {type}
-        </button>
-      </div>
-    );
-  };
-
   return (
     <div className="flex min-h-screen w-full overflow-hidden bg-[#020617] font-mono text-cyan-400">
       <div className="sticky top-0 z-20 flex h-screen w-[320px] flex-col border-r border-cyan-800/50 bg-slate-900/40">
@@ -696,6 +713,7 @@ export function AdminConfigView() {
           </div>
 
           <button
+            type="button"
             onClick={handleLogout}
             data-cy="admin-config-logout-button"
             className="ml-auto rounded-md border border-red-900/60 bg-slate-950/70 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-red-300 transition-colors hover:border-red-500 hover:text-red-200"
@@ -706,6 +724,7 @@ export function AdminConfigView() {
 
         <nav className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
           <button
+            type="button"
             onClick={() => setActiveTab("list")}
             data-cy="admin-config-tab-list"
             className={`flex items-center gap-3 rounded-lg border p-4 text-xs font-bold uppercase tracking-widest transition-all ${
@@ -722,6 +741,7 @@ export function AdminConfigView() {
               <div className="my-2 border-t border-slate-800"></div>
 
               <button
+                type="button"
                 onClick={() => setActiveTab("general")}
                 data-cy="admin-config-tab-general"
                 className={`flex items-center gap-3 rounded-lg border p-4 text-xs font-bold uppercase tracking-widest transition-all ${
@@ -734,6 +754,7 @@ export function AdminConfigView() {
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab("sujetos")}
                 data-cy="admin-config-tab-subjects"
                 className={`flex items-center gap-3 rounded-lg border p-4 text-xs font-bold uppercase tracking-widest transition-all ${
@@ -746,6 +767,7 @@ export function AdminConfigView() {
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab("objetos")}
                 data-cy="admin-config-tab-objects"
                 className={`flex items-center gap-3 rounded-lg border p-4 text-xs font-bold uppercase tracking-widest transition-all ${
@@ -758,6 +780,7 @@ export function AdminConfigView() {
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab("espacios")}
                 data-cy="admin-config-tab-spaces"
                 className={`flex items-center gap-3 rounded-lg border p-4 text-xs font-bold uppercase tracking-widest transition-all ${
@@ -774,6 +797,7 @@ export function AdminConfigView() {
 
         <div className="border-t border-cyan-800/50 bg-slate-900/80 p-6">
           <button
+            type="button"
             onClick={handleSaveConfig}
             disabled={!canSave}
             data-cy="admin-config-save-button"
@@ -868,6 +892,7 @@ export function AdminConfigView() {
                 </div>
 
                 <button
+                  type="button"
                   onClick={createNewConfig}
                   disabled={isBusy}
                   data-cy="admin-config-create-button"
@@ -881,7 +906,7 @@ export function AdminConfigView() {
                 <div data-cy="admin-config-empty-state" className="flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-slate-800 p-12 text-slate-500">
                   <List className="size-12 opacity-50" />
                   <p>No hay configuraciones remotas guardadas.</p>
-                  <button data-cy="admin-config-empty-create-button" onClick={createNewConfig} className="text-indigo-400 hover:underline">
+                  <button type="button" data-cy="admin-config-empty-create-button" onClick={createNewConfig} className="text-indigo-400 hover:underline">
                     Comienza creando una aquí
                   </button>
                 </div>
@@ -892,7 +917,10 @@ export function AdminConfigView() {
                   {configs.map((config) => (
                     <div
                       key={config.id}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => void loadConfig(config.id)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void loadConfig(config.id); }}
                       data-cy="admin-config-card"
                       className={`group relative rounded-xl border border-slate-700 bg-slate-900/60 p-6 transition-all ${
                         isBusy ? "cursor-wait opacity-70" : "cursor-pointer hover:border-indigo-500"
@@ -903,6 +931,7 @@ export function AdminConfigView() {
                           {config.name}
                         </h3>
                         <button
+                          type="button"
                           onClick={(event) => void deleteConfig(config.id, event)}
                           disabled={isBusy}
                           data-cy="admin-config-card-delete-button"
@@ -952,6 +981,7 @@ export function AdminConfigView() {
                   </label>
                   <input
                     type="text"
+                    aria-label="Nombre de la cluedoskin"
                     value={configName}
                     disabled={fieldsDisabled}
                     data-cy="admin-config-name-input"
@@ -967,6 +997,7 @@ export function AdminConfigView() {
                   </label>
                   <input
                     type="text"
+                    aria-label="Título de la partida pública"
                     value={gameTitle}
                     disabled={fieldsDisabled}
                     data-cy="admin-config-game-title-input"
@@ -983,6 +1014,7 @@ export function AdminConfigView() {
                   <div className="flex gap-4">
                     <input
                       type="text"
+                      aria-label="URL de la imagen central del mapa"
                       value={centerImage}
                       disabled={fieldsDisabled}
                       data-cy="admin-config-center-image-input"
@@ -1013,6 +1045,7 @@ export function AdminConfigView() {
                       <span className="mb-1 block text-[9px] uppercase text-slate-500">Terna 1</span>
                       <input
                         type="text"
+                        aria-label="Nombre de la primera categoría (Terna 1)"
                         value={cat1Name}
                         disabled={fieldsDisabled}
                         data-cy="admin-config-cat1-input"
@@ -1025,6 +1058,7 @@ export function AdminConfigView() {
                       <span className="mb-1 block text-[9px] uppercase text-slate-500">Terna 2</span>
                       <input
                         type="text"
+                        aria-label="Nombre de la segunda categoría (Terna 2)"
                         value={cat2Name}
                         disabled={fieldsDisabled}
                         data-cy="admin-config-cat2-input"
@@ -1037,6 +1071,7 @@ export function AdminConfigView() {
                       <span className="mb-1 block text-[9px] uppercase text-slate-500">Terna 3</span>
                       <input
                         type="text"
+                        aria-label="Nombre de la tercera categoría (Terna 3)"
                         value={cat3Name}
                         disabled={fieldsDisabled}
                         data-cy="admin-config-cat3-input"
@@ -1068,6 +1103,7 @@ export function AdminConfigView() {
                   </label>
                   <input
                     type="number"
+                    aria-label="Duración estimada en minutos"
                     value={duration}
                     disabled={fieldsDisabled}
                     data-cy="admin-config-duration-input"
@@ -1081,6 +1117,7 @@ export function AdminConfigView() {
                     <Target className="size-4" /> Objetivo de Evaluación
                   </label>
                   <textarea
+                    aria-label="Objetivo de evaluación"
                     value={objective}
                     disabled={fieldsDisabled}
                     data-cy="admin-config-objective-input"
@@ -1108,7 +1145,7 @@ export function AdminConfigView() {
                 <p className="text-sm text-slate-400">Define entre {COLLECTION_CONSTRAINTS.subjects.min} y {COLLECTION_CONSTRAINTS.subjects.max} sujetos para la skin.</p>
               </div>
 
-              {renderEditableItemList(subjects, setSubjects, <User className="size-4" />, "Sujeto", "subjects", COLLECTION_CONSTRAINTS.subjects.min, COLLECTION_CONSTRAINTS.subjects.max, false, itemErrors.subjects)}
+              <EditableItemList items={subjects} setItems={setSubjects} icon={<User className="size-4" />} type="Sujeto" collectionKey="subjects" minItems={COLLECTION_CONSTRAINTS.subjects.min} maxItems={COLLECTION_CONSTRAINTS.subjects.max} showMotif={false} errorItems={itemErrors.subjects} fieldsDisabled={fieldsDisabled} />
             </motion.div>
           ) : null}
 
@@ -1127,7 +1164,7 @@ export function AdminConfigView() {
                 <p className="text-sm text-slate-400">Define entre {COLLECTION_CONSTRAINTS.objects.min} y {COLLECTION_CONSTRAINTS.objects.max} objetos para la skin.</p>
               </div>
 
-              {renderEditableItemList(objects, setObjects, <Box className="size-4" />, "Objeto", "objects", COLLECTION_CONSTRAINTS.objects.min, COLLECTION_CONSTRAINTS.objects.max, false, itemErrors.objects)}
+              <EditableItemList items={objects} setItems={setObjects} icon={<Box className="size-4" />} type="Objeto" collectionKey="objects" minItems={COLLECTION_CONSTRAINTS.objects.min} maxItems={COLLECTION_CONSTRAINTS.objects.max} showMotif={false} errorItems={itemErrors.objects} fieldsDisabled={fieldsDisabled} />
             </motion.div>
           ) : null}
 
@@ -1148,7 +1185,7 @@ export function AdminConfigView() {
                 </p>
               </div>
 
-              {renderEditableItemList(spaces, setSpaces, <MapPin className="size-4" />, cat3Name, "spaces", COLLECTION_CONSTRAINTS.spaces.min, COLLECTION_CONSTRAINTS.spaces.max, hasMotifs, itemErrors.spaces)}
+              <EditableItemList items={spaces} setItems={setSpaces} icon={<MapPin className="size-4" />} type={cat3Name} collectionKey="spaces" minItems={COLLECTION_CONSTRAINTS.spaces.min} maxItems={COLLECTION_CONSTRAINTS.spaces.max} showMotif={hasMotifs} errorItems={itemErrors.spaces} fieldsDisabled={fieldsDisabled} />
             </motion.div>
           ) : null}
         </AnimatePresence>

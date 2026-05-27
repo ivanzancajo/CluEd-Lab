@@ -220,6 +220,12 @@ function buildSuggestionSentence(suggestion: SuggestionSummary) {
   return `${suggestion.subject.name} con ${suggestion.object.name} en ${suggestion.space.name}`;
 }
 
+function CellIcon({ state }: { state: number }) {
+  if (state === 1) return <HelpCircle className="size-4 text-orange-500" />;
+  if (state === 2) return <X className="size-4 text-red-500" />;
+  return null;
+}
+
 export function TerminalView() {
   const navigate = useNavigate();
   const lobbySocketRef = React.useRef<LobbySocketClient | null>(null);
@@ -229,7 +235,7 @@ export function TerminalView() {
   const [boardTheme, setBoardTheme] = useState<StoredBoardTheme | null>(() => readStoredBoardTheme());
   const [boardTeams, setBoardTeams] = useState<LobbySession["teams"]>([]);
   const [teamName, setTeamName] = useState(getStoredTeamName() || "Equipo sin asignar");
-  const [teamColor, setTeamColor] = useState<TeamColor | null>(getStoredTeamColor());
+  const [teamColor, setTeamColor] = useState<TeamColor | null>(() => getStoredTeamColor());
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>(getStoredSessionStatus() ?? "LOBBY");
   const [lobbyConnectionStatus, setLobbyConnectionStatus] = useState<"connecting" | "connected" | "disconnected" | "error">("connecting");
   const [lobbyError, setLobbyError] = useState<string | null>(null);
@@ -258,7 +264,7 @@ export function TerminalView() {
   const [selectedSubjectId, setSelectedSubjectId] = useState("");
   const [selectedObjectId, setSelectedObjectId] = useState("");
   const [selectedSpaceId, setSelectedSpaceId] = useState("");
-  const [selectedRefuteCardId, setSelectedRefuteCardId] = useState("");
+  const [manualRefuteCardId, setSelectedRefuteCardId] = useState("");
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [suggestionNotice, setSuggestionNotice] = useState<string | null>(null);
   const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
@@ -894,7 +900,7 @@ export function TerminalView() {
     return () => {
       active = false;
     };
-  }, [sessionStatus]);
+  }, [sessionStatus, refreshTerminalState]);
 
   React.useEffect(() => {
     const sessionId = getStoredSessionId();
@@ -1129,23 +1135,8 @@ export function TerminalView() {
       return;
     }
     void refreshMoveState();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSuggestion, isMyTurn, isResolutionBlockingGameplay, pendingSuggestion, sessionStatus, sessionTurn?.currentTeamId]);
+  }, [activeSuggestion, isMyTurn, isResolutionBlockingGameplay, pendingSuggestion, refreshMoveState, sessionStatus, sessionTurn?.currentTeamId]);
 
-  React.useEffect(() => {
-    if (pendingSuggestion?.type === "REFUTE_REQUEST") {
-      setSelectedRefuteCardId((currentValue) => {
-        if (pendingSuggestion.matchingCards.some((card) => card.id === currentValue)) {
-          return currentValue;
-        }
-
-        return pendingSuggestion.matchingCards[0]?.id ?? "";
-      });
-      return;
-    }
-
-    setSelectedRefuteCardId("");
-  }, [pendingSuggestion]);
 
   React.useEffect(() => {
     if (selectedSubjectId && !categories.c1.some((item) => item.id === selectedSubjectId)) {
@@ -1194,12 +1185,6 @@ export function TerminalView() {
     setMatrix(prev => ({ ...prev, [key]: next }));
   };
 
-  const renderCellIcon = (state: number) => {
-    if (state === 1) return <HelpCircle className="size-4 text-orange-500" />;
-    if (state === 2) return <X className="size-4 text-red-500" />;
-    return null;
-  };
-
   const boardSpaces = mapBoardSpaces(boardTheme);
   const storedTeamIdForPawns = getStoredTeamId();
   const boardPawns = boardTeams.reduce<{ id: string; color: string; positionX: number; positionY: number; opacity: number; isCurrent: boolean }[]>((acc, team) => {
@@ -1246,6 +1231,12 @@ export function TerminalView() {
   const selectedObject = categories.c2.find((item) => item.id === selectedObjectId) ?? null;
   const refuteRequest = pendingSuggestion?.type === "REFUTE_REQUEST" ? pendingSuggestion : null;
   const awaitingRefutation = pendingSuggestion?.type === "AWAITING_REFUTATION" ? pendingSuggestion : null;
+  // Compute effective refute card id: use manual selection if still valid, otherwise default to first matching card
+  const selectedRefuteCardId = refuteRequest
+    ? (refuteRequest.matchingCards.some((card) => card.id === manualRefuteCardId)
+        ? manualRefuteCardId
+        : refuteRequest.matchingCards[0]?.id ?? "")
+    : "";
   const selectedRefuteCard = refuteRequest?.matchingCards.find((card) => card.id === selectedRefuteCardId) ?? null;
   const canUseRealtimeSuggestion = lobbyConnectionStatus === "connected" && Boolean(lobbySocketRef.current);
   const canComposeSuggestion =
@@ -1664,7 +1655,7 @@ export function TerminalView() {
                            onChange={(e) => setForcedDiceValue(e.target.value ? Number(e.target.value) : undefined)}
                            className="rounded border border-amber-700/40 bg-slate-950/90 font-mono text-[11px] text-amber-200 px-1.5 py-0.5"
                          >
-                           <option value="">— elige valor —</option>
+                           <option value="">elige valor</option>
                            {Array.from({ length: 11 }, (_, i) => i + 2).map((v) => (
                              <option key={v} value={v}>{v}</option>
                            ))}
@@ -1699,8 +1690,11 @@ export function TerminalView() {
                    {sessionStatus === "EN_CURSO" ? (
                      <div
                        data-cy="terminal-board-surface"
+                       role="button"
+                       tabIndex={0}
                        className="absolute inset-0 z-20 cursor-crosshair"
                        onClick={handleBoardSurfaceClick}
+                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") (e.target as HTMLElement).click(); }}
                      />
                    ) : null}
 
@@ -1717,9 +1711,9 @@ export function TerminalView() {
                      >
                        <div className="scale-[0.28] sm:scale-[0.34] md:scale-[0.42] origin-center">
                          <DiceAnimation
+                           key={diceResetSignal}
                            dataCy="terminal-dice-roll"
                            disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || isResolutionBlockingGameplay || sessionTurn?.dice !== null || isLoadingMoves || isMovingPawn}
-                           resetSignal={diceResetSignal}
                            onRollRequest={handleDiceRoll}
                          />
                        </div>
@@ -1915,7 +1909,10 @@ export function TerminalView() {
                       <div
                         data-cy="terminal-hand-card"
                         key={card.id}
+                        role="button"
+                        tabIndex={0}
                         onClick={() => { setSelectedCard(card); setCardFlipped(false); }}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setSelectedCard(card); setCardFlipped(false); } }}
                         className={`w-36 flex-shrink-0 aspect-[2.5/3.5] rounded-lg border-2 ${card.color} ${card.bg} flex flex-col items-center justify-start cursor-pointer snap-center hover:brightness-110 transition-all shadow-lg relative overflow-hidden`}
                       >
                         <div className="w-full h-1/2 relative overflow-hidden border-b border-slate-800">
@@ -2026,13 +2023,14 @@ export function TerminalView() {
                               const state = matrix[`${rowName}-${team}`] || 0;
                               return (
                                 <button
+                                  type="button"
                                   key={team}
                                   onClick={() => handleCellClick(rowName, team)}
                                   className={`size-10 flex-shrink-0 border-r border-slate-800 flex items-center justify-center transition-colors ${
                                     state === 2 ? 'bg-red-950/20' : state === 1 ? 'bg-orange-950/10' : 'bg-transparent'
                                   }`}
                                 >
-                                  {renderCellIcon(state)}
+                                  <CellIcon state={state} />
                                 </button>
                               )
                             })}
@@ -2599,6 +2597,7 @@ export function TerminalView() {
           { id: "suggest", icon: MessageSquare, label: "SUGERIR/ACUSAR" }
         ].map(tab => (
           <button
+            type="button"
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all ${

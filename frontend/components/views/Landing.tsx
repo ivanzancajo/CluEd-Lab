@@ -81,7 +81,7 @@ export function Landing() {
         <div className="p-4 bg-cyan-950/30 border border-cyan-800 rounded-full shadow-[0_0_30px_rgba(6,182,212,0.15)]">
           <Fingerprint className="size-16 text-cyan-400" />
         </div>
-        <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400 drop-shadow-[0_0_15px_rgba(45,212,191,0.5)] uppercase break-words px-4">
+        <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-cyan-300 drop-shadow-[0_0_15px_rgba(45,212,191,0.5)] uppercase break-words px-4">
           {gameTitle}
         </h1>
         <p className="max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
@@ -91,7 +91,7 @@ export function Landing() {
 
       <div className="relative z-10 mt-6 grid w-full max-w-6xl grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
         {/* Botones protegidos: Usamos onClick en lugar de Link directo */}
-        <button data-cy="landing-admin-config-button" onClick={(e) => handleAdminAccess(e, '/config')} className="group relative flex min-h-[260px] flex-col items-start justify-between overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/55 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:border-purple-500 hover:bg-slate-800/85 hover:shadow-[0_0_40px_-10px_rgba(168,85,247,0.3)]">
+        <button type="button" data-cy="landing-admin-config-button" onClick={(e) => handleAdminAccess(e, '/config')} className="group relative flex min-h-[260px] flex-col items-start justify-between overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/55 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:border-purple-500 hover:bg-slate-800/85 hover:shadow-[0_0_40px_-10px_rgba(168,85,247,0.3)]">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-purple-400/70 to-transparent opacity-0 transition-opacity group-hover:opacity-100"></div>
           <div className="rounded-2xl border border-purple-900/50 bg-purple-950/20 p-4">
             <Settings className="size-10 text-slate-500 group-hover:text-purple-400 transition-colors" />
@@ -103,7 +103,7 @@ export function Landing() {
           </div>
         </button>
 
-        <button data-cy="landing-admin-create-session-button" onClick={(e) => handleAdminAccess(e, '/host')} className="group relative flex min-h-[260px] flex-col items-start justify-between overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/55 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:border-yellow-500 hover:bg-slate-800/85 hover:shadow-[0_0_40px_-10px_rgba(234,179,8,0.3)]">
+        <button type="button" data-cy="landing-admin-create-session-button" onClick={(e) => handleAdminAccess(e, '/host')} className="group relative flex min-h-[260px] flex-col items-start justify-between overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/55 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:border-yellow-500 hover:bg-slate-800/85 hover:shadow-[0_0_40px_-10px_rgba(234,179,8,0.3)]">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent opacity-0 transition-opacity group-hover:opacity-100"></div>
           <div className="rounded-2xl border border-yellow-900/50 bg-yellow-950/15 p-4">
             <Zap className="size-10 text-slate-500 group-hover:text-yellow-400 transition-colors" />
@@ -115,7 +115,7 @@ export function Landing() {
           </div>
         </button>
 
-        <button onClick={(e) => handleAdminAccess(e, '/lobby')} className="group relative flex min-h-[260px] flex-col items-start justify-between overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/55 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:border-cyan-500 hover:bg-slate-800/85 hover:shadow-[0_0_40px_-10px_rgba(6,182,212,0.3)]">
+        <button type="button" onClick={(e) => handleAdminAccess(e, '/lobby')} className="group relative flex min-h-[260px] flex-col items-start justify-between overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/55 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:border-cyan-500 hover:bg-slate-800/85 hover:shadow-[0_0_40px_-10px_rgba(6,182,212,0.3)]">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/70 to-transparent opacity-0 transition-opacity group-hover:opacity-100"></div>
           <div className="rounded-2xl border border-cyan-900/50 bg-cyan-950/20 p-4">
             <Monitor className="size-10 text-slate-500 group-hover:text-cyan-400 transition-colors" />
@@ -160,7 +160,8 @@ export function Landing() {
               exit={{ scale: 0.9, y: 20 }}
               className="bg-slate-900 border border-cyan-800 rounded-2xl p-8 max-w-md w-full relative shadow-[0_0_50px_rgba(6,182,212,0.2)]"
             >
-              <button 
+              <button
+                type="button"
                 onClick={() => setShowLogin(false)}
                 className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
               >

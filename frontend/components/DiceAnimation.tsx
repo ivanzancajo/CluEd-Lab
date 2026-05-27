@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 
 type DiceRollResult = {
@@ -58,22 +58,15 @@ export const DiceAnimation = ({
   onRollRequest,
   disabled = false,
   dataCy,
-  resetSignal = 0,
 }: {
   onRollRequest: (forcedTotal?: number) => Promise<DiceRollResult>;
   disabled?: boolean;
   dataCy?: string;
-  resetSignal?: number;
 }) => {
   const [dice1, setDice1] = useState(1);
   const [dice2, setDice2] = useState(1);
   const [isRolling, setIsRolling] = useState(false);
   const [hasRolled, setHasRolled] = useState(false);
-
-  useEffect(() => {
-    // Mantener el último resultado visible entre actualizaciones de turno.
-    setIsRolling(false);
-  }, [resetSignal]);
 
   const startRoll = () => {
     if (isRolling || disabled) return;
@@ -109,6 +102,7 @@ export const DiceAnimation = ({
   return (
     <div className="flex flex-col items-center gap-2">
     <button
+      type="button"
       data-cy={dataCy}
       onClick={startRoll}
       disabled={isRolling || disabled}

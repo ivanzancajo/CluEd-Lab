@@ -1,10 +1,11 @@
-import { ColorEquipo, EstadoPartida } from '@prisma/client';
+import { ColorEquipo, EstadoPartida, TipoEvento } from '@prisma/client';
 import { HttpError } from './http.js';
 import { prisma } from './prisma.js';
 import {
   BOARD_MOVEMENT_CONNECTIONS,
   BOARD_MOVEMENT_NODES,
   BOARD_MOVEMENT_POSITION_TOLERANCE,
+  getBoardRoomSpaceSlotIndex,
   findBoardMovementNodeByPosition,
   getRoomEntryNodeByDoorNodeId,
   getSecretPassageDestinationNodeByRoomNodeId,
@@ -15,6 +16,7 @@ import {
   ensureCurrentTurnBelongsToTeam,
   ensureTeamCanTakeTurn,
   ensureTurnHasNoActiveDice,
+  ensureTurnHasNotMoved,
   getActiveDice,
   getActiveDiceRemainingMoves,
   rollTurnDice,
@@ -22,7 +24,7 @@ import {
   type SessionTurnDice,
 } from './sessionTurn.js';
 
-type TeamMovementClient = Pick<typeof prisma, 'partida' | 'equipo'>;
+type TeamMovementClient = Pick<typeof prisma, 'partida' | 'equipo' | 'evento'>;
 export { BOARD_MOVEMENT_CONNECTIONS, BOARD_MOVEMENT_NODES } from './boardGraph.js';
 export { findBoardMovementNodeByPosition } from './boardGraph.js';
 export type { BoardMovementNode } from './boardGraph.js';
@@ -275,6 +277,7 @@ export async function rollTeamDiceByAccessCode(
   ensureSessionIsMovable(session.status);
   ensureSessionHasNoPendingSuggestion(session);
   ensureCurrentTurnBelongsToTeam(session, teamId);
+  ensureTurnHasNotMoved(session);
   ensureTurnHasNoActiveDice(session);
 
   const movementContext = resolveTeamMovementContext(session, teamId);
@@ -370,6 +373,21 @@ export async function moveTeamByAccessCode(
         },
   });
 
+  if (!turnAdvanced) {
+    await client.evento.create({
+      data: {
+        partidaId: session.id,
+        emitterId: teamId,
+        eventType: TipoEvento.MOVIMIENTO,
+        detail: {
+          roomNodeId: committedTargetNode.id,
+          spaceSlotIndex: getBoardRoomSpaceSlotIndex(committedTargetNode.id),
+        },
+      },
+      select: { id: true },
+    });
+  }
+
   const updatedSession = await loadMovementSessionByAccessCode(client, accessCode);
   const updatedContext = resolveTeamMovementContext(updatedSession, teamId);
 
@@ -410,6 +428,7 @@ async function loadMovementSessionByAccessCode(client: TeamMovementClient, acces
       activeDiceValueTwo: true,
       activeDiceRemainingMoves: true,
       activeSuggestionEventId: true,
+      currentTurnHasMoved: true,
       isDebug: true,
       teams: {
         select: {
@@ -438,6 +457,7 @@ async function loadMovementSessionByAccessCode(client: TeamMovementClient, acces
     activeDiceValueTwo: session.activeDiceValueTwo,
     activeDiceRemainingMoves: session.activeDiceRemainingMoves,
     activeSuggestionEventId: session.activeSuggestionEventId,
+    currentTurnHasMoved: session.currentTurnHasMoved ?? false,
     isDebug: session.isDebug,
     teams: session.teams,
   };

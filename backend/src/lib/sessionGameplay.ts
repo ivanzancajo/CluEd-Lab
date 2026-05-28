@@ -349,23 +349,19 @@ function buildDistributedGameSetup(skin: LoadedSkinConfiguration, teamIds: strin
   const space = pickRandomItem(skin.spaces);
   const allElementIds = [...skin.subjects, ...skin.objects, ...skin.spaces].map((item) => item.id);
 
-  // Repartir por categoría para garantizar equilibrio entre equipos dentro de cada tipo.
-  // Un reparto mezclado puede concentrar todos los objetos en un equipo y ninguno en otro.
-  const subjectDeck = shuffleArray(skin.subjects.filter((s) => s.id !== subject.id).map((s) => s.id));
-  const objectDeck  = shuffleArray(skin.objects.filter((o) => o.id !== object.id).map((o) => o.id));
-  const spaceDeck   = shuffleArray(skin.spaces.filter((sp) => sp.id !== space.id).map((sp) => sp.id));
+  // Mezcla todas las cartas restantes juntas y reparte de forma cíclica para que
+  // cada equipo reciba floor(total/numEquipos) cartas; el exceso va boca arriba.
+  const remainingDeck = shuffleArray([
+    ...skin.subjects.filter((s) => s.id !== subject.id).map((s) => s.id),
+    ...skin.objects.filter((o) => o.id !== object.id).map((o) => o.id),
+    ...skin.spaces.filter((sp) => sp.id !== space.id).map((sp) => sp.id),
+  ]);
 
-  const { cardsByTeam: subjectsByTeam, sobrantes: subjectSobrantes } = cyclicDeal(subjectDeck, teamIds.length);
-  const { cardsByTeam: objectsByTeam,  sobrantes: objectSobrantes  } = cyclicDeal(objectDeck,  teamIds.length);
-  const { cardsByTeam: spacesByTeam,   sobrantes: spaceSobrantes   } = cyclicDeal(spaceDeck,   teamIds.length);
+  const { cardsByTeam: dealtByTeam, sobrantes } = cyclicDeal(remainingDeck, teamIds.length);
 
   const cardsByTeam: TeamCardAssignment[] = teamIds.map((teamId, i) => ({
     teamId,
-    elementIds: [
-      ...(subjectsByTeam[i] ?? []),
-      ...(objectsByTeam[i]  ?? []),
-      ...(spacesByTeam[i]   ?? []),
-    ],
+    elementIds: dealtByTeam[i] ?? [],
   }));
 
   return {
@@ -376,7 +372,7 @@ function buildDistributedGameSetup(skin: LoadedSkinConfiguration, teamIds: strin
     },
     allElementIds,
     cardsByTeam,
-    sobrantes: [...subjectSobrantes, ...objectSobrantes, ...spaceSobrantes],
+    sobrantes,
   };
 }
 

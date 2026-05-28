@@ -50,7 +50,7 @@ type DistributedGameSetup = {
   sobrantes: string[];
 };
 
-export const MINIMUM_TEAMS_TO_START = 2;
+export const MINIMUM_TEAMS_TO_START = 3;
 
 export type TeamTerminalState = {
   session: SessionSnapshot;

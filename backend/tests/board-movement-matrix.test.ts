@@ -308,7 +308,7 @@ describe('SCRUM-112 · Matriz de validación de movimientos', () => {
       expect(violations).toHaveLength(0);
     });
 
-    it('todos los destinos tienen stepsRequired igual a la tirada exacta', () => {
+    it('todos los destinos tienen stepsRequired válido para la tirada', () => {
       const violations: string[] = [];
 
       Object.keys(BOARD_MOVEMENT_NODES).forEach((startNodeId) => {
@@ -316,7 +316,12 @@ describe('SCRUM-112 · Matriz de validación de movimientos', () => {
           const destinations = getReachableMoveNodes(startNodeId, [], dice);
 
           destinations.forEach((dest) => {
-            if ((dest.stepsRequired ?? -1) !== dice) {
+            const steps = dest.stepsRequired ?? -1;
+            // Las puertas de sala son destino válido con cualquier tirada >= su distancia (BFS relajado).
+            // El resto de nodos deben estar exactamente a `dice` pasos.
+            const isDoor = dest.kind === 'square' && Boolean(getRoomEntryNodeByDoorNodeId(dest.id));
+            const valid = isDoor ? steps <= dice : steps === dice;
+            if (!valid) {
               violations.push(
                 `Desde ${startNodeId} con tirada ${dice}: ${dest.id} tiene stepsRequired=${dest.stepsRequired}`
               );

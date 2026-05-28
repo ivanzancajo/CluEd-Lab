@@ -143,6 +143,16 @@ export function getReachableMoveNodes(currentNodeId: string, occupiedNodeIds: It
         return;
       }
 
+      // Entrada a sala: cuando no se parte de una sala y la casilla es puerta, es destino válido
+      // aunque los pasos sean menores que la tirada (exceso ignorado al confirmar la entrada).
+      if (!startingFromRoom && node.kind === 'square' && getRoomEntryNodeByDoorNodeId(linkedNodeId)) {
+        reachableNodes.set(linkedNodeId, { ...node, stepsRequired: nextSteps });
+        if (nextSteps < diceRoll) {
+          queue.push({ nodeId: linkedNodeId, steps: nextSteps });
+        }
+        return;
+      }
+
       if (nextSteps === diceRoll) {
         if (node.kind === 'room') {
           return;
@@ -155,9 +165,7 @@ export function getReachableMoveNodes(currentNodeId: string, occupiedNodeIds: It
         return;
       }
 
-      // Si el nodo siguiente es una sala y no partimos de una sala, no exploramos
-      // más allá de ella: las salas solo son destino cuando la puerta es el último
-      // paso (lo resuelve resolveCommittedMoveTargetNode), no nodos de tránsito.
+      // Las salas no son nodos de tránsito salvo que el turno comience en una sala.
       if (node.kind === 'room' && !startingFromRoom) {
         return;
       }

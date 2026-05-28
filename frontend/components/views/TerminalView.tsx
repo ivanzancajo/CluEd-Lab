@@ -1740,7 +1740,7 @@ export function TerminalView() {
                          <DiceAnimation
                            key={diceResetSignal}
                            dataCy="terminal-dice-roll"
-                           disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || isResolutionBlockingGameplay || sessionTurn?.dice !== null || isLoadingMoves || isMovingPawn}
+                           disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || isResolutionBlockingGameplay || sessionTurn?.dice !== null || sessionTurn?.hasMoved || isLoadingMoves || isMovingPawn}
                            onRollRequest={handleDiceRoll}
                          />
                        </div>

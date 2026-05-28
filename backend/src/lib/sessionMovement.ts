@@ -191,13 +191,15 @@ export function getReachableMoveNodes(currentNodeId: string, occupiedNodeIds: It
 }
 
 export function resolveCommittedMoveTargetNode(currentNode: BoardMovementNode, targetNode: BoardMovementNode) {
-  if (currentNode.kind === 'room') {
-    return targetNode;
+  // Resolver siempre las puertas a su sala, incluso al salir de una sala hacia otra.
+  // Se excluye la sala de origen para no reentrar en la sala actual.
+  const mappedRoomEntryNode = getRoomEntryNodeByDoorNodeId(targetNode.id);
+  if (mappedRoomEntryNode && mappedRoomEntryNode.id !== currentNode.id) {
+    return mappedRoomEntryNode;
   }
 
-  const mappedRoomEntryNode = getRoomEntryNodeByDoorNodeId(targetNode.id);
-  if (mappedRoomEntryNode) {
-    return mappedRoomEntryNode;
+  if (currentNode.kind === 'room') {
+    return targetNode;
   }
 
   // Fallback defensivo: si el nodo objetivo es una casilla conectada a una sala,
@@ -207,7 +209,7 @@ export function resolveCommittedMoveTargetNode(currentNode: BoardMovementNode, t
       .map((nodeId) => BOARD_MOVEMENT_NODES[nodeId])
       .find((node): node is BoardMovementNode => Boolean(node && node.kind === 'room'));
 
-    if (connectedRoomNode) {
+    if (connectedRoomNode && connectedRoomNode.id !== currentNode.id) {
       return connectedRoomNode;
     }
   }

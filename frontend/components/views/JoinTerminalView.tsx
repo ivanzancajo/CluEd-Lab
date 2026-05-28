@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { ArrowLeft, KeyRound, LoaderCircle, MonitorSmartphone, ShieldAlert, Cpu } from "lucide-react";
 import { clearStoredTeamContext, getStoredJoinedLobbyContext, storeJoinedLobbySession } from "../../src/lib/lobbyStorage";
 import { TEAM_METADATA } from "../../src/lib/teamMeta";
@@ -22,6 +22,7 @@ export function JoinTerminalView() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // react-doctor-disable-next-line react-doctor/no-cascading-set-state
   useEffect(() => {
     if (code.length !== 6) {
       setSessionSnapshot(null);
@@ -224,17 +225,17 @@ export function JoinTerminalView() {
 
       <div className="flex-1 relative z-10 flex flex-col items-center justify-center p-6">
         <Link to="/" className="absolute top-6 left-6 text-slate-500 hover:text-cyan-400 transition-colors p-2 rounded-md hover:bg-slate-800">
-          <ArrowLeft className="w-6 h-6" />
+          <ArrowLeft className="size-6" />
         </Link>
 
-        <motion.div
+        <m.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           className="w-full max-w-sm bg-slate-900/80 backdrop-blur-md border border-cyan-800/50 rounded-2xl p-8 shadow-[0_0_40px_-10px_rgba(6,182,212,0.3)]"
         >
           <div className="flex flex-col items-center text-center mb-8">
             <div className="p-3 bg-cyan-950/50 border border-cyan-800 rounded-full mb-4">
-              <MonitorSmartphone className="w-8 h-8 text-cyan-400" />
+              <MonitorSmartphone className="size-8 text-cyan-400" />
             </div>
             <h1 className="text-xl font-black tracking-widest text-white uppercase">Unirse a la partida</h1>
             <p className="text-xs text-slate-400 mt-2">Conectar Terminal de Equipo al lobby</p>
@@ -242,11 +243,13 @@ export function JoinTerminalView() {
 
           <form onSubmit={handleJoin} className="flex flex-col gap-6">
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] uppercase text-cyan-500 flex items-center gap-2 font-bold tracking-widest">
-                <KeyRound className="w-3 h-3" /> Código de Sesión
+              <label htmlFor="join-code-input" className="text-[10px] uppercase text-cyan-500 flex items-center gap-2 font-bold tracking-widest">
+                <KeyRound className="size-3" /> Código de Sesión
               </label>
               <input
+                id="join-code-input"
                 data-cy="join-terminal-code-input"
+                aria-label="Código de sesión"
                 type="text"
                 value={code}
                 onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
@@ -256,7 +259,7 @@ export function JoinTerminalView() {
                 required
               />
               <div data-cy="join-terminal-code-status" className={`mt-1 flex items-center gap-2 text-[11px] ${codeStatusMessage.tone}`}>
-                {isLoadingSession ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <KeyRound className="h-3 w-3" />}
+                {isLoadingSession ? <LoaderCircle className="size-3 animate-spin" /> : <KeyRound className="size-3" />}
                 {codeStatusMessage.message}
               </div>
             </div>
@@ -287,20 +290,20 @@ export function JoinTerminalView() {
             ) : null}
 
             <div className="flex flex-col gap-3">
-              <label className="text-[10px] uppercase text-slate-500 font-bold tracking-widest">
-                Seleccion de color
-              </label>
+              <p className="text-[10px] uppercase text-slate-500 font-bold tracking-widest">
+                Selección de color
+              </p>
               <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-widest">
                 <span className="inline-flex items-center gap-2 rounded-full border border-emerald-900/60 bg-emerald-950/20 px-3 py-1 text-emerald-200">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
+                  <span className="size-2.5 rounded-full bg-emerald-400"></span>
                   Libre
                 </span>
                 <span className="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-950/70 px-3 py-1 text-slate-400">
-                  <span className="h-2.5 w-2.5 rounded-full bg-slate-500"></span>
+                  <span className="size-2.5 rounded-full bg-slate-500"></span>
                   Ocupado
                 </span>
                 <span className="inline-flex items-center gap-2 rounded-full border border-cyan-900/60 bg-cyan-950/20 px-3 py-1 text-cyan-200">
-                  <span className="h-2.5 w-2.5 rounded-full bg-cyan-300"></span>
+                  <span className="size-2.5 rounded-full bg-cyan-300"></span>
                   Tu equipo
                 </span>
               </div>
@@ -343,7 +346,7 @@ export function JoinTerminalView() {
                     >
                       <div className="flex items-center gap-2">
                         <div
-                          className={`h-4 w-4 rounded-full border ${team.color === "BLANCO" ? 'border-slate-500' : 'border-slate-950/80'} ${team.swatchClass} ${
+                          className={`size-4 rounded-full border ${team.color === "BLANCO" ? 'border-slate-500' : 'border-slate-950/80'} ${team.swatchClass} ${
                             isSelected || isResumeTeam ? 'shadow-[0_0_10px_currentColor]' : ''
                           }`}
                         ></div>
@@ -389,16 +392,16 @@ export function JoinTerminalView() {
                 disabled={!canJoin && !canResume}
                 className="w-full bg-cyan-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none hover:bg-cyan-500 text-slate-950 font-bold uppercase tracking-widest py-4 rounded-lg flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.4)]"
               >
-                {isJoining ? <LoaderCircle className="w-5 h-5 animate-spin" /> : <Cpu className="w-5 h-5" />}
+                {isJoining ? <LoaderCircle className="size-5 animate-spin" /> : <Cpu className="size-5" />}
                 {isJoining ? "Conectando..." : canResume ? "Reanudar terminal" : "Unirse al lobby"}
               </button>
             </div>
           </form>
-        </motion.div>
+        </m.div>
       </div>
 
       <div className="absolute bottom-4 left-0 right-0 text-center text-[10px] text-slate-600 flex items-center justify-center gap-2">
-        <ShieldAlert className="w-3 h-3" /> SISTEMA DE COMUNICACIÓN ENCRIPTADO
+        <ShieldAlert className="size-3" /> SISTEMA DE COMUNICACIÓN ENCRIPTADO
       </div>
     </div>
   );

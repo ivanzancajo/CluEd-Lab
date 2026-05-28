@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { 
   Map as MapIcon, 
   Search, 
@@ -157,36 +157,54 @@ function mapHandCardToTerminalCard(card: TeamHandCard, config: GameConfig): Term
 // Categorías convertidas a objetos dinámicos con avatares predefinidos (íconos tech)
 const CATEGORIES = {
   sujetos: [
-    { name: "Ada Lovelace", avatar: <User className="w-3 h-3 text-pink-400" />, color: "bg-pink-950/30 border-pink-800" },
-    { name: "Alan Turing", avatar: <Cpu className="w-3 h-3 text-blue-400" />, color: "bg-blue-950/30 border-blue-800" },
-    { name: "Nikola Tesla", avatar: <Zap className="w-3 h-3 text-yellow-400" />, color: "bg-yellow-950/30 border-yellow-800" },
-    { name: "Marie Curie", avatar: <Activity className="w-3 h-3 text-emerald-400" />, color: "bg-emerald-950/30 border-emerald-800" },
-    { name: "Hedy Lamarr", avatar: <Wifi className="w-3 h-3 text-cyan-400" />, color: "bg-cyan-950/30 border-cyan-800" },
-    { name: "Max Planck", avatar: <Database className="w-3 h-3 text-purple-400" />, color: "bg-purple-950/30 border-purple-800" }
+    { name: "Ada Lovelace", avatar: <User className="size-3 text-pink-400" />, color: "bg-pink-950/30 border-pink-800" },
+    { name: "Alan Turing", avatar: <Cpu className="size-3 text-blue-400" />, color: "bg-blue-950/30 border-blue-800" },
+    { name: "Nikola Tesla", avatar: <Zap className="size-3 text-yellow-400" />, color: "bg-yellow-950/30 border-yellow-800" },
+    { name: "Marie Curie", avatar: <Activity className="size-3 text-emerald-400" />, color: "bg-emerald-950/30 border-emerald-800" },
+    { name: "Hedy Lamarr", avatar: <Wifi className="size-3 text-cyan-400" />, color: "bg-cyan-950/30 border-cyan-800" },
+    { name: "Max Planck", avatar: <Database className="size-3 text-purple-400" />, color: "bg-purple-950/30 border-purple-800" }
   ],
   objetos: [
-    { name: "Osciloscopio", avatar: <Activity className="w-3 h-3 text-emerald-400" />, color: "bg-emerald-950/30 border-emerald-800" },
-    { name: "Cable de Fibra", avatar: <Radio className="w-3 h-3 text-orange-400" />, color: "bg-orange-950/30 border-orange-800" },
-    { name: "Diodo Láser", avatar: <Crosshair className="w-3 h-3 text-red-400" />, color: "bg-red-950/30 border-red-800" },
-    { name: "Soldador", avatar: <Zap className="w-3 h-3 text-amber-400" />, color: "bg-amber-950/30 border-amber-800" },
-    { name: "Batería C.", avatar: <Shield className="w-3 h-3 text-lime-400" />, color: "bg-lime-950/30 border-lime-800" },
-    { name: "Llave Inglesa", avatar: <Box className="w-3 h-3 text-slate-400" />, color: "bg-slate-800/50 border-slate-600" }
+    { name: "Osciloscopio", avatar: <Activity className="size-3 text-emerald-400" />, color: "bg-emerald-950/30 border-emerald-800" },
+    { name: "Cable de Fibra", avatar: <Radio className="size-3 text-orange-400" />, color: "bg-orange-950/30 border-orange-800" },
+    { name: "Diodo Láser", avatar: <Crosshair className="size-3 text-red-400" />, color: "bg-red-950/30 border-red-800" },
+    { name: "Soldador", avatar: <Zap className="size-3 text-amber-400" />, color: "bg-amber-950/30 border-amber-800" },
+    { name: "Batería C.", avatar: <Shield className="size-3 text-lime-400" />, color: "bg-lime-950/30 border-lime-800" },
+    { name: "Llave Inglesa", avatar: <Box className="size-3 text-slate-400" />, color: "bg-slate-800/50 border-slate-600" }
   ],
   espacios: [
-    { name: "Cámara Anecoica", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "Sala H. Lamarr", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "C. Conmutación", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "Seminario Haykin", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "Club de radio", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "L. Com. Ópticas", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "L. Electrónica", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "Seminario Maxwell", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
-    { name: "S. Torres Quevedo", avatar: <MapPin className="w-3 h-3 text-red-500" />, color: "bg-red-950/20 border-red-900" }
+    { name: "Cámara Anecoica", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "Sala H. Lamarr", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "C. Conmutación", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "Seminario Haykin", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "Club de radio", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "L. Com. Ópticas", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "L. Electrónica", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "Seminario Maxwell", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" },
+    { name: "S. Torres Quevedo", avatar: <MapPin className="size-3 text-red-500" />, color: "bg-red-950/20 border-red-900" }
   ]
 };
 
 const TEAMS = ["Rojo", "Amarillo", "Azul", "Verde", "Morado", "Blanco"];
 
+function mapConfigToCategories(config: GameConfig): { c1: ElementoItem[]; c2: ElementoItem[]; c3: ElementoItem[] } {
+  const showMotifs = config.hasMotifs === true;
+  const mapItems = (items: RawItem[], defaultIcon: React.ReactNode, defaultColor: string): ElementoItem[] =>
+    items.map((item) => ({ id: item.id, name: item.name, desc: item.desc, motif: showMotifs ? item.motif : undefined, avatar: defaultIcon, color: defaultColor }));
+  return {
+    c1: mapItems(config.subjects || [], <User className="size-3 text-cyan-400" />, "bg-cyan-950/30 border-cyan-800"),
+    c2: mapItems(config.objects || [], <Box className="size-3 text-emerald-400" />, "bg-emerald-950/30 border-emerald-800"),
+    c3: mapItems(config.spaces || [], <MapPin className="size-3 text-red-500" />, "bg-red-950/20 border-red-900"),
+  };
+}
+
+function catNamesFromConfig(config: GameConfig | null) {
+  return {
+    c1: config?.cat1Name || "Sujetos",
+    c2: config?.cat2Name || "Objetos",
+    c3: config?.cat3Name || "Espacios",
+  };
+}
 
 function resolveCurrentTeamBoardNode(teams: LobbySession["teams"], teamId: string | null): TeamMoveNode | null {
   if (!teamId) {
@@ -220,16 +238,67 @@ function buildSuggestionSentence(suggestion: SuggestionSummary) {
   return `${suggestion.subject.name} con ${suggestion.object.name} en ${suggestion.space.name}`;
 }
 
+function CellIcon({ state }: { state: number }) {
+  if (state === 1) return <HelpCircle className="size-4 text-orange-500" />;
+  if (state === 2) return <X className="size-4 text-red-500" />;
+  return null;
+}
+
+type MoveState = {
+  destinationNodes: TeamMoveNode[];
+  selectedDestinationNodeId: string;
+  isMoveConfirmOpen: boolean;
+  isLoadingMoves: boolean;
+  diceResetSignal: number;
+};
+
+type MoveAction =
+  | { type: 'reset' }
+  | { type: 'clearSelection' }
+  | { type: 'startRefresh' }
+  | { type: 'setNodes'; nodes: TeamMoveNode[] }
+  | { type: 'clearNodes' }
+  | { type: 'incrementDice' }
+  | { type: 'afterMove' }
+  | { type: 'selectNode'; id: string }
+  | { type: 'closeConfirm' }
+  | { type: 'setConfirmOpen'; open: boolean };
+
+function moveReducer(state: MoveState, action: MoveAction): MoveState {
+  switch (action.type) {
+    case 'reset':
+      return { destinationNodes: [], selectedDestinationNodeId: "", isMoveConfirmOpen: false, isLoadingMoves: false, diceResetSignal: state.diceResetSignal + 1 };
+    case 'clearSelection':
+      return { ...state, destinationNodes: [], selectedDestinationNodeId: "", isMoveConfirmOpen: false };
+    case 'startRefresh':
+      return { ...state, destinationNodes: [], selectedDestinationNodeId: "", isMoveConfirmOpen: false, isLoadingMoves: true };
+    case 'setNodes':
+      return { ...state, destinationNodes: action.nodes, isLoadingMoves: false };
+    case 'clearNodes':
+      return { ...state, destinationNodes: [], isLoadingMoves: false };
+    case 'incrementDice':
+      return { ...state, diceResetSignal: state.diceResetSignal + 1 };
+    case 'afterMove':
+      return { ...state, destinationNodes: [], selectedDestinationNodeId: "", diceResetSignal: state.diceResetSignal + 1 };
+    case 'selectNode':
+      return { ...state, selectedDestinationNodeId: action.id, isMoveConfirmOpen: true };
+    case 'closeConfirm':
+      return { ...state, isMoveConfirmOpen: false, selectedDestinationNodeId: "" };
+    case 'setConfirmOpen':
+      return { ...state, isMoveConfirmOpen: action.open, selectedDestinationNodeId: action.open ? state.selectedDestinationNodeId : "" };
+  }
+}
+
 export function TerminalView() {
   const navigate = useNavigate();
   const lobbySocketRef = React.useRef<LobbySocketClient | null>(null);
-  const activeGameConfigRef = React.useRef<GameConfig | null>(null);
+  const activeGameConfigRef = React.useRef<GameConfig | null>(readStoredBoardTheme() as GameConfig | null);
   const [activeTab, setActiveTab] = useState("map");
-  const [centerImage, setCenterImage] = useState("");
+  const [centerImage, setCenterImage] = useState(() => localStorage.getItem("centerImage") ?? "");
   const [boardTheme, setBoardTheme] = useState<StoredBoardTheme | null>(() => readStoredBoardTheme());
   const [boardTeams, setBoardTeams] = useState<LobbySession["teams"]>([]);
   const [teamName, setTeamName] = useState(getStoredTeamName() || "Equipo sin asignar");
-  const [teamColor, setTeamColor] = useState<TeamColor | null>(getStoredTeamColor());
+  const [teamColor, setTeamColor] = useState<TeamColor | null>(() => getStoredTeamColor());
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>(getStoredSessionStatus() ?? "LOBBY");
   const [lobbyConnectionStatus, setLobbyConnectionStatus] = useState<"connecting" | "connected" | "disconnected" | "error">("connecting");
   const [lobbyError, setLobbyError] = useState<string | null>(null);
@@ -237,28 +306,31 @@ export function TerminalView() {
   const [isLoadingHand, setIsLoadingHand] = useState(false);
   const [teamHand, setTeamHand] = useState<TerminalCard[]>([]);
   const [publicCards, setPublicCards] = useState<TeamHandCard[]>([]);
-  const [destinationNodes, setDestinationNodes] = useState<TeamMoveNode[]>([]);
-  const [selectedDestinationNodeId, setSelectedDestinationNodeId] = useState("");
-  const [isMoveConfirmOpen, setIsMoveConfirmOpen] = useState(false);
+  const [moveState, dispatchMove] = React.useReducer(moveReducer, {
+    destinationNodes: [],
+    selectedDestinationNodeId: "",
+    isMoveConfirmOpen: false,
+    isLoadingMoves: false,
+    diceResetSignal: 0,
+  });
+  const { destinationNodes, selectedDestinationNodeId, isMoveConfirmOpen, isLoadingMoves, diceResetSignal } = moveState;
   const [currentMoveNode, setCurrentMoveNode] = useState<TeamMoveNode | null>(null);
   const [sessionTurn, setSessionTurn] = useState<LobbySession["turn"]>(null);
   const [debugMode, setDebugMode] = useState<'off' | 'map' | 'forced-dice'>(() =>
     getStoredBoardDebugMode() ? 'map' : 'off'
   );
   const [boardDebugProbe, setBoardDebugProbe] = useState<BoardDebugProbe | null>(null);
-  const [diceResetSignal, setDiceResetSignal] = useState(0);
   const [forcedDiceValue, setForcedDiceValue] = useState<number | undefined>(undefined);
   const [activeMotifSpace, setActiveMotifSpace] = useState<BoardSpaceLabel | null>(null);
-  const [isLoadingMoves, setIsLoadingMoves] = useState(false);
   const [isMovingPawn, setIsMovingPawn] = useState(false);
   const [isEmittingSecretPassage, setIsEmittingSecretPassage] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [activeSuggestion, setActiveSuggestion] = useState<SuggestionSummary | null>(null);
   const [pendingSuggestion, setPendingSuggestion] = useState<TeamPendingSuggestionState | null>(null);
-  const [selectedSubjectId, setSelectedSubjectId] = useState("");
-  const [selectedObjectId, setSelectedObjectId] = useState("");
+  const [rawSubjectId, setSelectedSubjectId] = useState("");
+  const [rawObjectId, setSelectedObjectId] = useState("");
   const [selectedSpaceId, setSelectedSpaceId] = useState("");
-  const [selectedRefuteCardId, setSelectedRefuteCardId] = useState("");
+  const [manualRefuteCardId, setSelectedRefuteCardId] = useState("");
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [suggestionNotice, setSuggestionNotice] = useState<string | null>(null);
   const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
@@ -278,20 +350,26 @@ export function TerminalView() {
     c1: ElementoItem[];
     c2: ElementoItem[];
     c3: ElementoItem[];
-  }>({
-    c1: CATEGORIES.sujetos.map(s => ({ id: s.name, ...s, desc: "Descripción", motif: "" })),
-    c2: CATEGORIES.objetos.map(o => ({ id: o.name, ...o, desc: "Descripción", motif: "" })),
-    c3: CATEGORIES.espacios.map(e => ({ id: e.name, ...e, desc: "Descripción", motif: "" }))
+  }>(() => {
+    const theme = readStoredBoardTheme() as GameConfig | null;
+    if (!theme) return {
+      c1: CATEGORIES.sujetos.map(s => ({ id: s.name, ...s, desc: "Descripción", motif: "" })),
+      c2: CATEGORIES.objetos.map(o => ({ id: o.name, ...o, desc: "Descripción", motif: "" })),
+      c3: CATEGORIES.espacios.map(e => ({ id: e.name, ...e, desc: "Descripción", motif: "" })),
+    };
+    return mapConfigToCategories(theme);
   });
-  const [catNames, setCatNames] = useState({ c1: "Sujetos", c2: "Objetos", c3: "Espacios" });
+  const [catNames, setCatNames] = useState(() => catNamesFromConfig(readStoredBoardTheme() as GameConfig | null));
   const [selectedCard, setSelectedCard] = useState<TerminalCard | null>(null);
   const [cardFlipped, setCardFlipped] = useState(false);
 
   const storedTeamId = getStoredTeamId();
+  // react-doctor-disable-next-line react-doctor/no-event-handler
   const isMyTurn = sessionTurn?.currentTeamId === storedTeamId;
   const currentTurnRemainingMoves = sessionTurn?.remainingMoves ?? null;
   const currentTeamState = boardTeams.find((team) => team.id === storedTeamId) ?? null;
   const isTeamEliminated = Boolean(currentTeamState?.falseAccusation || currentTeamState?.eliminatedAt);
+  // react-doctor-disable-next-line react-doctor/no-event-handler
   const activeResolution = resolutionState;
   const isResolutionAwaitingInputs = activeResolution?.phase === "ESPERANDO_RESOLUCION";
   const isResolutionShowingSolution = activeResolution?.phase === "MOSTRANDO_SOLUCION";
@@ -344,56 +422,58 @@ export function TerminalView() {
     setPublicCards(state.session.publicCards ?? []);
   };
 
-  const refreshTerminalState = React.useEffectEvent(async () => {
+  const refreshTerminalStateCtx = React.useRef({ sessionStatus });
+  refreshTerminalStateCtx.current = { sessionStatus };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const refreshTerminalState = React.useCallback(async () => {
     const accessCode = getStoredSessionCode();
     const teamId = getStoredTeamId();
 
-    if (!accessCode || !teamId || sessionStatus === "LOBBY") {
+    if (!accessCode || !teamId || refreshTerminalStateCtx.current.sessionStatus === "LOBBY") {
       return null;
     }
 
     const state = await getTeamTerminalState(accessCode, teamId);
     applyTerminalState(state);
     return state;
-  });
+  }, []);
 
-  const refreshMoveState = React.useEffectEvent(async () => {
+  const refreshMoveStateCtx = React.useRef({ sessionStatus, isMyTurn, activeSuggestion, pendingSuggestion, isResolutionBlockingGameplay });
+  refreshMoveStateCtx.current = { sessionStatus, isMyTurn, activeSuggestion, pendingSuggestion, isResolutionBlockingGameplay };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const refreshMoveState = React.useCallback(async () => {
+    const { sessionStatus: status, isMyTurn: myTurn, activeSuggestion: activeSug, pendingSuggestion: pendingSug, isResolutionBlockingGameplay: resolutionBlocking } = refreshMoveStateCtx.current;
     const accessCode = getStoredSessionCode();
     const teamId = getStoredTeamId();
 
     if (
       !accessCode ||
       !teamId ||
-      sessionStatus !== "EN_CURSO" ||
-      !isMyTurn ||
-      activeSuggestion ||
-      pendingSuggestion ||
-      isResolutionBlockingGameplay
+      status !== "EN_CURSO" ||
+      !myTurn ||
+      activeSug ||
+      pendingSug ||
+      resolutionBlocking
     ) {
-      setDestinationNodes([]);
-      setSelectedDestinationNodeId("");
-      setIsMoveConfirmOpen(false);
+      dispatchMove({ type: 'clearSelection' });
       return;
     }
 
-    setDestinationNodes([]);
-    setSelectedDestinationNodeId("");
-    setIsMoveConfirmOpen(false);
+    dispatchMove({ type: 'startRefresh' });
     setMoveError(null);
-    setIsLoadingMoves(true);
 
     try {
-      const moveState = await getTeamMoveState(accessCode, teamId);
-      setCurrentMoveNode(moveState.currentNode);
-      setDestinationNodes(moveState.destinationNodes);
+      const fetchedMoveData = await getTeamMoveState(accessCode, teamId);
+      setCurrentMoveNode(fetchedMoveData.currentNode);
+      dispatchMove({ type: 'setNodes', nodes: fetchedMoveData.destinationNodes });
       setMoveError(null);
     } catch (error) {
-      setDestinationNodes([]);
+      dispatchMove({ type: 'clearNodes' });
       setMoveError(getSessionErrorMessage(error, "No se ha podido preparar la selección de destino."));
-    } finally {
-      setIsLoadingMoves(false);
     }
-  });
+  }, []);
 
   const handleDiceRoll = async (forcedTotal?: number) => {
     const accessCode = getStoredSessionCode();
@@ -407,9 +487,7 @@ export function TerminalView() {
       throw new Error("Hay una sugerencia pendiente de resolver antes de volver a mover el peón.");
     }
 
-    setDestinationNodes([]);
-    setSelectedDestinationNodeId("");
-    setIsMoveConfirmOpen(false);
+    dispatchMove({ type: 'clearSelection' });
     setMoveError(null);
     const rollStartedAt = Date.now();
 
@@ -430,7 +508,7 @@ export function TerminalView() {
       await waitForDiceAnimationToFinish();
 
       setCurrentMoveNode(rollResult.currentNode);
-      setDestinationNodes(rollResult.destinationNodes);
+      dispatchMove({ type: 'setNodes', nodes: rollResult.destinationNodes });
       setMoveError(
         rollResult.turnAdvanced
           ? "La tirada no deja movimientos legales. El turno ha pasado automáticamente al siguiente equipo."
@@ -442,28 +520,26 @@ export function TerminalView() {
       }
 
       if (rollResult.turnAdvanced) {
-        setDiceResetSignal((previousValue) => previousValue + 1);
+        dispatchMove({ type: 'incrementDice' });
       }
 
       return rollResult.dice;
     } catch (error) {
       await waitForDiceAnimationToFinish();
-      setDestinationNodes([]);
+      dispatchMove({ type: 'clearNodes' });
       setMoveError(getSessionErrorMessage(error, "No se ha podido registrar la tirada del turno actual."));
-      setDiceResetSignal((previousValue) => previousValue + 1);
+      dispatchMove({ type: 'incrementDice' });
       throw error;
     }
   };
 
   const handleDestinationNodePress = (destinationNodeId: string) => {
-    setSelectedDestinationNodeId(destinationNodeId);
+    dispatchMove({ type: 'selectNode', id: destinationNodeId });
     setMoveError(null);
-    setIsMoveConfirmOpen(true);
   };
 
   const handleBoardNodePress = (boardNode: BoardMovementNode) => {
-    setIsMoveConfirmOpen(false);
-    setSelectedDestinationNodeId("");
+    dispatchMove({ type: 'closeConfirm' });
 
     if (sessionStatus !== "EN_CURSO") {
       return;
@@ -530,8 +606,7 @@ export function TerminalView() {
     }
 
     if (sessionStatus === "EN_CURSO" && isTeamEliminated) {
-      setIsMoveConfirmOpen(false);
-      setSelectedDestinationNodeId("");
+      dispatchMove({ type: 'closeConfirm' });
       setMoveError(eliminatedMoveErrorMessage);
       return;
     }
@@ -544,8 +619,7 @@ export function TerminalView() {
       destinationNodes.length > 0
     ) {
       if (!matchedDestinationNode) {
-        setIsMoveConfirmOpen(false);
-        setSelectedDestinationNodeId("");
+        dispatchMove({ type: 'closeConfirm' });
         setMoveError("La casilla o sala seleccionada no es alcanzable con la tirada actual.");
         return;
       }
@@ -555,8 +629,7 @@ export function TerminalView() {
     }
 
     if (!matchedNode) {
-      setIsMoveConfirmOpen(false);
-      setSelectedDestinationNodeId("");
+      dispatchMove({ type: 'closeConfirm' });
       setMoveError("Pulsa una casilla o una sala real del tablero para intentar el movimiento.");
       return;
     }
@@ -580,11 +653,7 @@ export function TerminalView() {
   };
 
   const handleMoveConfirmOpenChange = (open: boolean) => {
-    setIsMoveConfirmOpen(open);
-
-    if (!open) {
-      setSelectedDestinationNodeId("");
-    }
+    dispatchMove({ type: 'setConfirmOpen', open });
   };
 
   const handleMovePawn = async (targetNodeId = selectedDestinationNodeId) => {
@@ -601,7 +670,7 @@ export function TerminalView() {
     }
 
     const selectedDestinationNode = destinationNodes.find((node) => node.id === targetNodeId) ?? null;
-    setIsMoveConfirmOpen(false);
+    dispatchMove({ type: 'closeConfirm' });
     setIsMovingPawn(true);
 
     try {
@@ -610,10 +679,8 @@ export function TerminalView() {
 
       setBoardTeams(moveResult.session.teams);
       setCurrentMoveNode(moveResult.currentNode);
-      setDestinationNodes([]);
-      setSelectedDestinationNodeId("");
+      dispatchMove({ type: 'afterMove' });
       setMoveError(null);
-      setDiceResetSignal((previousValue) => previousValue + 1);
 
       if (currentTeam) {
         applyRealtimeSession(moveResult.session, currentTeam);
@@ -658,7 +725,7 @@ export function TerminalView() {
         return;
       }
 
-      setDiceResetSignal((previousValue) => previousValue + 1);
+      dispatchMove({ type: 'incrementDice' });
       setCurrentMoveNode(null);
       void refreshMoveState();
     } catch {
@@ -777,9 +844,7 @@ export function TerminalView() {
 
       setPendingSuggestion(null);
       setActiveSuggestion(result.session.activeSuggestion);
-      setDestinationNodes([]);
-      setSelectedDestinationNodeId("");
-      setDiceResetSignal((previousValue) => previousValue + 1);
+      dispatchMove({ type: 'afterMove' });
 
       if (currentTeam) {
         applyRealtimeSession(result.session, currentTeam);
@@ -815,9 +880,9 @@ export function TerminalView() {
     };
 
     setCategories({
-      c1: mapItems(config.subjects || [], <User className="w-3 h-3 text-cyan-400" />, "bg-cyan-950/30 border-cyan-800"),
-      c2: mapItems(config.objects || [], <Box className="w-3 h-3 text-emerald-400" />, "bg-emerald-950/30 border-emerald-800"),
-      c3: mapItems(config.spaces || [], <MapPin className="w-3 h-3 text-red-500" />, "bg-red-950/20 border-red-900"),
+      c1: mapItems(config.subjects || [], <User className="size-3 text-cyan-400" />, "bg-cyan-950/30 border-cyan-800"),
+      c2: mapItems(config.objects || [], <Box className="size-3 text-emerald-400" />, "bg-emerald-950/30 border-emerald-800"),
+      c3: mapItems(config.spaces || [], <MapPin className="size-3 text-red-500" />, "bg-red-950/20 border-red-900"),
     });
 
     if (config.centerImage !== undefined) {
@@ -831,21 +896,7 @@ export function TerminalView() {
     return () => clearTimeout(timer);
   }, [showEnvelopeAnimation]);
 
-  // Fetch active config and map to Terminal's internal state
-  React.useEffect(() => {
-    const storedTheme = readStoredBoardTheme();
-
-    if (storedTheme) {
-      applyGameConfig(storedTheme as GameConfig);
-      return;
-    }
-
-    const savedImg = localStorage.getItem("centerImage");
-    if (savedImg) {
-      setCenterImage(savedImg);
-    }
-  }, []);
-
+  // react-doctor-disable-next-line react-doctor/no-cascading-set-state
   React.useEffect(() => {
     const accessCode = getStoredSessionCode();
     const teamId = getStoredTeamId();
@@ -885,8 +936,9 @@ export function TerminalView() {
     return () => {
       active = false;
     };
-  }, [sessionStatus]);
+  }, [sessionStatus, refreshTerminalState]);
 
+  // react-doctor-disable-next-line react-doctor/effect-needs-cleanup, react-doctor/no-cascading-set-state
   React.useEffect(() => {
     const sessionId = getStoredSessionId();
     const teamId = getStoredTeamId();
@@ -1071,24 +1123,28 @@ export function TerminalView() {
     return () => {
       window.clearInterval(heartbeatIntervalId);
       lobbySocketRef.current = null;
+      socket.removeAllListeners();
       socket.disconnect();
     };
-  }, [navigate]);
+  // react-doctor-disable-next-line react-doctor/prefer-use-effect-event
+  }, [navigate, refreshTerminalState]);
 
+  // react-doctor-disable-next-line react-doctor/no-event-handler
   React.useEffect(() => {
     if (
       !isMyTurn ||
+      // react-doctor-disable-next-line react-doctor/no-event-handler
       activeSuggestion ||
+      // react-doctor-disable-next-line react-doctor/no-event-handler
       pendingSuggestion ||
       isResolutionBlockingGameplay ||
+      // react-doctor-disable-next-line react-doctor/no-event-handler
       activeTab !== "map" ||
+      // react-doctor-disable-next-line react-doctor/no-event-handler
       sessionStatus !== "EN_CURSO"
     ) {
-      setDestinationNodes([]);
-      setSelectedDestinationNodeId("");
-      setIsMoveConfirmOpen(false);
-      setIsLoadingMoves(false);
-      setDiceResetSignal((previousValue) => previousValue + 1);
+      // react-doctor-disable-next-line react-doctor/no-event-handler
+      dispatchMove({ type: 'reset' });
       return;
     }
 
@@ -1098,13 +1154,10 @@ export function TerminalView() {
     }
 
     if (sessionTurn?.dice === null) {
-      setDestinationNodes([]);
-      setSelectedDestinationNodeId("");
-      setIsMoveConfirmOpen(false);
-      setIsLoadingMoves(false);
-      setDiceResetSignal((previousValue) => previousValue + 1);
+      // react-doctor-disable-next-line react-doctor/no-event-handler
+      dispatchMove({ type: 'reset' });
     }
-  }, [activeSuggestion, activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, isResolutionBlockingGameplay, pendingSuggestion, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
+  }, [activeSuggestion, activeTab, destinationNodes.length, isLoadingMoves, isMyTurn, isResolutionBlockingGameplay, pendingSuggestion, refreshMoveState, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
 
   // Carga la posición actual del equipo al inicio del turno (dado=null) para detectar sala esquina
   React.useEffect(() => {
@@ -1119,35 +1172,8 @@ export function TerminalView() {
       return;
     }
     void refreshMoveState();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSuggestion, isMyTurn, isResolutionBlockingGameplay, pendingSuggestion, sessionStatus, sessionTurn?.currentTeamId]);
+  }, [activeSuggestion, isMyTurn, isResolutionBlockingGameplay, pendingSuggestion, refreshMoveState, sessionStatus, sessionTurn?.currentTeamId, sessionTurn?.dice]);
 
-  React.useEffect(() => {
-    if (pendingSuggestion?.type === "REFUTE_REQUEST") {
-      setSelectedRefuteCardId((currentValue) => {
-        if (pendingSuggestion.matchingCards.some((card) => card.id === currentValue)) {
-          return currentValue;
-        }
-
-        return pendingSuggestion.matchingCards[0]?.id ?? "";
-      });
-      return;
-    }
-
-    setSelectedRefuteCardId("");
-  }, [pendingSuggestion]);
-
-  React.useEffect(() => {
-    if (selectedSubjectId && !categories.c1.some((item) => item.id === selectedSubjectId)) {
-      setSelectedSubjectId("");
-    }
-  }, [categories.c1, selectedSubjectId]);
-
-  React.useEffect(() => {
-    if (selectedObjectId && !categories.c2.some((item) => item.id === selectedObjectId)) {
-      setSelectedObjectId("");
-    }
-  }, [categories.c2, selectedObjectId]);
 
   const currentTeamMeta = teamColor ? getTeamMeta(teamColor) : null;
   const hasActiveTeams = boardTeams.some((team) => !team.falseAccusation && !team.eliminatedAt);
@@ -1184,23 +1210,14 @@ export function TerminalView() {
     setMatrix(prev => ({ ...prev, [key]: next }));
   };
 
-  const renderCellIcon = (state: number) => {
-    if (state === 1) return <HelpCircle className="w-4 h-4 text-orange-500" />;
-    if (state === 2) return <X className="w-4 h-4 text-red-500" />;
-    return null;
-  };
-
   const boardSpaces = mapBoardSpaces(boardTheme);
-  const boardPawns = boardTeams
-    .filter((team) => team.id === getStoredTeamId())
-    .map((team) => ({
-      id: team.id,
-      color: team.color,
-      positionX: team.positionX,
-      positionY: team.positionY,
-      opacity: 1,
-      isCurrent: true,
-    }));
+  const storedTeamIdForPawns = getStoredTeamId();
+  const boardPawns = boardTeams.reduce<{ id: string; color: string; positionX: number; positionY: number; opacity: number; isCurrent: boolean }[]>((acc, team) => {
+    if (team.id === storedTeamIdForPawns) {
+      acc.push({ id: team.id, color: team.color, positionX: team.positionX, positionY: team.positionY, opacity: 1, isCurrent: true });
+    }
+    return acc;
+  }, []);
   const selectedDestinationNode = destinationNodes.find((node) => node.id === selectedDestinationNodeId) ?? null;
   const resolvedCurrentMoveNode = currentMoveNode ?? resolveCurrentTeamBoardNode(boardTeams, storedTeamId);
   const secretPassageDestinationNode = resolvedCurrentMoveNode?.kind === "room"
@@ -1235,10 +1252,18 @@ export function TerminalView() {
     ? getBoardRoomSpaceSlotIndex(resolvedCurrentMoveNode.id)
     : null;
   const currentRoomSpace = currentRoomSpaceSlotIndex === null ? null : categories.c3[currentRoomSpaceSlotIndex] ?? null;
+  const selectedSubjectId = categories.c1.some((item) => item.id === rawSubjectId) ? rawSubjectId : "";
+  const selectedObjectId = categories.c2.some((item) => item.id === rawObjectId) ? rawObjectId : "";
   const selectedSubject = categories.c1.find((item) => item.id === selectedSubjectId) ?? null;
   const selectedObject = categories.c2.find((item) => item.id === selectedObjectId) ?? null;
   const refuteRequest = pendingSuggestion?.type === "REFUTE_REQUEST" ? pendingSuggestion : null;
   const awaitingRefutation = pendingSuggestion?.type === "AWAITING_REFUTATION" ? pendingSuggestion : null;
+  // Compute effective refute card id: use manual selection if still valid, otherwise default to first matching card
+  const selectedRefuteCardId = refuteRequest
+    ? (refuteRequest.matchingCards.some((card) => card.id === manualRefuteCardId)
+        ? manualRefuteCardId
+        : refuteRequest.matchingCards[0]?.id ?? "")
+    : "";
   const selectedRefuteCard = refuteRequest?.matchingCards.find((card) => card.id === selectedRefuteCardId) ?? null;
   const canUseRealtimeSuggestion = lobbyConnectionStatus === "connected" && Boolean(lobbySocketRef.current);
   const canComposeSuggestion =
@@ -1423,7 +1448,7 @@ export function TerminalView() {
       {/* Header */}
       <div className="flex items-center justify-between p-4 bg-slate-950/80 backdrop-blur-md border-b border-cyan-900/50 sticky top-0 z-50">
         <Link to="/" className="text-slate-500 hover:text-cyan-400 transition-colors">
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="size-5" />
         </Link>
         <div className="text-center flex flex-col items-center">
           <h2 className="text-xs font-bold text-emerald-400 tracking-widest uppercase flex items-center gap-2">
@@ -1440,7 +1465,7 @@ export function TerminalView() {
             {teamName.toUpperCase()} - {sessionStatusLabel} - {connectionLabel}
           </p>
         </div>
-        <div className={`w-3 h-3 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse ${isMyTurn ? 'bg-emerald-500 shadow-emerald-500/80' : 'bg-red-500 shadow-red-500/80'}`}></div>
+        <div className={`size-3 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse ${isMyTurn ? 'bg-emerald-500 shadow-emerald-500/80' : 'bg-red-500 shadow-red-500/80'}`}></div>
       </div>
 
       {!lobbyError ? (
@@ -1486,7 +1511,7 @@ export function TerminalView() {
           {resolutionCountdownLabel ? (
             <div
               data-cy="terminal-final-chance-countdown"
-              className={`rounded-2xl border px-4 py-4 ${
+              className={`rounded-2xl border p-4 ${
                 resolutionCountdownSeconds === 0
                   ? "border-red-700/60 bg-red-950/25"
                   : "border-amber-700/60 bg-amber-950/20"
@@ -1516,7 +1541,7 @@ export function TerminalView() {
             <div className="grid gap-3">
               <div className="rounded-2xl border border-rose-800/60 bg-slate-900/70 p-4">
                 <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-rose-200">
-                  <MapPin className="h-3.5 w-3.5" />
+                  <MapPin className="size-3.5" />
                   {catNames.c3}
                 </label>
                 <select
@@ -1525,7 +1550,7 @@ export function TerminalView() {
                   onChange={(event) => setSelectedSpaceId(event.target.value)}
                   className="mt-3 w-full rounded-xl border border-rose-800/70 bg-slate-900/80 p-3 text-sm text-rose-100 outline-none focus:border-rose-400"
                 >
-                  <option value="" disabled>Selecciona...</option>
+                  <option value="" disabled>Selecciona…</option>
                   {BOARD_SPACE_SLOTS.map((slot, index) => {
                     const space = categories.c3[index];
                     const optionLabel = space?.name ?? `Sala ${index + 1}`;
@@ -1542,7 +1567,7 @@ export function TerminalView() {
 
               <div className="rounded-2xl border border-cyan-800/60 bg-slate-900/70 p-4">
                 <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
-                  <User className="h-3.5 w-3.5" />
+                  <User className="size-3.5" />
                   {catNames.c1}
                 </label>
                 <select
@@ -1551,7 +1576,7 @@ export function TerminalView() {
                   onChange={(event) => setSelectedSubjectId(event.target.value)}
                   className="mt-3 w-full rounded-xl border border-cyan-800/70 bg-slate-900/80 p-3 text-sm text-cyan-100 outline-none focus:border-cyan-400"
                 >
-                  <option value="" disabled>Selecciona...</option>
+                  <option value="" disabled>Selecciona…</option>
                   {categories.c1.map((item) => (
                     <option key={item.id} value={item.id}>{item.name}</option>
                   ))}
@@ -1560,7 +1585,7 @@ export function TerminalView() {
 
               <div className="rounded-2xl border border-emerald-800/60 bg-slate-900/70 p-4">
                 <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">
-                  <Box className="h-3.5 w-3.5" />
+                  <Box className="size-3.5" />
                   {catNames.c2}
                 </label>
                 <select
@@ -1569,7 +1594,7 @@ export function TerminalView() {
                   onChange={(event) => setSelectedObjectId(event.target.value)}
                   className="mt-3 w-full rounded-xl border border-emerald-800/70 bg-slate-900/80 p-3 text-sm text-emerald-100 outline-none focus:border-emerald-400"
                 >
-                  <option value="" disabled>Selecciona...</option>
+                  <option value="" disabled>Selecciona…</option>
                   {categories.c2.map((item) => (
                     <option key={item.id} value={item.id}>{item.name}</option>
                   ))}
@@ -1587,13 +1612,13 @@ export function TerminalView() {
                 data-cy="terminal-final-chance-submit"
                 onClick={() => void handleFinalAccusation({ resolutionMode: true })}
                 disabled={isSubmittingAccusation || !selectedSubjectId || !selectedObjectId || !selectedSpaceId}
-                className="w-full rounded-2xl bg-amber-500 px-4 py-4 text-sm font-black uppercase tracking-[0.22em] text-slate-950 shadow-[0_0_24px_rgba(245,158,11,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-2xl bg-amber-500 p-4 text-sm font-black uppercase tracking-[0.22em] text-slate-950 shadow-[0_0_24px_rgba(245,158,11,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmittingAccusation ? "Enviando acusacion..." : "Enviar acusacion final"}
               </button>
             </div>
           ) : (
-            <div className="rounded-2xl border border-amber-700/60 bg-amber-950/25 px-4 py-4 text-sm text-amber-50">
+            <div className="rounded-2xl border border-amber-700/60 bg-amber-950/25 p-4 text-sm text-amber-50">
               {hasSubmittedResolution
                 ? accusationFeedback ?? "Esperando al resto de equipos..."
                 : "Permanece atento al revelado final de la solución."}
@@ -1612,13 +1637,13 @@ export function TerminalView() {
           
           {/* MAP & DICE TAB */}
           {activeTab === "map" && (
-            <motion.div 
+            <m.div 
               key="map"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="absolute inset-0 pb-20 bg-[#380b0b] flex flex-col items-center justify-start overflow-y-auto"
             >
               {/* Tablero sobre base cuadrada fija para mantener coordenadas y áreas clicables consistentes */}
-              <div className="relative h-[clamp(18rem,88vw,26rem)] w-[clamp(18rem,88vw,26rem)] bg-black/50 rounded-b-xl border-b-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex-shrink-0 overflow-hidden">
+              <div className="relative size-[clamp(18rem,88vw,26rem)] bg-black/50 rounded-b-xl border-b-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex-shrink-0 overflow-hidden">
                  {import.meta.env.DEV && (
                    <div className="absolute right-3 top-3 z-40 flex flex-col items-end gap-1.5">
                      <div className="flex gap-1">
@@ -1646,18 +1671,19 @@ export function TerminalView() {
                      {debugMode === 'forced-dice' && isMyTurn && sessionTurn?.dice === null && (
                        <div
                          data-cy="debug-forced-dice-panel"
-                         className="flex flex-col items-end gap-1.5 rounded-md border border-amber-700/60 bg-amber-950/85 px-2 py-2 shadow-[0_0_12px_rgba(245,158,11,0.25)]"
+                         className="flex flex-col items-end gap-1.5 rounded-md border border-amber-700/60 bg-amber-950/85 p-2 shadow-[0_0_12px_rgba(245,158,11,0.25)]"
                        >
-                         <label className="font-mono text-[9px] uppercase tracking-widest text-amber-400">
+                         <label htmlFor="debug-forced-dice-select" className="font-mono text-[9px] uppercase tracking-widest text-amber-400">
                            Forzar dado
                          </label>
                          <select
+                           id="debug-forced-dice-select"
                            data-cy="debug-forced-dice-select"
                            value={forcedDiceValue ?? ''}
                            onChange={(e) => setForcedDiceValue(e.target.value ? Number(e.target.value) : undefined)}
                            className="rounded border border-amber-700/40 bg-slate-950/90 font-mono text-[11px] text-amber-200 px-1.5 py-0.5"
                          >
-                           <option value="">— elige valor —</option>
+                           <option value="">elige valor</option>
                            {Array.from({ length: 11 }, (_, i) => i + 2).map((v) => (
                              <option key={v} value={v}>{v}</option>
                            ))}
@@ -1690,8 +1716,10 @@ export function TerminalView() {
                    onSpaceMotifClick={setActiveMotifSpace}
                  >
                    {sessionStatus === "EN_CURSO" ? (
-                     <div
+                     <button
+                       type="button"
                        data-cy="terminal-board-surface"
+                       aria-label="Superficie del tablero"
                        className="absolute inset-0 z-20 cursor-crosshair"
                        onClick={handleBoardSurfaceClick}
                      />
@@ -1710,9 +1738,9 @@ export function TerminalView() {
                      >
                        <div className="scale-[0.28] sm:scale-[0.34] md:scale-[0.42] origin-center">
                          <DiceAnimation
+                           key={diceResetSignal}
                            dataCy="terminal-dice-roll"
                            disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || isResolutionBlockingGameplay || sessionTurn?.dice !== null || isLoadingMoves || isMovingPawn}
-                           resetSignal={diceResetSignal}
                            onRollRequest={handleDiceRoll}
                          />
                        </div>
@@ -1722,12 +1750,12 @@ export function TerminalView() {
                    {/* Card Modal Overlay */}
                    <AnimatePresence>
                      {selectedCard && (
-                       <motion.div
+                       <m.div
                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 backdrop-blur-sm"
                          onClick={() => { setSelectedCard(null); setCardFlipped(false); }}
                        >
-                         <motion.div
+                         <m.div
                            initial={{ scale: 0.8, y: 20 }}
                            animate={{ scale: 1, y: 0, rotateY: cardFlipped ? 180 : 0 }}
                            exit={{ scale: 0.8, opacity: 0 }}
@@ -1739,15 +1767,15 @@ export function TerminalView() {
                              <div className="w-full h-[60%] bg-black/40 border-b border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden">
                                {selectedCard.image
                                  ? <ImageWithFallback src={selectedCard.image} alt={selectedCard.name} className="w-full h-full object-cover opacity-90"
-                                     fallback={<div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
-                                       {selectedCard.kind === "SUJETO" && <User className="w-6 h-6 text-slate-300" />}
-                                       {selectedCard.kind === "OBJETO" && <Box className="w-6 h-6 text-slate-300" />}
-                                       {selectedCard.kind === "ESPACIO" && <MapPin className="w-6 h-6 text-slate-300" />}
+                                     fallback={<div className="size-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
+                                       {selectedCard.kind === "SUJETO" && <User className="size-6 text-slate-300" />}
+                                       {selectedCard.kind === "OBJETO" && <Box className="size-6 text-slate-300" />}
+                                       {selectedCard.kind === "ESPACIO" && <MapPin className="size-6 text-slate-300" />}
                                      </div>} />
-                                 : <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
-                                     {selectedCard.kind === "SUJETO" && <User className="w-6 h-6 text-slate-300" />}
-                                     {selectedCard.kind === "OBJETO" && <Box className="w-6 h-6 text-slate-300" />}
-                                     {selectedCard.kind === "ESPACIO" && <MapPin className="w-6 h-6 text-slate-300" />}
+                                 : <div className="size-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
+                                     {selectedCard.kind === "SUJETO" && <User className="size-6 text-slate-300" />}
+                                     {selectedCard.kind === "OBJETO" && <Box className="size-6 text-slate-300" />}
+                                     {selectedCard.kind === "ESPACIO" && <MapPin className="size-6 text-slate-300" />}
                                    </div>}
                              </div>
                              <div className="w-full flex-1 flex flex-col items-center justify-center p-2">
@@ -1760,8 +1788,8 @@ export function TerminalView() {
                              <p className="text-xs text-slate-400 leading-relaxed font-mono">{selectedCard.desc}</p>
                              <div className="mt-auto text-[8px] text-cyan-500 uppercase tracking-widest animate-pulse">Toca para voltear</div>
                            </div>
-                         </motion.div>
-                       </motion.div>
+                         </m.div>
+                       </m.div>
                      )}
                    </AnimatePresence>
                  </ThemedBoard>
@@ -1829,7 +1857,7 @@ export function TerminalView() {
                       </div>
                     ) : isLoadingMoves ? (
                       <p className="mt-3 text-[11px] text-cyan-200 uppercase tracking-[0.18em]">
-                        Preparando selector de destino...
+                        Preparando selector de destino…
                       </p>
                     ) : destinationNodes.length === 0 ? (
                       <p className="mt-3 text-[11px] text-slate-400">
@@ -1886,11 +1914,11 @@ export function TerminalView() {
               {/* Inventory Cards List */}
               <div className="w-full flex-1 p-4 flex flex-col gap-3 min-h-[160px]">
                 <h3 className="text-[10px] font-bold tracking-widest uppercase text-slate-500 flex items-center gap-2">
-                  <Database className="w-3 h-3" /> INVENTARIO DE CARTAS
+                  <Database className="size-3" /> INVENTARIO DE CARTAS
                 </h3>
                 {isLoadingHand ? (
                   <div data-cy="terminal-hand-state" className="rounded-lg border border-cyan-900/40 bg-cyan-950/10 px-4 py-3 text-xs uppercase tracking-[0.2em] text-cyan-200">
-                    Cargando cartas del equipo...
+                    Cargando cartas del equipo…
                   </div>
                 ) : handError ? (
                   <div data-cy="terminal-hand-state" className="rounded-lg border border-red-900/60 bg-red-950/20 px-4 py-3 text-xs text-red-100">
@@ -1905,7 +1933,8 @@ export function TerminalView() {
                 ) : (
                   <div data-cy="terminal-hand-list" className="flex gap-4 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory">
                     {teamHand.map(card => (
-                      <div
+                      <button
+                        type="button"
                         data-cy="terminal-hand-card"
                         key={card.id}
                         onClick={() => { setSelectedCard(card); setCardFlipped(false); }}
@@ -1915,25 +1944,25 @@ export function TerminalView() {
                           {card.image
                             ? <ImageWithFallback src={card.image} alt={card.name} className="w-full h-full object-cover opacity-80"
                                 fallback={<div className="w-full h-full bg-slate-900 flex items-center justify-center">
-                                  {card.kind === "SUJETO" && <User className="w-5 h-5 text-slate-400 opacity-80" />}
-                                  {card.kind === "OBJETO" && <Box className="w-5 h-5 text-slate-400 opacity-80" />}
-                                  {card.kind === "ESPACIO" && <MapPin className="w-5 h-5 text-slate-400 opacity-80" />}
+                                  {card.kind === "SUJETO" && <User className="size-5 text-slate-400 opacity-80" />}
+                                  {card.kind === "OBJETO" && <Box className="size-5 text-slate-400 opacity-80" />}
+                                  {card.kind === "ESPACIO" && <MapPin className="size-5 text-slate-400 opacity-80" />}
                                 </div>} />
                             : <div className="w-full h-full bg-slate-900 flex items-center justify-center">
-                                {card.kind === "SUJETO" && <User className="w-5 h-5 text-slate-400 opacity-80" />}
-                                {card.kind === "OBJETO" && <Box className="w-5 h-5 text-slate-400 opacity-80" />}
-                                {card.kind === "ESPACIO" && <MapPin className="w-5 h-5 text-slate-400 opacity-80" />}
+                                {card.kind === "SUJETO" && <User className="size-5 text-slate-400 opacity-80" />}
+                                {card.kind === "OBJETO" && <Box className="size-5 text-slate-400 opacity-80" />}
+                                {card.kind === "ESPACIO" && <MapPin className="size-5 text-slate-400 opacity-80" />}
                               </div>}
-                          <div className="absolute top-0 right-0 w-6 h-6 bg-black/60 rounded-bl-full backdrop-blur-sm border-b border-l border-slate-700/50 flex items-start justify-end p-1">
-                            {card.kind === "SUJETO" && <User className="w-3 h-3 text-cyan-400" />}
-                            {card.kind === "OBJETO" && <Box className="w-3 h-3 text-emerald-400" />}
-                            {card.kind === "ESPACIO" && <MapPin className="w-3 h-3 text-red-400" />}
+                          <div className="absolute top-0 right-0 size-6 bg-black/60 rounded-bl-full backdrop-blur-sm border-b border-l border-slate-700/50 flex items-start justify-end p-1">
+                            {card.kind === "SUJETO" && <User className="size-3 text-cyan-400" />}
+                            {card.kind === "OBJETO" && <Box className="size-3 text-emerald-400" />}
+                            {card.kind === "ESPACIO" && <MapPin className="size-3 text-red-400" />}
                           </div>
                         </div>
                         <div className="p-2 w-full flex-1 flex items-center justify-center">
                           <span className="text-[9px] font-bold text-center leading-tight text-slate-200 uppercase px-1 line-clamp-2">{card.name}</span>
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -1942,12 +1971,12 @@ export function TerminalView() {
               <div className="w-full px-4 pb-4">
                 <EvidenciasComunes publicCards={publicCards} />
               </div>
-            </motion.div>
+            </m.div>
           )}
 
           {/* MATRIX TAB */}
           {activeTab === "matrix" && (
-            <motion.div 
+            <m.div 
               key="matrix"
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
               className="p-2 pb-24"
@@ -1967,7 +1996,7 @@ export function TerminalView() {
                       };
                       return (
                       <div key={team} className="w-10 flex-shrink-0 border-r border-slate-800 flex items-center justify-center p-1">
-                        <div className={`w-3 h-3 rounded-full ${getTeamColor(team)} opacity-80 shadow-[0_0_8px_currentColor]`}></div>
+                        <div className={`size-3 rounded-full ${getTeamColor(team)} opacity-80 shadow-[0_0_8px_currentColor]`}></div>
                       </div>
                     )})}
                   </div>
@@ -2007,7 +2036,7 @@ export function TerminalView() {
                                 type="button"
                                 data-cy={`matrix-space-motif-${item.id}`}
                                 onClick={() => setActiveMotifSpace({ id: item.id, name: item.name, motif: item.motif, desc: item.desc })}
-                                className="flex-shrink-0 w-4 h-4 rounded-full bg-amber-900/70 text-[8px] font-black text-amber-100 border border-amber-700/60 hover:bg-amber-800/90 transition-colors flex items-center justify-center"
+                                className="flex-shrink-0 size-4 rounded-full bg-amber-900/70 text-[8px] font-black text-amber-100 border border-amber-700/60 hover:bg-amber-800/90 transition-colors flex items-center justify-center"
                                 title={item.motif}
                               >
                                 M
@@ -2019,13 +2048,14 @@ export function TerminalView() {
                               const state = matrix[`${rowName}-${team}`] || 0;
                               return (
                                 <button
+                                  type="button"
                                   key={team}
                                   onClick={() => handleCellClick(rowName, team)}
-                                  className={`w-10 h-10 flex-shrink-0 border-r border-slate-800 flex items-center justify-center transition-colors ${
+                                  className={`size-10 flex-shrink-0 border-r border-slate-800 flex items-center justify-center transition-colors ${
                                     state === 2 ? 'bg-red-950/20' : state === 1 ? 'bg-orange-950/10' : 'bg-transparent'
                                   }`}
                                 >
-                                  {renderCellIcon(state)}
+                                  <CellIcon state={state} />
                                 </button>
                               )
                             })}
@@ -2036,19 +2066,20 @@ export function TerminalView() {
                   )})}
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           )}
 
           {/* NOTES TAB */}
           {activeTab === "notes" && (
-            <motion.div 
+            <m.div 
               key="notes"
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
               className="p-4 pb-24 h-full flex flex-col"
             >
               <div className="flex-1 bg-slate-900/50 border border-slate-800 rounded-xl p-1 relative overflow-hidden">
                 <div className="absolute top-0 left-8 bottom-0 w-[1px] bg-red-900/30 z-0"></div>
-                <textarea 
+                <textarea
+                  aria-label="Notas de análisis lógico"
                   className="w-full h-full bg-transparent resize-none p-4 pl-12 text-sm text-cyan-200 focus:outline-none z-10 relative font-mono leading-[32px] placeholder:text-slate-600"
                   style={{
                     backgroundImage: 'repeating-linear-gradient(transparent, transparent 31px, rgba(15, 23, 42, 0.8) 31px, rgba(15, 23, 42, 0.8) 32px)',
@@ -2058,12 +2089,12 @@ export function TerminalView() {
                   spellCheck="false"
                 ></textarea>
               </div>
-            </motion.div>
+            </m.div>
           )}
 
           {/* SUGGEST TAB */}
           {activeTab === "suggest" && (
-            <motion.div
+            <m.div
               key="suggest"
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
               className="p-4 pb-24 flex flex-col gap-3 bg-[radial-gradient(circle_at_top,_rgba(6,182,212,0.16),_transparent_34%),linear-gradient(180deg,_rgba(8,47,73,0.18),_rgba(2,6,23,0.96)_72%)]"
@@ -2074,7 +2105,7 @@ export function TerminalView() {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <div className="inline-flex items-center gap-2 rounded-full border border-cyan-900/60 bg-cyan-950/20 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-200">
-                        <MessageSquare className="h-3.5 w-3.5" />
+                        <MessageSquare className="size-3.5" />
                         Canal de deduccion
                       </div>
                       <h3 className="mt-3 text-lg font-black uppercase tracking-[0.2em] text-emerald-300">
@@ -2122,14 +2153,14 @@ export function TerminalView() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-2xl border border-cyan-900/50 bg-cyan-950/20 p-3">
                       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-300">
-                        <MapPin className="h-3.5 w-3.5" />
+                        <MapPin className="size-3.5" />
                         Sala actual
                       </div>
                       <p className="mt-2 text-sm font-semibold text-white">{currentRoomSpace?.name ?? currentRoomLabel ?? "Sin sala activa"}</p>
                     </div>
                     <div className="rounded-2xl border border-emerald-900/50 bg-emerald-950/20 p-3">
                       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-300">
-                        <Shield className="h-3.5 w-3.5" />
+                        <Shield className="size-3.5" />
                         Turno
                       </div>
                       <p className="mt-2 text-sm font-semibold text-white">{isMyTurn ? "Control local" : currentTurnLabel}</p>
@@ -2185,7 +2216,7 @@ export function TerminalView() {
                       <div className="mt-5 grid gap-3">
                         <div className="rounded-2xl border border-rose-800/60 bg-slate-950/45 p-4">
                           <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-rose-200">
-                            <MapPin className="h-3.5 w-3.5" />
+                            <MapPin className="size-3.5" />
                             {catNames.c3}
                           </label>
                           <select
@@ -2194,7 +2225,7 @@ export function TerminalView() {
                             onChange={(event) => setSelectedSpaceId(event.target.value)}
                             className="mt-3 w-full rounded-xl border border-rose-800/70 bg-slate-900/80 p-3 text-sm text-rose-100 outline-none focus:border-rose-400"
                           >
-                            <option value="" disabled>Selecciona...</option>
+                            <option value="" disabled>Selecciona…</option>
                             {BOARD_SPACE_SLOTS.map((slot, index) => {
                               const space = categories.c3[index];
                               const optionLabel = space?.name ?? `Sala ${index + 1}`;
@@ -2211,7 +2242,7 @@ export function TerminalView() {
 
                         <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/45 p-4">
                           <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
-                            <User className="h-3.5 w-3.5" />
+                            <User className="size-3.5" />
                             {catNames.c1}
                           </label>
                           <select
@@ -2220,7 +2251,7 @@ export function TerminalView() {
                             onChange={(event) => setSelectedSubjectId(event.target.value)}
                             className="mt-3 w-full rounded-xl border border-cyan-800/70 bg-slate-900/80 p-3 text-sm text-cyan-100 outline-none focus:border-cyan-400"
                           >
-                            <option value="" disabled>Selecciona...</option>
+                            <option value="" disabled>Selecciona…</option>
                             {categories.c1.map((item) => (
                               <option key={item.id} value={item.id}>{item.name}</option>
                             ))}
@@ -2229,7 +2260,7 @@ export function TerminalView() {
 
                         <div className="rounded-2xl border border-emerald-800/60 bg-slate-950/45 p-4">
                           <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">
-                            <Box className="h-3.5 w-3.5" />
+                            <Box className="size-3.5" />
                             {catNames.c2}
                           </label>
                           <select
@@ -2238,7 +2269,7 @@ export function TerminalView() {
                             onChange={(event) => setSelectedObjectId(event.target.value)}
                             className="mt-3 w-full rounded-xl border border-emerald-800/70 bg-slate-900/80 p-3 text-sm text-emerald-100 outline-none focus:border-emerald-400"
                           >
-                            <option value="" disabled>Selecciona...</option>
+                            <option value="" disabled>Selecciona…</option>
                             {categories.c2.map((item) => (
                               <option key={item.id} value={item.id}>{item.name}</option>
                             ))}
@@ -2262,7 +2293,7 @@ export function TerminalView() {
                           !selectedObjectId ||
                           !selectedSpaceId
                         }
-                        className="mt-5 w-full rounded-2xl bg-red-600 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(239,68,68,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                        className="mt-5 w-full rounded-2xl bg-red-600 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(239,68,68,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {isSubmittingAccusation ? "Resolviendo acusacion..." : "Realizar acusacion"}
                       </button>
@@ -2287,9 +2318,9 @@ export function TerminalView() {
 
                           <div className="mt-4 grid gap-3 sm:grid-cols-3">
                             {[
-                              { label: catNames.c1, element: activeSuggestion.subject, tone: "border-cyan-700/70 bg-cyan-950/30 text-cyan-100", icon: <User className="h-4 w-4 text-cyan-300" /> },
-                              { label: catNames.c2, element: activeSuggestion.object, tone: "border-emerald-700/70 bg-emerald-950/30 text-emerald-100", icon: <Box className="h-4 w-4 text-emerald-300" /> },
-                              { label: catNames.c3, element: activeSuggestion.space, tone: "border-rose-700/70 bg-rose-950/30 text-rose-100", icon: <MapPin className="h-4 w-4 text-rose-300" /> },
+                              { label: catNames.c1, element: activeSuggestion.subject, tone: "border-cyan-700/70 bg-cyan-950/30 text-cyan-100", icon: <User className="size-4 text-cyan-300" /> },
+                              { label: catNames.c2, element: activeSuggestion.object, tone: "border-emerald-700/70 bg-emerald-950/30 text-emerald-100", icon: <Box className="size-4 text-emerald-300" /> },
+                              { label: catNames.c3, element: activeSuggestion.space, tone: "border-rose-700/70 bg-rose-950/30 text-rose-100", icon: <MapPin className="size-4 text-rose-300" /> },
                             ].map((item) => (
                               <div key={item.label} className={`rounded-2xl border p-3 ${item.tone}`}>
                                 <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em]">
@@ -2343,7 +2374,7 @@ export function TerminalView() {
                                 >
                                   <div className="flex items-center gap-3">
                                     <div className="rounded-xl border border-white/10 bg-slate-950/60 p-2">
-                                      {card.kind === "SUJETO" ? <User className="h-4 w-4 text-cyan-300" /> : card.kind === "OBJETO" ? <Box className="h-4 w-4 text-emerald-300" /> : <MapPin className="h-4 w-4 text-rose-300" />}
+                                      {card.kind === "SUJETO" ? <User className="size-4 text-cyan-300" /> : card.kind === "OBJETO" ? <Box className="size-4 text-emerald-300" /> : <MapPin className="size-4 text-rose-300" />}
                                     </div>
                                     <div className="flex-1">
                                       <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-300">{card.kind}</p>
@@ -2360,7 +2391,7 @@ export function TerminalView() {
                             type="button"
                             onClick={() => void handleSubmitRefutation()}
                             disabled={!selectedRefuteCard || isSubmittingRefutation || !canUseRealtimeSuggestion}
-                            className="mt-5 w-full rounded-2xl bg-red-500 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(239,68,68,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                            className="mt-5 w-full rounded-2xl bg-red-500 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(239,68,68,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {isSubmittingRefutation ? "Mostrando carta..." : selectedRefuteCard ? `Mostrar ${selectedRefuteCard.name}` : "Selecciona una carta"}
                           </button>
@@ -2397,7 +2428,7 @@ export function TerminalView() {
                           <div className="mt-3 grid gap-3">
                             <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/45 p-4">
                               <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
-                                <User className="h-3.5 w-3.5" />
+                                <User className="size-3.5" />
                                 {catNames.c1}
                               </label>
                               <select
@@ -2406,7 +2437,7 @@ export function TerminalView() {
                                 onChange={(event) => setSelectedSubjectId(event.target.value)}
                                 className="mt-3 w-full rounded-xl border border-cyan-800/70 bg-slate-900/80 p-3 text-sm text-cyan-100 outline-none focus:border-cyan-400"
                               >
-                                <option value="" disabled>Selecciona...</option>
+                                <option value="" disabled>Selecciona…</option>
                                 {categories.c1.map((item) => (
                                   <option key={item.id} value={item.id}>{item.name}</option>
                                 ))}
@@ -2415,7 +2446,7 @@ export function TerminalView() {
 
                             <div className="rounded-2xl border border-emerald-800/60 bg-slate-950/45 p-4">
                               <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">
-                                <Box className="h-3.5 w-3.5" />
+                                <Box className="size-3.5" />
                                 {catNames.c2}
                               </label>
                               <select
@@ -2424,7 +2455,7 @@ export function TerminalView() {
                                 onChange={(event) => setSelectedObjectId(event.target.value)}
                                 className="mt-3 w-full rounded-xl border border-emerald-800/70 bg-slate-900/80 p-3 text-sm text-emerald-100 outline-none focus:border-emerald-400"
                               >
-                                <option value="" disabled>Selecciona...</option>
+                                <option value="" disabled>Selecciona…</option>
                                 {categories.c2.map((item) => (
                                   <option key={item.id} value={item.id}>{item.name}</option>
                                 ))}
@@ -2447,7 +2478,7 @@ export function TerminalView() {
                               type="button"
                               onClick={() => void handleSubmitSuggestion()}
                               disabled={!suggestionPreview || isSubmittingSuggestion || isResolutionBlockingGameplay || !canUseRealtimeSuggestion}
-                              className="rounded-2xl bg-cyan-500 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.3)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                              className="rounded-2xl bg-cyan-500 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.3)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {isSubmittingSuggestion ? "Enviando sugerencia..." : "Lanzar sugerencia"}
                             </button>
@@ -2456,7 +2487,7 @@ export function TerminalView() {
                               type="button"
                               onClick={() => void handleEndTurnFromRoom()}
                               disabled={isEndingTurn || isResolutionBlockingGameplay}
-                              className="rounded-2xl border border-slate-600 bg-slate-900/75 px-4 py-4 text-sm font-black uppercase tracking-[0.24em] text-slate-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                              className="rounded-2xl border border-slate-600 bg-slate-900/75 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {isEndingTurn ? "Cerrando..." : "Terminar turno"}
                             </button>
@@ -2485,7 +2516,7 @@ export function TerminalView() {
                             <div className="mt-4 rounded-2xl border border-emerald-700/60 bg-slate-950/55 p-4">
                               <div className="flex items-center gap-3">
                                 <div className="rounded-xl border border-white/10 bg-slate-900/80 p-2">
-                                  {refutationResult.shownCard.kind === "SUJETO" ? <User className="h-4 w-4 text-cyan-300" /> : refutationResult.shownCard.kind === "OBJETO" ? <Box className="h-4 w-4 text-emerald-300" /> : <MapPin className="h-4 w-4 text-rose-300" />}
+                                  {refutationResult.shownCard.kind === "SUJETO" ? <User className="size-4 text-cyan-300" /> : refutationResult.shownCard.kind === "OBJETO" ? <Box className="size-4 text-emerald-300" /> : <MapPin className="size-4 text-rose-300" />}
                                 </div>
                                 <div>
                                   <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Carta revelada</p>
@@ -2507,7 +2538,7 @@ export function TerminalView() {
                   )}
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           )}
 
         </AnimatePresence>
@@ -2515,7 +2546,7 @@ export function TerminalView() {
 
       <AnimatePresence>
         {isResolutionShowingSolution && activeResolution?.solution ? (
-          <motion.div
+          <m.div
             key="terminal-solution-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -2523,7 +2554,7 @@ export function TerminalView() {
             className="absolute inset-0 z-[70] flex flex-col items-center justify-center gap-6 bg-slate-950/95 px-6 text-center"
             data-cy="terminal-solution-reveal"
           >
-            <motion.div
+            <m.div
               initial={{ y: 24, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               className="space-y-2"
@@ -2534,7 +2565,7 @@ export function TerminalView() {
               <h3 className="text-2xl font-black uppercase tracking-[0.14em] text-white">
                 Caso cerrado
               </h3>
-            </motion.div>
+            </m.div>
 
             <div className="grid w-full max-w-xl gap-4 sm:grid-cols-3">
               {[
@@ -2542,7 +2573,7 @@ export function TerminalView() {
                 { key: "object", label: catNames.c2, card: activeResolution.solution.object, tone: "border-emerald-700/70 bg-emerald-950/25 text-emerald-100" },
                 { key: "space", label: catNames.c3, card: activeResolution.solution.space, tone: "border-rose-700/70 bg-rose-950/25 text-rose-100" },
               ].map((item, index) => (
-                <motion.div
+                <m.div
                   key={item.key}
                   data-cy={`terminal-solution-${item.key}`}
                   initial={{ opacity: 0, rotateY: -90, scale: 0.85 }}
@@ -2552,11 +2583,11 @@ export function TerminalView() {
                 >
                   <span className="block text-[10px] font-bold uppercase tracking-[0.22em] opacity-70">{item.label}</span>
                   <p className="mt-3 text-lg font-black text-white">{item.card.name}</p>
-                </motion.div>
+                </m.div>
               ))}
             </div>
 
-            <motion.div
+            <m.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.45, duration: 0.3 }}
@@ -2567,8 +2598,8 @@ export function TerminalView() {
                 : activeResolution.winningTeams.length === 1
                 ? `Equipo ganador: ${activeResolution.winningTeams[0]?.name ?? "Sin determinar"}.`
                 : `Equipos ganadores: ${activeResolution.winningTeams.map((team) => team.name).join(", ")}.`}
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         ) : null}
       </AnimatePresence>
 
@@ -2592,6 +2623,7 @@ export function TerminalView() {
           { id: "suggest", icon: MessageSquare, label: "SUGERIR/ACUSAR" }
         ].map(tab => (
           <button
+            type="button"
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all ${
@@ -2600,7 +2632,7 @@ export function TerminalView() {
                 : "text-slate-600 hover:text-slate-400"
             }`}
           >
-            <tab.icon className="w-6 h-6" strokeWidth={activeTab === tab.id ? 2.5 : 1.5} />
+            <tab.icon className="size-6" strokeWidth={activeTab === tab.id ? 2.5 : 1.5} />
             <span className="text-[9px] font-bold tracking-widest uppercase">{tab.label}</span>
           </button>
         ))}

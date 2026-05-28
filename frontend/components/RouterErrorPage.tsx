@@ -51,7 +51,7 @@ export function RouterErrorPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-950 p-6">
       <div className="max-w-md w-full text-center space-y-6">
         <div className="flex justify-center">
-          <AlertTriangle className="w-16 h-16 text-amber-400" />
+          <AlertTriangle className="size-16 text-amber-400" />
         </div>
 
         {status && (
@@ -69,26 +69,29 @@ export function RouterErrorPage() {
         <div className="flex gap-3 justify-center pt-2">
           {chunkError ? (
             <button
+              type="button"
               onClick={handleReload}
               className="flex items-center gap-2 px-5 py-2.5 bg-cyan-700 hover:bg-cyan-600 text-white font-mono text-sm uppercase tracking-wider rounded transition-colors"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className="size-4" />
               Recargar página
             </button>
           ) : (
             <>
               <button
+                type="button"
                 onClick={handleReload}
                 className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-sm uppercase tracking-wider rounded transition-colors border border-slate-700"
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className="size-4" />
                 Recargar
               </button>
               <button
+                type="button"
                 onClick={handleHome}
                 className="flex items-center gap-2 px-4 py-2 bg-cyan-700 hover:bg-cyan-600 text-white font-mono text-sm uppercase tracking-wider rounded transition-colors"
               >
-                <Home className="w-4 h-4" />
+                <Home className="size-4" />
                 Inicio
               </button>
             </>

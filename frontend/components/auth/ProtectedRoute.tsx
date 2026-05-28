@@ -9,19 +9,16 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const [status, setStatus] = useState<'checking' | 'allowed' | 'denied'>('checking');
+  const [status, setStatus] = useState<'checking' | 'allowed' | 'denied'>(() =>
+    hasStoredAdminSession() ? 'checking' : 'denied'
+  );
 
   useEffect(() => {
+    if (!hasStoredAdminSession()) return;
+
     let cancelled = false;
 
     async function validateSession() {
-      if (!hasStoredAdminSession()) {
-        if (!cancelled) {
-          setStatus('denied');
-        }
-        return;
-      }
-
       try {
         await api.get('/auth/session');
         if (!cancelled) {
@@ -35,6 +32,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       }
     }
 
+    // react-doctor-disable-next-line react-doctor/no-initialize-state
     validateSession();
 
     return () => {
@@ -45,7 +43,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (status === 'checking') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-cyan-300 font-mono uppercase tracking-[0.2em]">
-        Verificando acceso...
+        Verificando acceso…
       </div>
     );
   }

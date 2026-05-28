@@ -25,9 +25,9 @@ export const BOARD_MOVEMENT_NODE_PICK_RADIUS = {
   roomHeightPercent: 9.4,
 };
 
-export const BOARD_MOVEMENT_POSITION_TOLERANCE = 0.75;
+const BOARD_MOVEMENT_POSITION_TOLERANCE = 0.75;
 
-export const BOARD_ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER = [
+const BOARD_ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER = [
   'sala-superior-izquierda',
   'sala-superior-centro',
   'sala-superior-derecha',
@@ -513,8 +513,8 @@ const IMAGE_ALIGNED_EXTRA_GRID_POINTS = [
 
 const EXPANDED_MOVEMENT_GRAPH = buildExpandedMovementGraph();
 
-export const BOARD_MOVEMENT_NODES = EXPANDED_MOVEMENT_GRAPH.nodes;
-export const BOARD_MOVEMENT_CONNECTIONS = EXPANDED_MOVEMENT_GRAPH.connections;
+const BOARD_MOVEMENT_NODES = EXPANDED_MOVEMENT_GRAPH.nodes;
+const BOARD_MOVEMENT_CONNECTIONS = EXPANDED_MOVEMENT_GRAPH.connections;
 export const BOARD_MOVEMENT_NODE_LIST = Object.values(BOARD_MOVEMENT_NODES).sort((left, right) => {
   const kindDelta = getTerminalRenderPriority(left.kind) - getTerminalRenderPriority(right.kind);
   if (kindDelta !== 0) {
@@ -524,7 +524,7 @@ export const BOARD_MOVEMENT_NODE_LIST = Object.values(BOARD_MOVEMENT_NODES).sort
   return left.label.localeCompare(right.label, 'es');
 });
 
-export function findRoomNodeIdByDoorNodeId(nodeId: string) {
+function findRoomNodeIdByDoorNodeId(nodeId: string) {
   const node = BOARD_MOVEMENT_NODES[nodeId];
   if (!node || node.kind !== 'square' || !node.gridPosition) {
     return null;
@@ -590,9 +590,10 @@ function buildExpandedMovementGraph() {
     Object.keys(nodes).map((nodeId) => [nodeId, []])
   );
   const squareGridPointsByNodeId: Record<string, BoardGridPoint> = Object.fromEntries(
-    Object.values(BASE_MOVEMENT_NODE_DEFINITIONS)
-      .filter((nodeDefinition) => nodeDefinition.kind === 'square')
-      .map((nodeDefinition) => [nodeDefinition.id, nodeDefinition.gridPoint])
+    Object.values(BASE_MOVEMENT_NODE_DEFINITIONS).reduce<[string, BoardGridPoint][]>((acc, nodeDefinition) => {
+      if (nodeDefinition.kind === 'square') acc.push([nodeDefinition.id, nodeDefinition.gridPoint]);
+      return acc;
+    }, [])
   );
   const processedEdges = new Set<string>();
 
@@ -802,13 +803,12 @@ function pruneExcludedSquareNodes(
   connections: Record<string, string[]>
 ) {
   const removedNodeIds = new Set(
-    Object.entries(nodes)
-      .filter(([_nodeId, node]) =>
-        node.kind === 'square' &&
-        node.gridPosition &&
-        EXCLUDED_SQUARE_GRID_KEYS.has(buildGridCellKey(node.gridPosition))
-      )
-      .map(([nodeId]) => nodeId)
+    Object.entries(nodes).reduce<string[]>((acc, [nodeId, node]) => {
+      if (node.kind === 'square' && node.gridPosition && EXCLUDED_SQUARE_GRID_KEYS.has(buildGridCellKey(node.gridPosition))) {
+        acc.push(nodeId);
+      }
+      return acc;
+    }, [])
   );
 
   if (removedNodeIds.size === 0) {

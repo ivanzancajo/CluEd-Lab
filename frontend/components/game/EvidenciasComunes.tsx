@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { Database, User, Box, MapPin } from 'lucide-react';
 import type { TeamHandCard, TeamElementKind } from '../../src/lib/sessionApi';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
@@ -31,7 +31,7 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
   return (
     <div data-cy="evidencias-comunes-panel" className="w-full">
       <div className="flex items-center gap-2 mb-2">
-        <Database className="w-4 h-4 text-slate-400 flex-shrink-0" />
+        <Database className="size-4 text-slate-400 flex-shrink-0" />
         <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
           Evidencias Comunes
         </span>
@@ -47,7 +47,8 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
             const styles = KIND_STYLES[card.kind];
             const Icon = styles.icon;
             return (
-              <div
+              <button
+                type="button"
                 key={card.id}
                 data-cy="evidencias-comunes-card"
                 onClick={() => handleCardClick(card)}
@@ -59,18 +60,18 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
                         src={card.imageUrl}
                         alt={card.name}
                         className="w-full h-full object-cover opacity-80"
-                        fallback={<div className="w-full h-full bg-slate-900 flex items-center justify-center"><Icon className="w-5 h-5 text-slate-400 opacity-80" /></div>}
+                        fallback={<div className="w-full h-full bg-slate-900 flex items-center justify-center"><Icon className="size-5 text-slate-400 opacity-80" /></div>}
                       />
-                    : <div className="w-full h-full bg-slate-900 flex items-center justify-center"><Icon className="w-5 h-5 text-slate-400 opacity-80" /></div>
+                    : <div className="w-full h-full bg-slate-900 flex items-center justify-center"><Icon className="size-5 text-slate-400 opacity-80" /></div>
                   }
-                  <div className="absolute top-0 right-0 w-6 h-6 bg-black/60 rounded-bl-full backdrop-blur-sm border-b border-l border-slate-700/50 flex items-start justify-end p-1">
-                    <Icon className="w-3 h-3 text-white/70" />
+                  <div className="absolute top-0 right-0 size-6 bg-black/60 rounded-bl-full backdrop-blur-sm border-b border-l border-slate-700/50 flex items-start justify-end p-1">
+                    <Icon className="size-3 text-white/70" />
                   </div>
                 </div>
                 <div className="p-2 w-full flex-1 flex items-center justify-center">
                   <span className="text-[9px] font-bold text-center leading-tight text-slate-200 uppercase px-1 line-clamp-2">{card.name}</span>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -81,7 +82,7 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
           const styles = KIND_STYLES[selectedCard.kind];
           const Icon = styles.icon;
           return (
-            <motion.div
+            <m.div
               key="evidencias-comunes-modal"
               data-cy="evidencias-comunes-modal"
               initial={{ opacity: 0 }}
@@ -90,7 +91,7 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
               className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 backdrop-blur-sm"
               onClick={handleCloseModal}
             >
-              <motion.div
+              <m.div
                 data-cy="evidencias-comunes-modal-card"
                 initial={{ scale: 0.8, y: 20 }}
                 animate={{ scale: 1, y: 0, rotateY: cardFlipped ? 180 : 0 }}
@@ -108,13 +109,13 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
                           alt={selectedCard.name}
                           className="w-full h-full object-cover opacity-90"
                           fallback={
-                            <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
-                              <Icon className="w-6 h-6 text-slate-300" />
+                            <div className="size-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
+                              <Icon className="size-6 text-slate-300" />
                             </div>
                           }
                         />
-                      : <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
-                          <Icon className="w-6 h-6 text-slate-300" />
+                      : <div className="size-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
+                          <Icon className="size-6 text-slate-300" />
                         </div>
                     }
                   </div>
@@ -132,8 +133,8 @@ export function EvidenciasComunes({ publicCards }: EvidenciasComunesProps) {
                     Toca para voltear
                   </div>
                 </div>
-              </motion.div>
-            </motion.div>
+              </m.div>
+            </m.div>
           );
         })()}
       </AnimatePresence>

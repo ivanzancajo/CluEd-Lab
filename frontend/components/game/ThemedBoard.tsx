@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Crosshair } from 'lucide-react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import {
   BOARD_GRID_COLUMNS_PERCENT,
   BOARD_GRID_ROWS_PERCENT,
@@ -115,7 +115,7 @@ export function ThemedBoard({
                   type="button"
                   data-cy={`board-space-motif-${index + 1}`}
                   onClick={(e) => { e.stopPropagation(); onSpaceMotifClick?.(space); }}
-                  className="absolute top-0 right-0 z-30 flex h-5 w-5 items-center justify-center rounded-full bg-amber-900/70 text-[9px] font-black text-amber-100 shadow-sm backdrop-blur-sm border border-amber-700/60 hover:bg-amber-800/90 hover:scale-110 transition-all duration-150"
+                  className="absolute top-0 right-0 z-30 flex size-5 items-center justify-center rounded-full bg-amber-900/70 text-[9px] font-black text-amber-100 shadow-sm backdrop-blur-sm border border-amber-700/60 hover:bg-amber-800/90 hover:scale-110 transition-all duration-150"
                   title={space.motif}
                 >
                   M
@@ -149,9 +149,9 @@ export function ThemedBoard({
         const teamMeta = getTeamMeta(team.color);
 
         return (
-          <motion.div
+          <m.div
             key={team.id}
-            initial={{ scale: 0 }}
+            initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: team.opacity ?? 1 }}
             transition={{ type: 'spring', stiffness: 220, damping: 16 }}
             data-cy={`board-pawn-${team.color.toLowerCase()}`}
@@ -169,11 +169,11 @@ export function ThemedBoard({
             }}
           >
             {team.isCurrent ? (
-              <Crosshair className="h-[56%] w-[56%] text-white" />
+              <Crosshair className="size-[56%] text-white" />
             ) : (
-              <div className="h-[30%] w-[30%] rounded-full bg-white/45 backdrop-blur-sm" />
+              <div className="size-[30%] rounded-full bg-white/45 backdrop-blur-sm" />
             )}
-          </motion.div>
+          </m.div>
         );
       })}
 
@@ -203,7 +203,7 @@ function BoardDebugOverlay({
   return (
     <div data-cy="board-debug-overlay" className="pointer-events-none absolute inset-0 z-[24] overflow-hidden">
       {BOARD_GRID_COLUMNS_PERCENT.map((positionX, columnIndex) => (
-        <div key={`debug-col-${columnIndex}`}>
+        <div key={`debug-col-${positionX}`}>
           <div
             data-cy={`board-debug-grid-col-${columnIndex}`}
             className="absolute inset-y-0 w-px bg-cyan-300/30"
@@ -219,7 +219,7 @@ function BoardDebugOverlay({
       ))}
 
       {BOARD_GRID_ROWS_PERCENT.map((positionY, rowIndex) => (
-        <div key={`debug-row-${rowIndex}`}>
+        <div key={`debug-row-${positionY}`}>
           <div
             data-cy={`board-debug-grid-row-${rowIndex}`}
             className="absolute inset-x-0 h-px bg-cyan-300/30"
@@ -273,7 +273,7 @@ function BoardDebugOverlay({
             />
           ) : null}
           <div
-            className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-fuchsia-100 bg-fuchsia-300/80 shadow-[0_0_10px_rgba(232,121,249,0.7)]"
+            className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-fuchsia-100 bg-fuchsia-300/80 shadow-[0_0_10px_rgba(232,121,249,0.7)]"
             style={{
               left: toBoardPercent(debugProbe.positionX),
               top: toBoardPercent(debugProbe.positionY),
@@ -303,7 +303,7 @@ function getBoardDebugMarkerClass(kind: string, isGeneratedSquare: boolean, isHi
     return 'h-3.5 w-3.5 bg-emerald-300/90';
   }
 
-  return isGeneratedSquare ? 'h-2 w-2 bg-cyan-200/80' : 'h-3 w-3 bg-cyan-300/90';
+  return isGeneratedSquare ? 'size-2 bg-cyan-200/80' : 'size-3 bg-cyan-300/90';
 }
 
 

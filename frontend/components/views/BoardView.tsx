@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import {
   Activity,
   ArrowLeft,
@@ -83,8 +83,10 @@ export function BoardView() {
   const shouldAnimateOnMount = !!(location.state as { showEnvelopeAnimation?: boolean } | null)?.showEnvelopeAnimation;
   const hasAnimatedRef = useRef(shouldAnimateOnMount);
   const [showEnvelopeAnimation, setShowEnvelopeAnimation] = useState(shouldAnimateOnMount);
-  const [timeRemaining, setTimeRemaining] = useState(0);
-  const [sessionCode, setSessionCode] = useState("");
+  const [timeRemaining, setTimeRemaining] = useState(() =>
+    calculateRemainingSeconds(getStoredSessionStartedAt(), getStoredSessionDurationSeconds() ?? 0)
+  );
+  const [sessionCode, setSessionCode] = useState(() => getStoredSessionCode() || "N/A");
   const [boardConfig, setBoardConfig] = useState(() => readStoredActiveBoardConfig());
   const [presenceState, setPresenceState] = useState<LobbyPresenceState | null>(null);
   const [events, setEvents] = useState<LobbyEventMessage[]>([]);
@@ -99,18 +101,11 @@ export function BoardView() {
   const [monitoringNow, setMonitoringNow] = useState(() => Date.now());
 
   useEffect(() => {
-    setSessionCode(getStoredSessionCode() || "N/A");
-    setBoardConfig(readStoredActiveBoardConfig());
-    setTimeRemaining(
-      calculateRemainingSeconds(getStoredSessionStartedAt(), getStoredSessionDurationSeconds() ?? 0)
-    );
-  }, []);
-
-  useEffect(() => {
     const intervalId = window.setInterval(() => setMonitoringNow(Date.now()), 1000);
     return () => window.clearInterval(intervalId);
   }, []);
 
+  // react-doctor-disable-next-line react-doctor/no-cascading-set-state
   useEffect(() => {
     if (!presenceState) {
       return;
@@ -140,6 +135,7 @@ export function BoardView() {
     return () => window.clearInterval(timer);
   }, [navigate, presenceState]);
 
+  // react-doctor-disable-next-line react-doctor/effect-needs-cleanup, react-doctor/no-cascading-set-state
   useEffect(() => {
     let active = true;
     const socket = createLobbySocketClient({ admin: true });
@@ -276,6 +272,7 @@ export function BoardView() {
       if (socketRef.current === socket) {
         socketRef.current = null;
       }
+      socket.removeAllListeners();
       socket.disconnect();
     };
   }, [navigate]);
@@ -491,30 +488,30 @@ export function BoardView() {
       <div className="w-[380px] h-full bg-slate-900/40 border-r border-cyan-800/50 shadow-[4px_0_24px_-4px_rgba(6,182,212,0.15)] flex flex-col relative z-20 backdrop-blur-md">
         <div className="flex items-center gap-3 p-5 border-b border-cyan-800/50 bg-slate-900/60">
           <Link to="/" className="text-slate-500 hover:text-cyan-400 transition-colors p-2 rounded-md hover:bg-slate-800">
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="size-5" />
           </Link>
-          <MonitorPlay className="w-6 h-6 text-emerald-400" />
+          <MonitorPlay className="size-6 text-emerald-400" />
           <div className="flex-1">
             <h1 className="text-sm font-bold tracking-widest text-emerald-400">PANTALLA CENTRAL</h1>
             <p className="text-[10px] text-slate-500">{formatBoardHeaderSubtitle(presenceState?.status ?? null)}</p>
           </div>
-          {connectionStatus === "connecting" ? <LoaderCircle className="w-4 h-4 animate-spin text-cyan-300" /> : null}
+          {connectionStatus === "connecting" ? <LoaderCircle className="size-4 animate-spin text-cyan-300" /> : null}
         </div>
 
         <div className="flex-1 overflow-y-auto">
         <div className="p-6 border-b border-cyan-800/30 grid grid-cols-2 gap-4 bg-gradient-to-b from-cyan-950/10 to-transparent">
           <div className="flex flex-col gap-1 p-3 bg-slate-900 border border-slate-800 rounded-lg shadow-inner shadow-slate-950/50">
-            <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><KeyRound className="w-3 h-3" /> Codigo Sesion</span>
+            <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><KeyRound className="size-3" /> Codigo Sesion</span>
             <span className="text-xl font-mono font-bold tracking-widest text-emerald-400">{sessionCode}</span>
           </div>
           <div className="flex flex-col gap-1 p-3 bg-slate-900 border border-slate-800 rounded-lg shadow-inner shadow-slate-950/50 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-[2px] bg-red-500"></div>
-            <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><Clock className="w-3 h-3" /> Tiempo Restante</span>
+            <span className="text-[10px] text-slate-500 flex items-center gap-1 uppercase"><Clock className="size-3" /> Tiempo Restante</span>
             <span className={`text-xl font-bold font-mono tracking-widest ${timeRemaining < 300 ? "text-red-400 animate-pulse" : "text-cyan-400"}`}>
               {formatTime(timeRemaining)}
             </span>
           </div>
-          <div className="col-span-2 rounded-lg border border-cyan-800/40 bg-cyan-950/10 px-4 py-4">
+          <div className="col-span-2 rounded-lg border border-cyan-800/40 bg-cyan-950/10 p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <span className="text-[10px] text-slate-500 uppercase tracking-widest">Turno actual</span>
@@ -531,13 +528,13 @@ export function BoardView() {
               </span>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/60 px-3 py-3">
+              <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/60 p-3">
                 <span className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">Estado</span>
                 <span className="mt-2 block text-sm font-black text-cyan-100">
                   {formatSessionStatusLabel(presenceState?.status ?? "EN_CURSO")}
                 </span>
               </div>
-              <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/60 px-3 py-3 text-right">
+              <div className="rounded-2xl border border-cyan-800/60 bg-slate-950/60 p-3 text-right">
                 <span className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">Dados</span>
                 <span className="mt-2 block text-lg font-black text-emerald-300">
                   {presenceState?.status === "FINALIZADA"
@@ -549,7 +546,7 @@ export function BoardView() {
               </div>
             </div>
           </div>
-          <div data-cy="board-session-controls" className="col-span-2 rounded-lg border border-cyan-800/40 bg-cyan-950/10 px-4 py-4">
+          <div data-cy="board-session-controls" className="col-span-2 rounded-lg border border-cyan-800/40 bg-cyan-950/10 p-4">
             <div className="flex items-start justify-between gap-3">
               <span className="text-[10px] text-slate-500 uppercase tracking-widest">Control de partida</span>
               <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] ${boardControlStatusTone}`}>
@@ -569,7 +566,7 @@ export function BoardView() {
                   disabled={connectionStatus !== "connected" || isChangingGameStatus || Boolean(activeResolution) || !canManageGameControls}
                   className="flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/70 bg-cyan-500 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {presenceState?.status === "PAUSADA" ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                  {presenceState?.status === "PAUSADA" ? <Play className="size-4" /> : <Pause className="size-4" />}
                   {isChangingGameStatus
                     ? "Actualizando"
                     : presenceState?.status === "PAUSADA"
@@ -583,7 +580,7 @@ export function BoardView() {
                   disabled={!canOpenResolutionDialog || isTriggeringResolution}
                   className="flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border border-red-500/70 bg-red-500 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <Flag className="h-4 w-4" />
+                  <Flag className="size-4" />
                   {isTriggeringResolution ? "Abriendo..." : "Finalizar"}
                 </button>
               </div>
@@ -661,7 +658,7 @@ export function BoardView() {
 
         <div className="px-6 py-4 border-b border-cyan-800/30">
           <h3 className="text-xs uppercase text-cyan-600 mb-4 flex items-center gap-2 font-bold tracking-widest">
-            <Users className="w-4 h-4" /> Equipos Conectados
+            <Users className="size-4" /> Equipos Conectados
           </h3>
           <div className="mb-4 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest">
             <span className="rounded-full border border-cyan-900/60 bg-cyan-950/20 px-3 py-1 text-cyan-200">Conectados {connectedCount}</span>
@@ -681,15 +678,15 @@ export function BoardView() {
 
               return (
                 <div key={team.color} className={`flex items-center gap-2 p-2 rounded border transition-all ${cardClass}`}>
-                  <div className="w-3 h-3 rounded-full shadow-[0_0_5px_rgba(255,255,255,0.2)]" style={{ backgroundColor: team.hexColor }}></div>
+                  <div className="size-3 rounded-full shadow-[0_0_5px_rgba(255,255,255,0.2)]" style={{ backgroundColor: team.hexColor }}></div>
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-xs font-bold text-slate-200 truncate">{team.team?.name ?? team.label}</span>
                     <span className="text-[9px] text-slate-500 truncate" title={team.location}>{team.secondaryText}</span>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <span className="text-[8px] font-bold uppercase tracking-widest text-slate-400">{team.statusLabel}</span>
-                    {team.status === "connected" ? <Activity className="w-3 h-3 text-cyan-400 animate-pulse" /> : null}
-                    {team.status === "inactive" ? <Activity className="w-3 h-3 text-amber-300" /> : null}
+                    {team.status === "connected" ? <Activity className="size-3 text-cyan-400 animate-pulse" /> : null}
+                    {team.status === "inactive" ? <Activity className="size-3 text-amber-300" /> : null}
                   </div>
                 </div>
               );
@@ -706,9 +703,9 @@ export function BoardView() {
         <div className="p-6 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-slate-900 to-[#020617]">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xs uppercase text-cyan-600 flex items-center gap-2 font-bold tracking-widest">
-              <History className="w-4 h-4" /> Registro de Partida
+              <History className="size-4" /> Registro de Partida
             </h3>
-            <RefreshCw className={`w-3 h-3 text-cyan-800 ${connectionStatus === "connecting" ? "animate-spin" : ""}`} />
+            <RefreshCw className={`size-3 text-cyan-800 ${connectionStatus === "connecting" ? "animate-spin" : ""}`} />
           </div>
           <div className="space-y-3 pr-2">
             {visibleEvents.map((event) => {
@@ -722,7 +719,7 @@ export function BoardView() {
                   : "bg-slate-900/50 border-slate-800 text-slate-400 font-bold";
 
               return (
-                <motion.div
+                <m.div
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   key={event.id}
@@ -732,7 +729,7 @@ export function BoardView() {
                     <span className="text-[10px] opacity-60 font-mono">{formatEventTime(event.occurredAt)}</span>
                   </div>
                   {event.message}
-                </motion.div>
+                </m.div>
               );
             })}
           </div>
@@ -758,8 +755,10 @@ export function BoardView() {
             onSpaceMotifClick={setActiveMotifSpace}
           >
             {isBoardDebugEnabled ? (
-              <div
+              <button
+                type="button"
                 data-cy="host-board-debug-surface"
+                aria-label="Superficie de depuración del tablero"
                 className="absolute inset-0 z-20 cursor-crosshair"
                 onClick={handleBoardDebugSurfaceClick}
               />
@@ -771,7 +770,7 @@ export function BoardView() {
           </ThemedBoard>
 
           {isBoardSolutionVisible && activeResolution?.solution ? (
-            <motion.div
+            <m.div
               key={`board-solution-${activeResolution.mode}`}
               data-cy="board-solution-reveal"
               initial={{ opacity: 0, scale: 0.97 }}
@@ -811,7 +810,7 @@ export function BoardView() {
 
                 <div className="mt-6 grid gap-3 sm:grid-cols-3">
                   {boardSolutionCards.map((item, index) => (
-                    <motion.div
+                    <m.div
                       key={item.key}
                       data-cy={`board-solution-card-${item.key}`}
                       initial={{ opacity: 0, y: 28, rotateX: -12 }}
@@ -822,11 +821,11 @@ export function BoardView() {
                       <div className="relative aspect-[4/5] w-full overflow-hidden border-b border-white/10 bg-slate-950/90">
                         <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(15,23,42,0.92),rgba(2,6,23,1))]">
                           {item.key === "subject" ? (
-                            <User className="h-12 w-12 text-cyan-200/70" />
+                            <User className="size-12 text-cyan-200/70" />
                           ) : item.key === "object" ? (
-                            <Box className="h-12 w-12 text-emerald-200/70" />
+                            <Box className="size-12 text-emerald-200/70" />
                           ) : (
-                            <MapPin className="h-12 w-12 text-rose-200/70" />
+                            <MapPin className="size-12 text-rose-200/70" />
                           )}
                         </div>
                         {item.imageUrl ? (
@@ -849,24 +848,24 @@ export function BoardView() {
                             className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_center,rgba(15,23,42,0.98),rgba(2,6,23,1))]"
                           >
                             {item.key === "subject" ? (
-                              <User className="h-12 w-12 text-cyan-200/80" />
+                              <User className="size-12 text-cyan-200/80" />
                             ) : item.key === "object" ? (
-                              <Box className="h-12 w-12 text-emerald-200/80" />
+                              <Box className="size-12 text-emerald-200/80" />
                             ) : (
-                              <MapPin className="h-12 w-12 text-rose-200/80" />
+                              <MapPin className="size-12 text-rose-200/80" />
                             )}
                           </div>
                         )}
                       </div>
-                      <div className="px-4 py-4 text-left">
+                      <div className="p-4 text-left">
                         <span className="block text-[10px] font-bold uppercase tracking-[0.26em] opacity-75">{item.label}</span>
                         <p className="mt-3 text-2xl font-black leading-[1.05] text-white break-words">{item.name}</p>
                       </div>
-                    </motion.div>
+                    </m.div>
                   ))}
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           ) : null}
 
           {import.meta.env.DEV && !isBoardSolutionVisible ? (
@@ -881,10 +880,10 @@ export function BoardView() {
             </button>
           ) : null}
 
-          <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-cyan-800 -translate-x-4 -translate-y-4"></div>
-          <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-cyan-800 translate-x-4 -translate-y-4"></div>
-          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-cyan-800 -translate-x-4 translate-y-4"></div>
-          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-cyan-800 translate-x-4 translate-y-4"></div>
+          <div className="absolute top-0 left-0 size-8 border-t-2 border-l-2 border-cyan-800/70 -translate-x-2 -translate-y-2"></div>
+          <div className="absolute top-0 right-0 size-8 border-t-2 border-r-2 border-cyan-800/70 translate-x-2 -translate-y-2"></div>
+          <div className="absolute bottom-0 left-0 size-8 border-b-2 border-l-2 border-cyan-800/70 -translate-x-2 translate-y-2"></div>
+          <div className="absolute bottom-0 right-0 size-8 border-b-2 border-r-2 border-cyan-800/70 translate-x-2 translate-y-2"></div>
         </div>
 
         {showEnvelopeAnimation ? (

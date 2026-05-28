@@ -13,10 +13,12 @@ export function SpaceMotifModal({ space, onClose }: SpaceMotifModalProps) {
   }
 
   return (
-    <div
+    <button
+      type="button"
       data-cy="space-motif-modal-overlay"
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-[2px]"
       onClick={onClose}
+      aria-label="Cerrar modal"
     >
       <div
         data-cy="space-motif-modal"
@@ -27,7 +29,7 @@ export function SpaceMotifModal({ space, onClose }: SpaceMotifModalProps) {
           type="button"
           data-cy="space-motif-modal-close"
           onClick={onClose}
-          className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full border border-amber-800/50 bg-amber-900/40 text-amber-200 text-xs hover:bg-amber-800/60 transition-colors"
+          className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full border border-amber-800/50 bg-amber-900/40 text-amber-200 text-xs hover:bg-amber-800/60 transition-colors"
           aria-label="Cerrar"
         >
           ×
@@ -38,10 +40,10 @@ export function SpaceMotifModal({ space, onClose }: SpaceMotifModalProps) {
             <ImageWithFallback
               src={space.imageUrl}
               alt={space.name}
-              className="h-16 w-16 rounded-lg object-cover border border-amber-800/40 shadow-md"
+              className="size-16 rounded-lg object-cover border border-amber-800/40 shadow-md"
               fallback={
-                <div className="h-16 w-16 rounded-lg border border-amber-800/40 flex items-center justify-center bg-slate-900">
-                  <MapPin className="w-8 h-8 text-amber-700/60" />
+                <div className="size-16 rounded-lg border border-amber-800/40 flex items-center justify-center bg-slate-900">
+                  <MapPin className="size-8 text-amber-700/60" />
                 </div>
               }
             />
@@ -64,6 +66,6 @@ export function SpaceMotifModal({ space, onClose }: SpaceMotifModalProps) {
           </p>
         )}
       </div>
-    </div>
+    </button>
   );
 }

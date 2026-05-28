@@ -31,7 +31,7 @@ import { getGameSession, getSessionErrorMessage, startGameSession } from "../../
 type LobbyConnectionStatus = "idle" | "connecting" | "connected" | "error";
 type TeamSlotStatus = "free" | "connected" | "inactive" | "disconnected";
 
-const MINIMUM_TEAMS_TO_START = 2;
+const MINIMUM_TEAMS_TO_START = 3;
 
 export function LobbyView() {
   const navigate = useNavigate();

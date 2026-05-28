@@ -35,6 +35,7 @@ import {
   moveTeamByAccessCode,
   rollTeamDiceByAccessCode,
 } from '../lib/sessionMovement.js';
+import { getBoardRoomSpaceSlotIndex } from '../lib/boardGraph.js';
 import { getTeamSpawnPosition } from '../lib/teamSpawnPositions.js';
 import { verifyToken } from '../middleware/auth.js';
 import { emitGameStarted, emitSessionSnapshotUpdate } from '../socket/socketServer.js';
@@ -174,12 +175,15 @@ router.post('/sessions/:accessCode/teams/:teamId/move', async (req, res) => {
 
     try {
       const nextTeamName = session.turn?.currentTeamName;
+      const slotIndex = getBoardRoomSpaceSlotIndex(moveResult.currentNode.id);
+      const skinRoomName = slotIndex !== null ? (session.skin.spaces[slotIndex]?.name ?? null) : null;
+      const roomName = skinRoomName ?? moveResult.currentNode.label;
       await emitSessionSnapshotUpdate(moveResult.sessionId, {
         id: randomUUID(),
         type: 'system',
         message: moveResult.turnAdvanced
           ? `${moveResult.teamName} se ha movido a ${moveResult.currentNode.label}.${nextTeamName ? ` Turno para ${nextTeamName}.` : ''}`
-          : `${moveResult.teamName} ha entrado en ${moveResult.currentNode.label}. Puede lanzar una sugerencia o terminar su turno.`,
+          : `${moveResult.teamName} ha entrado en ${roomName}. Puede lanzar una sugerencia o terminar su turno.`,
         occurredAt: Date.now(),
         teamColor: moveResult.teamColor,
         teamId: moveResult.teamId,

@@ -1,10 +1,11 @@
-import { ColorEquipo, EstadoPartida } from '@prisma/client';
+import { ColorEquipo, EstadoPartida, TipoEvento } from '@prisma/client';
 import { HttpError } from './http.js';
 import { prisma } from './prisma.js';
 import {
   BOARD_MOVEMENT_CONNECTIONS,
   BOARD_MOVEMENT_NODES,
   BOARD_MOVEMENT_POSITION_TOLERANCE,
+  getBoardRoomSpaceSlotIndex,
   findBoardMovementNodeByPosition,
   getRoomEntryNodeByDoorNodeId,
   getSecretPassageDestinationNodeByRoomNodeId,
@@ -15,6 +16,7 @@ import {
   ensureCurrentTurnBelongsToTeam,
   ensureTeamCanTakeTurn,
   ensureTurnHasNoActiveDice,
+  ensureTurnHasNotMoved,
   getActiveDice,
   getActiveDiceRemainingMoves,
   rollTurnDice,
@@ -22,7 +24,7 @@ import {
   type SessionTurnDice,
 } from './sessionTurn.js';
 
-type TeamMovementClient = Pick<typeof prisma, 'partida' | 'equipo'>;
+type TeamMovementClient = Pick<typeof prisma, 'partida' | 'equipo' | 'evento'>;
 export { BOARD_MOVEMENT_CONNECTIONS, BOARD_MOVEMENT_NODES } from './boardGraph.js';
 export { findBoardMovementNodeByPosition } from './boardGraph.js';
 export type { BoardMovementNode } from './boardGraph.js';
@@ -143,6 +145,16 @@ export function getReachableMoveNodes(currentNodeId: string, occupiedNodeIds: It
         return;
       }
 
+      // Entrada a sala: cuando no se parte de una sala y la casilla es puerta, es destino válido
+      // aunque los pasos sean menores que la tirada (exceso ignorado al confirmar la entrada).
+      if (!startingFromRoom && node.kind === 'square' && getRoomEntryNodeByDoorNodeId(linkedNodeId)) {
+        reachableNodes.set(linkedNodeId, { ...node, stepsRequired: nextSteps });
+        if (nextSteps < diceRoll) {
+          queue.push({ nodeId: linkedNodeId, steps: nextSteps });
+        }
+        return;
+      }
+
       if (nextSteps === diceRoll) {
         if (node.kind === 'room') {
           return;
@@ -155,9 +167,7 @@ export function getReachableMoveNodes(currentNodeId: string, occupiedNodeIds: It
         return;
       }
 
-      // Si el nodo siguiente es una sala y no partimos de una sala, no exploramos
-      // más allá de ella: las salas solo son destino cuando la puerta es el último
-      // paso (lo resuelve resolveCommittedMoveTargetNode), no nodos de tránsito.
+      // Las salas no son nodos de tránsito salvo que el turno comience en una sala.
       if (node.kind === 'room' && !startingFromRoom) {
         return;
       }
@@ -181,13 +191,15 @@ export function getReachableMoveNodes(currentNodeId: string, occupiedNodeIds: It
 }
 
 export function resolveCommittedMoveTargetNode(currentNode: BoardMovementNode, targetNode: BoardMovementNode) {
-  if (currentNode.kind === 'room') {
-    return targetNode;
+  // Resolver siempre las puertas a su sala, incluso al salir de una sala hacia otra.
+  // Se excluye la sala de origen para no reentrar en la sala actual.
+  const mappedRoomEntryNode = getRoomEntryNodeByDoorNodeId(targetNode.id);
+  if (mappedRoomEntryNode && mappedRoomEntryNode.id !== currentNode.id) {
+    return mappedRoomEntryNode;
   }
 
-  const mappedRoomEntryNode = getRoomEntryNodeByDoorNodeId(targetNode.id);
-  if (mappedRoomEntryNode) {
-    return mappedRoomEntryNode;
+  if (currentNode.kind === 'room') {
+    return targetNode;
   }
 
   // Fallback defensivo: si el nodo objetivo es una casilla conectada a una sala,
@@ -197,7 +209,7 @@ export function resolveCommittedMoveTargetNode(currentNode: BoardMovementNode, t
       .map((nodeId) => BOARD_MOVEMENT_NODES[nodeId])
       .find((node): node is BoardMovementNode => Boolean(node && node.kind === 'room'));
 
-    if (connectedRoomNode) {
+    if (connectedRoomNode && connectedRoomNode.id !== currentNode.id) {
       return connectedRoomNode;
     }
   }
@@ -267,6 +279,7 @@ export async function rollTeamDiceByAccessCode(
   ensureSessionIsMovable(session.status);
   ensureSessionHasNoPendingSuggestion(session);
   ensureCurrentTurnBelongsToTeam(session, teamId);
+  ensureTurnHasNotMoved(session);
   ensureTurnHasNoActiveDice(session);
 
   const movementContext = resolveTeamMovementContext(session, teamId);
@@ -362,6 +375,21 @@ export async function moveTeamByAccessCode(
         },
   });
 
+  if (!turnAdvanced) {
+    await client.evento.create({
+      data: {
+        partidaId: session.id,
+        emitterId: teamId,
+        eventType: TipoEvento.MOVIMIENTO,
+        detail: {
+          roomNodeId: committedTargetNode.id,
+          spaceSlotIndex: getBoardRoomSpaceSlotIndex(committedTargetNode.id),
+        },
+      },
+      select: { id: true },
+    });
+  }
+
   const updatedSession = await loadMovementSessionByAccessCode(client, accessCode);
   const updatedContext = resolveTeamMovementContext(updatedSession, teamId);
 
@@ -402,6 +430,7 @@ async function loadMovementSessionByAccessCode(client: TeamMovementClient, acces
       activeDiceValueTwo: true,
       activeDiceRemainingMoves: true,
       activeSuggestionEventId: true,
+      currentTurnHasMoved: true,
       isDebug: true,
       teams: {
         select: {
@@ -430,6 +459,7 @@ async function loadMovementSessionByAccessCode(client: TeamMovementClient, acces
     activeDiceValueTwo: session.activeDiceValueTwo,
     activeDiceRemainingMoves: session.activeDiceRemainingMoves,
     activeSuggestionEventId: session.activeSuggestionEventId,
+    currentTurnHasMoved: session.currentTurnHasMoved ?? false,
     isDebug: session.isDebug,
     teams: session.teams,
   };

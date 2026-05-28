@@ -53,6 +53,12 @@ export function ensureTurnHasNoActiveDice(
   }
 }
 
+export function ensureTurnHasNotMoved(session: { currentTurnHasMoved: boolean }) {
+  if (session.currentTurnHasMoved) {
+    throw new HttpError(409, 'El equipo ya ha entrado en una sala este turno. Solo puede lanzar hipótesis o terminar el turno.');
+  }
+}
+
 export function hasActiveDiceRoll(
   session: Pick<SessionTurnManagedState, 'activeDiceValueOne' | 'activeDiceValueTwo'>
 ): session is { activeDiceValueOne: number; activeDiceValueTwo: number } {

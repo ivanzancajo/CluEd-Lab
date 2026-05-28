@@ -9,7 +9,7 @@ import {
   isSecretPassageMoveValid,
   resolveCommittedMoveTargetNode,
 } from '../src/lib/sessionMovement.js';
-import { findNearestBoardMovementNode, type BoardMovementNode } from '../src/lib/boardGraph.js';
+import { findNearestBoardMovementNode, getRoomEntryNodeByDoorNodeId, type BoardMovementNode } from '../src/lib/boardGraph.js';
 import { TEAM_SPAWN_POSITIONS } from '../src/lib/teamSpawnPositions.js';
 
 describe('sessionMovement', () => {
@@ -156,8 +156,8 @@ describe('sessionMovement', () => {
     const roomMovesFromCorridor = getReachableMoveNodes('square:grid:6:3', [], 1);
     const roomMovesFromDoor = getReachableMoveNodes('square:grid:5:3', [], 1);
 
-    // Ni desde el pasillo ni desde la puerta la sala aparece como destino directo:
-    // las salas se excluyen de getReachableMoveNodes (la entrada se resuelve vía resolveCommittedMoveTargetNode).
+    // Las salas nunca aparecen como destino directo: la entrada se resuelve vía
+    // resolveCommittedMoveTargetNode al seleccionar la casilla de puerta.
     expect(roomMovesFromCorridor).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'sala-superior-izquierda' }),
@@ -187,6 +187,18 @@ describe('sessionMovement', () => {
     expect(oneStepMoves).toContain('square:grid:5:3');
     expect(oneStepMoves).not.toContain('sala-superior-izquierda');
     expect(twoStepMoves).not.toContain('sala-superior-izquierda');
+  });
+
+  it('BFS relajado: una puerta alcanzable en N pasos es destino válido con tirada > N', () => {
+    // square:grid:5:3 es la puerta de sala-superior-izquierda, a 1 paso de square:grid:6:3.
+    // Con tirada=3 (> 1) debe seguir siendo un destino válido (exceso ignorado al entrar).
+    const threeStepMoves = getReachableMoveNodes('square:grid:6:3', [], 3).map((node) => node.id);
+    expect(threeStepMoves).toContain('square:grid:5:3');
+    expect(threeStepMoves).not.toContain('sala-superior-izquierda');
+
+    // Con tirada=5 también debe aparecer (puerta a 1 paso, 4 pasos de exceso).
+    const fiveStepMoves = getReachableMoveNodes('square:grid:6:3', [], 5).map((node) => node.id);
+    expect(fiveStepMoves).toContain('square:grid:5:3');
   });
 
   it('permite salir de la sala inferior central por cualquiera de sus puertas', () => {
@@ -425,9 +437,15 @@ describe('sessionMovement', () => {
 
       for (let diceRoll = 1; diceRoll <= 8; diceRoll += 1) {
         const reachableMoves = getReachableMoveNodes(spawnNodeId, [], diceRoll);
-        const outOfRangeMoves = reachableMoves.filter(
-          (node) => (shortestDistances.get(node.id) ?? Number.POSITIVE_INFINITY) !== diceRoll
-        );
+        // Las puertas de sala son válidas con cualquier tirada >= su distancia mínima (BFS relajado).
+        // El resto de nodos siguen requiriendo exactamente diceRoll pasos.
+        const outOfRangeMoves = reachableMoves.filter((node) => {
+          const shortest = shortestDistances.get(node.id) ?? Number.POSITIVE_INFINITY;
+          if (node.kind === 'square' && getRoomEntryNodeByDoorNodeId(node.id)) {
+            return shortest > diceRoll;
+          }
+          return shortest !== diceRoll;
+        });
 
         expect(outOfRangeMoves).toHaveLength(0);
       }

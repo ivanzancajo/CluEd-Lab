@@ -1,11 +1,11 @@
 import React, { useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { m, AnimatePresence } from "motion/react";
-import { 
-  Map as MapIcon, 
-  Search, 
-  FileText, 
-  MessageSquare, 
+import {
+  Map as MapIcon,
+  Search,
+  FileText,
+  MessageSquare,
   ArrowLeft,
   X,
   HelpCircle,
@@ -20,7 +20,9 @@ import {
   Shield,
   Radio,
   Database,
+  BookOpen,
 } from "lucide-react";
+import { useExitGuard } from "../../src/hooks/useExitGuard";
 import { DiceAnimation } from "../DiceAnimation";
 import {
   createLobbySocketClient,
@@ -86,6 +88,7 @@ import {
 } from "../../src/lib/sessionApi";
 import { ThemedBoard } from "../game/ThemedBoard";
 import { SpaceMotifModal } from "../game/SpaceMotifModal";
+import { RulesModal } from "../game/RulesModal";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { EvidenciasComunes } from "../game/EvidenciasComunes";
 import { EnvelopeAnimation } from "../game/EnvelopeAnimation";
@@ -360,6 +363,10 @@ export function TerminalView() {
     return mapConfigToCategories(theme);
   });
   const [catNames, setCatNames] = useState(() => catNamesFromConfig(readStoredBoardTheme() as GameConfig | null));
+  const [isRulesOpen, setIsRulesOpen] = useState(false);
+
+  const isGameActive = sessionStatus === "EN_CURSO" || sessionStatus === "PAUSADA";
+  const { showConfirm: showExitConfirm, openConfirm: openExitConfirm, cancelExit } = useExitGuard(isGameActive);
   const [selectedCard, setSelectedCard] = useState<TerminalCard | null>(null);
   const [cardFlipped, setCardFlipped] = useState(false);
 
@@ -1177,10 +1184,10 @@ export function TerminalView() {
 
   const currentTeamMeta = teamColor ? getTeamMeta(teamColor) : null;
   const hasActiveTeams = boardTeams.some((team) => !team.falseAccusation && !team.eliminatedAt);
-  const eliminatedMovementMessage = "Tu equipo ha sido eliminado. El peon permanece donde quedo y ya no volvera a tener turno. Si bloquea una puerta, seguira ocupandola.";
-  const eliminatedMoveErrorMessage = "Tu equipo ya ha sido eliminado y no puede volver a mover este peon.";
-  const eliminatedSuggestionMessage = "Tu equipo ha sido eliminado. Ya no puede sugerir ni acusar, pero debe mostrar una carta si la mesa le pide refutar y mantener la solucion en secreto.";
-  const eliminatedRefuteMessage = "Aunque tu equipo este eliminado, debes mostrar una carta para refutar en privado y mantener la solucion del sobre en secreto.";
+  const eliminatedMovementMessage = "Equipo eliminado. El peón queda fijo y sigue bloqueando puertas si las ocupa.";
+  const eliminatedMoveErrorMessage = "Equipo eliminado. El peón ya no puede moverse.";
+  const eliminatedSuggestionMessage = "Equipo eliminado. No puede sugerir ni acusar, pero debe refutar si se le pide.";
+  const eliminatedRefuteMessage = "Aunque estés eliminado, debes mostrar una carta para refutar.";
   const sessionStatusLabel =
     sessionStatus === "EN_CURSO"
       ? "PARTIDA EN CURSO"
@@ -1447,9 +1454,13 @@ export function TerminalView() {
       
       {/* Header */}
       <div className="flex items-center justify-between p-4 bg-slate-950/80 backdrop-blur-md border-b border-cyan-900/50 sticky top-0 z-50">
-        <Link to="/" className="text-slate-500 hover:text-cyan-400 transition-colors">
+        <button
+          type="button"
+          onClick={isGameActive ? openExitConfirm : () => navigate("/")}
+          className="text-slate-500 hover:text-cyan-400 transition-colors"
+        >
           <ArrowLeft className="size-5" />
-        </Link>
+        </button>
         <div className="text-center flex flex-col items-center">
           <h2 className="text-xs font-bold text-emerald-400 tracking-widest uppercase flex items-center gap-2">
             Terminal
@@ -1465,7 +1476,17 @@ export function TerminalView() {
             {teamName.toUpperCase()} - {sessionStatusLabel} - {connectionLabel}
           </p>
         </div>
-        <div className={`size-3 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse ${isMyTurn ? 'bg-emerald-500 shadow-emerald-500/80' : 'bg-red-500 shadow-red-500/80'}`}></div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsRulesOpen(true)}
+            className="text-slate-500 hover:text-amber-400 transition-colors"
+            aria-label="Ver reglas"
+          >
+            <BookOpen className="size-4" />
+          </button>
+          <div className={`size-3 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse ${isMyTurn ? 'bg-emerald-500 shadow-emerald-500/80' : 'bg-red-500 shadow-red-500/80'}`}></div>
+        </div>
       </div>
 
       {!lobbyError ? (
@@ -1492,6 +1513,35 @@ export function TerminalView() {
           {accusationBannerMessage}
         </div>
       ) : null}
+
+      <RulesModal open={isRulesOpen} onClose={() => setIsRulesOpen(false)} />
+
+      <AlertDialog open={showExitConfirm} onOpenChange={(open) => { if (!open) cancelExit(); }}>
+        <AlertDialogContent className="max-w-sm border-cyan-900/60 bg-slate-950 text-cyan-100">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm font-black uppercase tracking-[0.18em] text-cyan-300">
+              ¿Abandonar el terminal?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-slate-300">
+              Tu posición en el tablero se mantendrá, pero perderás la conexión con la partida.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+              onClick={cancelExit}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-700 text-slate-100 hover:bg-red-600"
+              onClick={() => { lobbySocketRef.current?.disconnect(); navigate("/"); }}
+            >
+              Salir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={shouldForceFinalChanceModal} onOpenChange={() => undefined}>
         <AlertDialogContent data-cy="terminal-final-chance-modal" className="max-w-md border-amber-700/60 bg-slate-950 text-amber-50">

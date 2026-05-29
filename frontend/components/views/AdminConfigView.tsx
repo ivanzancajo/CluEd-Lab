@@ -262,12 +262,8 @@ const EditableItemList = memo(function EditableItemList({
           {type}s configurados: {items.length}/{minItems === maxItems ? maxItems : `${minItems}-${maxItems}`}
         </div>
         {showMotif ? (
-          <p>Cuando los motivos están habilitados, la tabla de razonamiento mostrará el motivo en lugar del nombre del espacio.</p>
-        ) : minItems === maxItems ? (
-          <p>Edita los elementos de esta terna y completa exactamente {maxItems} para poder guardar la skin.</p>
-        ) : (
-          <p>Edita los elementos de esta terna y completa entre {minItems} y {maxItems} para poder guardar la skin.</p>
-        )}
+          <p>Los motivos se muestran en la tabla de razonamiento en lugar del nombre del espacio.</p>
+        ) : null}
       </div>
 
       {items.map((item, index) => (

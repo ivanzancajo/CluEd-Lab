@@ -324,7 +324,7 @@ export function SessionCreateView() {
                 Habilitar Partida
               </h1>
               <p className="mx-auto max-w-xl text-sm leading-7 text-slate-300 md:text-base">
-                Selecciona la configuración del juego y abre la sala de espera. El código de sesión se mostrará en el lobby, justo después de habilitar la partida.
+                El código de sesión aparecerá en el lobby una vez habilitada la partida.
               </p>
             </div>
           </div>

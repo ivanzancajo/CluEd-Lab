@@ -248,7 +248,6 @@ const REALTIME_ENABLED_STATES: ReadonlySet<EstadoPartida> = new Set<EstadoPartid
   EstadoPartida.LOBBY,
   EstadoPartida.EN_CURSO,
   EstadoPartida.PAUSADA,
-  EstadoPartida.FINALIZADA,
 ]);
 
 let activeIo: Server | null = null;

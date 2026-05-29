@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import { m } from "motion/react";
 import {
   Activity,
   ArrowLeft,
+  BookOpen,
   Box,
   Clock,
   Flag,
@@ -18,6 +19,7 @@ import {
   User,
   Users,
 } from "lucide-react";
+import { useExitGuard } from "../../src/hooks/useExitGuard";
 import {
   createLobbySocketClient,
   pauseGameFromBoard,
@@ -61,6 +63,7 @@ import {
 } from "../../src/lib/sessionApi";
 import {
   AlertDialog,
+  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -72,6 +75,8 @@ import { ThemedBoard } from "../game/ThemedBoard";
 import { SpaceMotifModal } from "../game/SpaceMotifModal";
 import { EnvelopeAnimation } from "../game/EnvelopeAnimation";
 import { EvidenciasComunes } from "../game/EvidenciasComunes";
+import { RulesModal } from "../game/RulesModal";
+import { GameOverModal } from "../game/GameOverModal";
 
 type BoardConnectionStatus = "idle" | "connecting" | "connected" | "error";
 type TeamSlotStatus = "free" | "connected" | "inactive" | "disconnected";
@@ -89,6 +94,12 @@ export function BoardView() {
   const [sessionCode, setSessionCode] = useState(() => getStoredSessionCode() || "N/A");
   const [boardConfig, setBoardConfig] = useState(() => readStoredActiveBoardConfig());
   const [presenceState, setPresenceState] = useState<LobbyPresenceState | null>(null);
+  const [isRulesOpen, setIsRulesOpen] = useState(false);
+  const [showGameOverModal, setShowGameOverModal] = useState(false);
+  const hasShownGameOverRef = useRef(false);
+
+  const isBoardActive = presenceState !== null && presenceState.status !== "FINALIZADA";
+  const { showConfirm: showExitConfirm, openConfirm: openExitConfirm, cancelExit } = useExitGuard(isBoardActive);
   const [events, setEvents] = useState<LobbyEventMessage[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<BoardConnectionStatus>("idle");
   const [boardError, setBoardError] = useState<string | null>(null);
@@ -104,6 +115,13 @@ export function BoardView() {
     const intervalId = window.setInterval(() => setMonitoringNow(Date.now()), 1000);
     return () => window.clearInterval(intervalId);
   }, []);
+
+  useEffect(() => {
+    if (presenceState?.status !== "FINALIZADA" || hasShownGameOverRef.current) return;
+    hasShownGameOverRef.current = true;
+    const timer = setTimeout(() => setShowGameOverModal(true), 800);
+    return () => clearTimeout(timer);
+  }, [presenceState?.status]);
 
   // react-doctor-disable-next-line react-doctor/no-cascading-set-state
   useEffect(() => {
@@ -363,6 +381,16 @@ export function BoardView() {
     ? "border-slate-700/60 bg-slate-950/60 text-slate-300"
     : "border-cyan-600/50 bg-cyan-950/25 text-cyan-100";
 
+  const gameOverWinner =
+    activeResolution?.winningTeams[0]
+      ? { name: activeResolution.winningTeams[0].name, color: activeResolution.winningTeams[0].color }
+      : latestAccusationEvent?.accusationVerdict?.outcome === "CORRECTA"
+      ? { name: latestAccusationEvent.accusationVerdict.accuserTeamName, color: latestAccusationEvent.accusationVerdict.accuserTeamColor }
+      : null;
+  const gameOverSolution = latestAccusationEvent?.accusationVerdict?.outcome === "CORRECTA"
+    ? { subject: latestAccusationEvent.accusationVerdict.accusation.subject.name, object: latestAccusationEvent.accusationVerdict.accusation.object.name, space: latestAccusationEvent.accusationVerdict.accusation.space.name }
+    : null;
+
   const boardSpaces = mapBoardSpaces(boardConfig);
   const boardCenterImage = getRenderableBoardCenterImage(boardConfig?.centerImage);
   const boardPawns = monitoredTeams.map((team) => ({
@@ -487,14 +515,26 @@ export function BoardView() {
     <div className="flex w-full h-screen bg-[#020617] text-cyan-400 font-mono overflow-hidden">
       <div className="w-[380px] h-full bg-slate-900/40 border-r border-cyan-800/50 shadow-[4px_0_24px_-4px_rgba(6,182,212,0.15)] flex flex-col relative z-20 backdrop-blur-md">
         <div className="flex items-center gap-3 p-5 border-b border-cyan-800/50 bg-slate-900/60">
-          <Link to="/" className="text-slate-500 hover:text-cyan-400 transition-colors p-2 rounded-md hover:bg-slate-800">
+          <button
+            type="button"
+            onClick={isBoardActive ? openExitConfirm : () => navigate("/")}
+            className="text-slate-500 hover:text-cyan-400 transition-colors p-2 rounded-md hover:bg-slate-800"
+          >
             <ArrowLeft className="size-5" />
-          </Link>
+          </button>
           <MonitorPlay className="size-6 text-emerald-400" />
           <div className="flex-1">
             <h1 className="text-sm font-bold tracking-widest text-emerald-400">PANTALLA CENTRAL</h1>
             <p className="text-[10px] text-slate-500">{formatBoardHeaderSubtitle(presenceState?.status ?? null)}</p>
           </div>
+          <button
+            type="button"
+            onClick={() => setIsRulesOpen(true)}
+            className="text-slate-500 hover:text-amber-400 transition-colors p-1"
+            aria-label="Ver reglas"
+          >
+            <BookOpen className="size-4" />
+          </button>
           {connectionStatus === "connecting" ? <LoaderCircle className="size-4 animate-spin text-cyan-300" /> : null}
         </div>
 
@@ -890,6 +930,52 @@ export function BoardView() {
           <EnvelopeAnimation onComplete={() => setShowEnvelopeAnimation(false)} />
         ) : null}
       </div>
+
+      <RulesModal open={isRulesOpen} onClose={() => setIsRulesOpen(false)} role="gm" />
+
+      {!isBoardSolutionVisible ? (
+        <GameOverModal
+          open={showGameOverModal}
+          onClose={() => setShowGameOverModal(false)}
+          winner={gameOverWinner}
+          solution={gameOverSolution}
+        />
+      ) : null}
+
+      <AlertDialog open={showExitConfirm} onOpenChange={(open) => { if (!open) cancelExit(); }}>
+        <AlertDialogContent className="max-w-sm border-cyan-900/60 bg-slate-950 text-cyan-100">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm font-black uppercase tracking-[0.18em] text-cyan-300">
+              ¿Salir como GM?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-slate-300">
+              La partida quedará pausada y los jugadores serán notificados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+              onClick={cancelExit}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-700 text-slate-100 hover:bg-red-600"
+              onClick={() => {
+                const socket = socketRef.current;
+                const sid = presenceState?.sessionId;
+                if (socket && sid) {
+                  void pauseGameFromBoard(socket, sid).catch(() => {});
+                }
+                socket?.disconnect();
+                navigate("/");
+              }}
+            >
+              Salir y pausar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={isResolutionDialogOpen} onOpenChange={setIsResolutionDialogOpen}>
         <AlertDialogContent data-cy="board-resolution-dialog" className="max-w-md border-cyan-900/60 bg-slate-950 text-cyan-100">

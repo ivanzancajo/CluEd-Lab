@@ -392,7 +392,7 @@ export function LobbyView() {
                 </div>
                 <h2 className="text-4xl font-black uppercase tracking-tight text-white">Esperando a los equipos</h2>
                 <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300">
-                  La partida ya tiene codigo de acceso, pero la pantalla central sigue oculta. Comparte el codigo con los jugadores y lanza la partida solo cuando esten listos.
+                  Comparte el código con los jugadores y lanza la partida cuando estén listos.
                 </p>
                 <div className="mt-8 grid grid-cols-2 gap-4">
                   {lobbySummaryCards.map((card) => (

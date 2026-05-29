@@ -76,6 +76,7 @@ import { SpaceMotifModal } from "../game/SpaceMotifModal";
 import { EnvelopeAnimation } from "../game/EnvelopeAnimation";
 import { EvidenciasComunes } from "../game/EvidenciasComunes";
 import { RulesModal } from "../game/RulesModal";
+import { GameOverModal } from "../game/GameOverModal";
 
 type BoardConnectionStatus = "idle" | "connecting" | "connected" | "error";
 type TeamSlotStatus = "free" | "connected" | "inactive" | "disconnected";
@@ -94,6 +95,8 @@ export function BoardView() {
   const [boardConfig, setBoardConfig] = useState(() => readStoredActiveBoardConfig());
   const [presenceState, setPresenceState] = useState<LobbyPresenceState | null>(null);
   const [isRulesOpen, setIsRulesOpen] = useState(false);
+  const [showGameOverModal, setShowGameOverModal] = useState(false);
+  const hasShownGameOverRef = useRef(false);
 
   const isBoardActive = presenceState !== null;
   const { showConfirm: showExitConfirm, openConfirm: openExitConfirm, cancelExit } = useExitGuard(isBoardActive);
@@ -112,6 +115,13 @@ export function BoardView() {
     const intervalId = window.setInterval(() => setMonitoringNow(Date.now()), 1000);
     return () => window.clearInterval(intervalId);
   }, []);
+
+  useEffect(() => {
+    if (presenceState?.status !== "FINALIZADA" || hasShownGameOverRef.current) return;
+    hasShownGameOverRef.current = true;
+    const timer = setTimeout(() => setShowGameOverModal(true), 800);
+    return () => clearTimeout(timer);
+  }, [presenceState?.status]);
 
   // react-doctor-disable-next-line react-doctor/no-cascading-set-state
   useEffect(() => {
@@ -370,6 +380,13 @@ export function BoardView() {
     : presenceState?.status === "FINALIZADA"
     ? "border-slate-700/60 bg-slate-950/60 text-slate-300"
     : "border-cyan-600/50 bg-cyan-950/25 text-cyan-100";
+
+  const gameOverWinner =
+    activeResolution?.winningTeams[0]
+      ? { name: activeResolution.winningTeams[0].name, color: activeResolution.winningTeams[0].color }
+      : latestAccusationEvent?.accusationVerdict?.outcome === "CORRECTA"
+      ? { name: latestAccusationEvent.accusationVerdict.accuserTeamName, color: latestAccusationEvent.accusationVerdict.accuserTeamColor }
+      : null;
 
   const boardSpaces = mapBoardSpaces(boardConfig);
   const boardCenterImage = getRenderableBoardCenterImage(boardConfig?.centerImage);
@@ -911,7 +928,16 @@ export function BoardView() {
         ) : null}
       </div>
 
-      <RulesModal open={isRulesOpen} onClose={() => setIsRulesOpen(false)} />
+      <RulesModal open={isRulesOpen} onClose={() => setIsRulesOpen(false)} role="gm" />
+
+      {!isBoardSolutionVisible ? (
+        <GameOverModal
+          open={showGameOverModal}
+          onClose={() => setShowGameOverModal(false)}
+          winner={gameOverWinner}
+          solution={null}
+        />
+      ) : null}
 
       <AlertDialog open={showExitConfirm} onOpenChange={(open) => { if (!open) cancelExit(); }}>
         <AlertDialogContent className="max-w-sm border-cyan-900/60 bg-slate-950 text-cyan-100">

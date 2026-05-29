@@ -1,5 +1,45 @@
-export function RulesModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+const playerRules = [
+  {
+    title: "Movimiento",
+    body: "Para moverte por los pasillos necesitas usar exactamente la tirada total de dados. Para entrar en una sala basta con que la puerta esté a una distancia menor o igual a tu tirada total: no hace falta agotar los pasos exactos.",
+  },
+  {
+    title: "Pasadizos",
+    body: "Si ya estás dentro de una sala puedes usar el pasadizo en tu turno para moverte directamente a la sala conectada, sin necesidad de haber entrado ese mismo turno. Usar el pasadizo no consume dados.",
+  },
+  {
+    title: "Sugerencias",
+    body: "Al entrar en una sala puedes sugerir un sospechoso y un objeto. Los equipos refutan en orden mostrando una carta si la tienen; solo tú ves qué carta se muestra.",
+  },
+  {
+    title: "Acusación final",
+    body: "Cuando estés seguro, acusa. Si aciertas ganas la partida. Si fallas eres eliminado, pero sigues mostrando cartas para refutar mientras el juego continúe.",
+  },
+];
+
+const gmRules = [
+  {
+    title: "Pausar y reanudar",
+    body: "Puedes pausar y reanudar la partida en cualquier momento desde el panel lateral. La pausa detiene los turnos pero los jugadores permanecen conectados.",
+  },
+  {
+    title: "Resolución",
+    body: "Cuando un equipo acusa correctamente o todos los activos son eliminados, podrás elegir entre revelar la solución directamente o abrir una última ronda de acusaciones simultáneas para todos los equipos.",
+  },
+  {
+    title: "Vista general",
+    body: "La pantalla central muestra el estado de todos los equipos, el historial de eventos y las cartas públicas disponibles para todos los jugadores.",
+  },
+  {
+    title: "Cartas públicas",
+    body: "Las cartas sobrantes del reparto son visibles para todos como evidencia compartida. Los jugadores pueden consultarlas en la sección de evidencias de su terminal.",
+  },
+];
+
+export function RulesModal({ open, onClose, role = "player" }: { open: boolean; onClose: () => void; role?: "player" | "gm" }) {
   if (!open) return null;
+  const rules = role === "gm" ? gmRules : playerRules;
+  const title = role === "gm" ? "Instrucciones del GM" : "Reglas del juego";
   return (
     <button
       type="button"
@@ -18,20 +58,13 @@ export function RulesModal({ open, onClose }: { open: boolean; onClose: () => vo
         >
           ×
         </button>
-        <h3 className="text-xs font-black uppercase tracking-[0.18em] text-amber-300 mb-4">Reglas del juego</h3>
+        <h3 className="text-xs font-black uppercase tracking-[0.18em] text-amber-300 mb-4">{title}</h3>
         <ol className="flex flex-col gap-3 text-[11px] leading-relaxed text-slate-300">
-          <li>
-            <strong className="text-amber-100">Movimiento relajado</strong> — No hace falta sacar el número exacto. Puedes moverte a cualquier casilla alcanzable con los dados disponibles, incluyendo entrar en una sala si tienes dados suficientes.
-          </li>
-          <li>
-            <strong className="text-amber-100">Pasadizos</strong> — Desde ciertas salas hay pasadizos directos a otras. Usarlos es gratuito: no consume dados y te transporta directamente.
-          </li>
-          <li>
-            <strong className="text-amber-100">Sugerencias</strong> — Al entrar en una sala puedes sugerir un sospechoso y un objeto. Los equipos refutan en orden mostrando una carta si la tienen; solo tú ves qué carta se muestra.
-          </li>
-          <li>
-            <strong className="text-amber-100">Acusación final</strong> — Cuando estés seguro, acusa. Si aciertas, ganas. Si fallas, eres eliminado pero sigues mostrando cartas para refutar.
-          </li>
+          {rules.map((rule) => (
+            <li key={rule.title}>
+              <strong className="text-amber-100">{rule.title}</strong> — {rule.body}
+            </li>
+          ))}
         </ol>
       </div>
     </button>

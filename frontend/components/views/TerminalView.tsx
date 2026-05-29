@@ -89,6 +89,7 @@ import {
 import { ThemedBoard } from "../game/ThemedBoard";
 import { SpaceMotifModal } from "../game/SpaceMotifModal";
 import { RulesModal } from "../game/RulesModal";
+import { GameOverModal } from "../game/GameOverModal";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { EvidenciasComunes } from "../game/EvidenciasComunes";
 import { EnvelopeAnimation } from "../game/EnvelopeAnimation";
@@ -348,6 +349,8 @@ export function TerminalView() {
   const [resolutionNow, setResolutionNow] = useState(() => Date.now());
   const [showEnvelopeAnimation, setShowEnvelopeAnimation] = useState(false);
   const hasEnvelopeAnimatedRef = useRef(false);
+  const [showGameOverModal, setShowGameOverModal] = useState(false);
+  const hasShownGameOverRef = useRef(false);
   
   const [categories, setCategories] = useState<{
     c1: ElementoItem[];
@@ -386,6 +389,16 @@ export function TerminalView() {
   const isResolutionBlockingGameplay = Boolean(activeResolution);
   const resolutionCountdownSeconds = getResolutionCountdownSeconds(activeResolution?.deadlineAt, resolutionNow);
   const resolutionCountdownLabel = resolutionCountdownSeconds === null ? null : formatCountdownClock(resolutionCountdownSeconds);
+
+  const gameOverWinner: { name: string; color: TeamColor } | null =
+    activeResolution?.winningTeams[0]
+      ? { name: activeResolution.winningTeams[0].name, color: activeResolution.winningTeams[0].color }
+      : latestAccusationVerdict?.outcome === "CORRECTA"
+      ? { name: latestAccusationVerdict.accuserTeamName, color: latestAccusationVerdict.accuserTeamColor }
+      : null;
+  const gameOverSolution = activeResolution?.solution
+    ? { subject: activeResolution.solution.subject.name, object: activeResolution.solution.object.name, space: activeResolution.solution.space.name }
+    : null;
 
   const [suggestMode, setSuggestMode] = useState("hipotesis");
   
@@ -902,6 +915,13 @@ export function TerminalView() {
     const timer = setTimeout(() => setShowEnvelopeAnimation(false), 3500);
     return () => clearTimeout(timer);
   }, [showEnvelopeAnimation]);
+
+  React.useEffect(() => {
+    if (sessionStatus !== "FINALIZADA" || hasShownGameOverRef.current) return;
+    hasShownGameOverRef.current = true;
+    const timer = setTimeout(() => setShowGameOverModal(true), 800);
+    return () => clearTimeout(timer);
+  }, [sessionStatus]);
 
   // react-doctor-disable-next-line react-doctor/no-cascading-set-state
   React.useEffect(() => {
@@ -1514,7 +1534,14 @@ export function TerminalView() {
         </div>
       ) : null}
 
-      <RulesModal open={isRulesOpen} onClose={() => setIsRulesOpen(false)} />
+      <RulesModal open={isRulesOpen} onClose={() => setIsRulesOpen(false)} role="player" />
+
+      <GameOverModal
+        open={showGameOverModal}
+        onClose={() => setShowGameOverModal(false)}
+        winner={gameOverWinner}
+        solution={gameOverSolution}
+      />
 
       <AlertDialog open={showExitConfirm} onOpenChange={(open) => { if (!open) cancelExit(); }}>
         <AlertDialogContent className="max-w-sm border-cyan-900/60 bg-slate-950 text-cyan-100">

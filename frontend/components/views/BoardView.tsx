@@ -98,7 +98,7 @@ export function BoardView() {
   const [showGameOverModal, setShowGameOverModal] = useState(false);
   const hasShownGameOverRef = useRef(false);
 
-  const isBoardActive = presenceState !== null;
+  const isBoardActive = presenceState !== null && presenceState.status !== "FINALIZADA";
   const { showConfirm: showExitConfirm, openConfirm: openExitConfirm, cancelExit } = useExitGuard(isBoardActive);
   const [events, setEvents] = useState<LobbyEventMessage[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<BoardConnectionStatus>("idle");

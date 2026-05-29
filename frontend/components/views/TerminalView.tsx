@@ -398,6 +398,8 @@ export function TerminalView() {
       : null;
   const gameOverSolution = activeResolution?.solution
     ? { subject: activeResolution.solution.subject.name, object: activeResolution.solution.object.name, space: activeResolution.solution.space.name }
+    : latestAccusationVerdict?.outcome === "CORRECTA"
+    ? { subject: latestAccusationVerdict.accusation.subject.name, object: latestAccusationVerdict.accusation.object.name, space: latestAccusationVerdict.accusation.space.name }
     : null;
 
   const [suggestMode, setSuggestMode] = useState("hipotesis");

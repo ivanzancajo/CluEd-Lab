@@ -387,6 +387,9 @@ export function BoardView() {
       : latestAccusationEvent?.accusationVerdict?.outcome === "CORRECTA"
       ? { name: latestAccusationEvent.accusationVerdict.accuserTeamName, color: latestAccusationEvent.accusationVerdict.accuserTeamColor }
       : null;
+  const gameOverSolution = latestAccusationEvent?.accusationVerdict?.outcome === "CORRECTA"
+    ? { subject: latestAccusationEvent.accusationVerdict.accusation.subject.name, object: latestAccusationEvent.accusationVerdict.accusation.object.name, space: latestAccusationEvent.accusationVerdict.accusation.space.name }
+    : null;
 
   const boardSpaces = mapBoardSpaces(boardConfig);
   const boardCenterImage = getRenderableBoardCenterImage(boardConfig?.centerImage);
@@ -935,7 +938,7 @@ export function BoardView() {
           open={showGameOverModal}
           onClose={() => setShowGameOverModal(false)}
           winner={gameOverWinner}
-          solution={null}
+          solution={gameOverSolution}
         />
       ) : null}
 

@@ -259,7 +259,7 @@ const EditableItemList = memo(function EditableItemList({
     <div className="flex flex-col gap-4">
       <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-300">
         <div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-cyan-300">
-          {type}s configurados: {items.length}/{minItems === maxItems ? maxItems : `${minItems}-${maxItems}`}
+          {type} configurados: {items.length}/{minItems === maxItems ? maxItems : `${minItems}-${maxItems}`}
         </div>
         {showMotif ? (
           <p>Los motivos se muestran en la tabla de razonamiento en lugar del nombre del espacio.</p>
@@ -292,9 +292,10 @@ const EditableItemList = memo(function EditableItemList({
                 onClick={() => removeItem(item.localId)}
                 disabled={fieldsDisabled}
                 data-cy={`admin-config-${collectionKey}-remove-button`}
-                className="ml-auto text-xs font-bold uppercase tracking-widest text-slate-600 hover:text-red-500 disabled:text-slate-700"
+                className="ml-auto text-slate-600 hover:text-red-500 disabled:text-slate-700"
+                title="Eliminar"
               >
-                Remover
+                <Trash2 className="size-4" />
               </button>
             </div>
 
@@ -1146,12 +1147,12 @@ export function AdminConfigView() {
             >
               <div>
                 <h2 className="mb-2 flex items-center gap-3 text-2xl font-black uppercase tracking-widest text-cyan-400">
-                  <User className="size-8" /> Configurar Sujetos
+                  <User className="size-8" /> Configurar {cat1Name}
                 </h2>
-                <p className="text-sm text-slate-400">Define entre {COLLECTION_CONSTRAINTS.subjects.min} y {COLLECTION_CONSTRAINTS.subjects.max} sujetos para la skin.</p>
+                <p className="text-sm text-slate-400">Define entre {COLLECTION_CONSTRAINTS.subjects.min} y {COLLECTION_CONSTRAINTS.subjects.max} {cat1Name.toLowerCase()} para la skin.</p>
               </div>
 
-              <EditableItemList items={subjects} setItems={setSubjects} icon={SUBJECT_ICON} type="Sujeto" collectionKey="subjects" minItems={COLLECTION_CONSTRAINTS.subjects.min} maxItems={COLLECTION_CONSTRAINTS.subjects.max} showMotif={false} errorItems={itemErrors.subjects} fieldsDisabled={fieldsDisabled} />
+              <EditableItemList items={subjects} setItems={setSubjects} icon={SUBJECT_ICON} type={cat1Name} collectionKey="subjects" minItems={COLLECTION_CONSTRAINTS.subjects.min} maxItems={COLLECTION_CONSTRAINTS.subjects.max} showMotif={false} errorItems={itemErrors.subjects} fieldsDisabled={fieldsDisabled} />
             </m.div>
           ) : null}
 
@@ -1165,12 +1166,12 @@ export function AdminConfigView() {
             >
               <div>
                 <h2 className="mb-2 flex items-center gap-3 text-2xl font-black uppercase tracking-widest text-emerald-400">
-                  <Box className="size-8" /> Configurar Objetos
+                  <Box className="size-8" /> Configurar {cat2Name}
                 </h2>
-                <p className="text-sm text-slate-400">Define entre {COLLECTION_CONSTRAINTS.objects.min} y {COLLECTION_CONSTRAINTS.objects.max} objetos para la skin.</p>
+                <p className="text-sm text-slate-400">Define entre {COLLECTION_CONSTRAINTS.objects.min} y {COLLECTION_CONSTRAINTS.objects.max} {cat2Name.toLowerCase()} para la skin.</p>
               </div>
 
-              <EditableItemList items={objects} setItems={setObjects} icon={OBJECT_ICON} type="Objeto" collectionKey="objects" minItems={COLLECTION_CONSTRAINTS.objects.min} maxItems={COLLECTION_CONSTRAINTS.objects.max} showMotif={false} errorItems={itemErrors.objects} fieldsDisabled={fieldsDisabled} />
+              <EditableItemList items={objects} setItems={setObjects} icon={OBJECT_ICON} type={cat2Name} collectionKey="objects" minItems={COLLECTION_CONSTRAINTS.objects.min} maxItems={COLLECTION_CONSTRAINTS.objects.max} showMotif={false} errorItems={itemErrors.objects} fieldsDisabled={fieldsDisabled} />
             </m.div>
           ) : null}
 
@@ -1184,10 +1185,10 @@ export function AdminConfigView() {
             >
               <div>
                 <h2 className="mb-2 flex items-center gap-3 text-2xl font-black uppercase tracking-widest text-red-400">
-                  <MapPin className="size-8" /> Configurar Espacios
+                  <MapPin className="size-8" /> Configurar {cat3Name}
                 </h2>
                 <p className="text-sm text-slate-400">
-                  Define exactamente {COLLECTION_CONSTRAINTS.spaces.min} espacios. Si los motivos están activos, cada espacio debe tener uno.
+                  Define exactamente {COLLECTION_CONSTRAINTS.spaces.min} {cat3Name.toLowerCase()}. Si los motivos están activos, cada {cat3Name.toLowerCase().replace(/s$/, "")} debe tener uno.
                 </p>
               </div>
 

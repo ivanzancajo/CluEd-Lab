@@ -947,10 +947,10 @@ export function BoardView() {
         <AlertDialogContent className="max-w-sm border-red-900/60 bg-slate-950 text-cyan-100">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-sm font-black uppercase tracking-[0.18em] text-red-300">
-              ¿Finalizar y salir como GM?
+              ¿Finalizar la partida?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm text-slate-300">
-              La partida quedará <span className="font-bold text-red-300">finalizada permanentemente</span> y todos los jugadores conectados serán notificados. Esta acción no se puede deshacer.
+              La sesión se cerrará para todos los participantes. Esta acción es irreversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -965,11 +965,14 @@ export function BoardView() {
               onClick={() => {
                 const socket = socketRef.current;
                 const sid = presenceState?.sessionId;
-                if (socket && sid) {
-                  void endSessionFromBoard(socket, sid).catch(() => {});
-                }
-                socket?.disconnect();
-                navigate("/");
+                const doExit = async () => {
+                  if (socket && sid) {
+                    await endSessionFromBoard(socket, sid).catch(() => {});
+                  }
+                  socket?.disconnect();
+                  navigate("/");
+                };
+                void doExit();
               }}
             >
               Finalizar partida

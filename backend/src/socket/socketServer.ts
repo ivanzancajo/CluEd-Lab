@@ -207,6 +207,7 @@ type LobbyClientToServerEvents = {
   startGame: (payload: unknown, acknowledge?: (response: StartGameAck) => void) => void;
   'game:pause': (payload: unknown, acknowledge?: (response: GameStatusChangeAck) => void) => void;
   'game:resume': (payload: unknown, acknowledge?: (response: GameStatusChangeAck) => void) => void;
+  'game:end-session': (payload: unknown, acknowledge?: (response: GameStatusChangeAck) => void) => void;
   'game:trigger-resolution': (payload: unknown, acknowledge?: (response: GameTriggerResolutionAck) => void) => void;
   'lobby:team-heartbeat': () => void;
   'turn:use-secret-passage': (payload: unknown, acknowledge?: (response: TeamSecretPassageAck) => void) => void;

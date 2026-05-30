@@ -1542,7 +1542,8 @@ export function TerminalView() {
 
       <GameOverModal
         open={showGameOverModal}
-        onClose={() => setShowGameOverModal(false)}
+        onClose={() => navigate("/")}
+
         winner={gameOverWinner}
         solution={gameOverSolution}
       />

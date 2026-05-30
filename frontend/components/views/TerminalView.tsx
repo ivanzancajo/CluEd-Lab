@@ -1239,6 +1239,8 @@ export function TerminalView() {
     setMatrix(prev => ({ ...prev, [key]: next }));
   };
 
+  const ownedItemIds = React.useMemo(() => new Set(teamHand.map(c => c.id)), [teamHand]);
+
   const boardSpaces = mapBoardSpaces(boardTheme);
   const storedTeamIdForPawns = getStoredTeamId();
   const boardPawns = boardTeams.reduce<{ id: string; color: string; positionX: number; positionY: number; opacity: number; isCurrent: boolean }[]>((acc, team) => {
@@ -2102,14 +2104,20 @@ export function TerminalView() {
                       {/* Items Rows */}
                       {items.map((item: ElementoItem) => {
                         const rowName = item.name;
+                        const isOwned = ownedItemIds.has(item.id);
 
                         return (
-                        <div key={item.name} className="flex border-b border-slate-800/50 hover:bg-slate-900/50 transition-colors">
+                        <div key={item.name} className={`flex border-b border-slate-800/50 transition-colors ${isOwned ? 'bg-emerald-950/10' : 'hover:bg-slate-900/50'}`}>
                           <div className="w-32 flex-shrink-0 p-2 border-r border-slate-800 flex items-center gap-1.5 overflow-hidden bg-slate-950">
-                            <div className="p-1 rounded-md border border-slate-800 bg-slate-900 flex-shrink-0">
+                            <div className={`p-1 rounded-md border flex-shrink-0 ${isOwned ? 'border-emerald-800/60 bg-emerald-950/40' : 'border-slate-800 bg-slate-900'}`}>
                               {item.avatar}
                             </div>
-                            <span className="text-[10px] text-slate-300 leading-tight truncate flex-1" title={item.name}>{item.name}</span>
+                            <span className={`text-[10px] leading-tight truncate flex-1 ${isOwned ? 'text-emerald-300' : 'text-slate-300'}`} title={item.name}>{item.name}</span>
+                            {isOwned && (
+                              <span className="flex-shrink-0 text-[7px] font-black uppercase tracking-wide text-emerald-200 bg-emerald-900/50 border border-emerald-700/40 rounded px-1 leading-4">
+                                Tuya
+                              </span>
+                            )}
                             {!isC1 && !isC2 && item.motif && (
                               <button
                                 type="button"
@@ -2124,6 +2132,15 @@ export function TerminalView() {
                           </div>
                           <div className="flex-1 flex overflow-x-auto scrollbar-none">
                             {TEAMS.map(team => {
+                              if (isOwned) {
+                                return (
+                                  <div
+                                    key={team}
+                                    className="size-10 flex-shrink-0 border-r border-slate-800/60 bg-emerald-950/15 cursor-not-allowed"
+                                    title="Carta en tu mano — no editable"
+                                  />
+                                );
+                              }
                               const state = matrix[`${rowName}-${team}`] || 0;
                               return (
                                 <button
@@ -2136,7 +2153,7 @@ export function TerminalView() {
                                 >
                                   <CellIcon state={state} />
                                 </button>
-                              )
+                              );
                             })}
                           </div>
                         </div>

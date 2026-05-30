@@ -467,7 +467,7 @@ export function AdminConfigView() {
     (value) => value.trim().length > 0
   );
 
-  const canSave = activeTab !== "list" && !fieldsDisabled;
+  const canSave = activeTab !== "list" && !fieldsDisabled && metadataReady && validation.isValid;
   const saveBlockerMessage = useMemo(() => {
     if (activeTab === "list") {
       return "Crea o carga una configuración para poder guardarla.";
@@ -809,7 +809,11 @@ export function AdminConfigView() {
           </button>
 
           {saveBlockerMessage ? (
-            <p className="mt-3 text-center text-[11px] leading-5 text-slate-500">
+            <p className={`mt-3 text-center text-[11px] leading-5 ${
+              !saving && !detailLoading && activeTab !== "list"
+                ? "text-red-400"
+                : "text-slate-500"
+            }`}>
               {saveBlockerMessage}
             </p>
           ) : (

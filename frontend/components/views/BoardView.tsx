@@ -22,6 +22,7 @@ import {
 import { useExitGuard } from "../../src/hooks/useExitGuard";
 import {
   createLobbySocketClient,
+  endSessionFromBoard,
   pauseGameFromBoard,
   resumeGameFromBoard,
   subscribeHostToLobby,
@@ -943,13 +944,13 @@ export function BoardView() {
       ) : null}
 
       <AlertDialog open={showExitConfirm} onOpenChange={(open) => { if (!open) cancelExit(); }}>
-        <AlertDialogContent className="max-w-sm border-cyan-900/60 bg-slate-950 text-cyan-100">
+        <AlertDialogContent className="max-w-sm border-red-900/60 bg-slate-950 text-cyan-100">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-sm font-black uppercase tracking-[0.18em] text-cyan-300">
-              ¿Salir como GM?
+            <AlertDialogTitle className="text-sm font-black uppercase tracking-[0.18em] text-red-300">
+              ¿Finalizar y salir como GM?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm text-slate-300">
-              La partida quedará pausada y los jugadores serán notificados.
+              La partida quedará <span className="font-bold text-red-300">finalizada permanentemente</span> y todos los jugadores conectados serán notificados. Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -965,13 +966,13 @@ export function BoardView() {
                 const socket = socketRef.current;
                 const sid = presenceState?.sessionId;
                 if (socket && sid) {
-                  void pauseGameFromBoard(socket, sid).catch(() => {});
+                  void endSessionFromBoard(socket, sid).catch(() => {});
                 }
                 socket?.disconnect();
                 navigate("/");
               }}
             >
-              Salir y pausar
+              Finalizar partida
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

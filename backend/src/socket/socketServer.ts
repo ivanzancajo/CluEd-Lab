@@ -33,7 +33,7 @@ import { prisma } from '../lib/prisma.js';
 import { env } from '../config/env.js';
 import { verifyAdminToken, type AuthTokenPayload } from '../middleware/auth.js';
 import { lobbyPresenceStore } from './lobbyPresenceStore.js';
-import { loadTeamTerminalStateByAccessCode, pauseSession, resumeSession, startSessionByAccessCode } from '../lib/sessionGameplay.js';
+import { endSessionByGM, loadTeamTerminalStateByAccessCode, pauseSession, resumeSession, startSessionByAccessCode } from '../lib/sessionGameplay.js';
 import { findBoardMovementNodeByPosition, isSecretPassageMoveValid } from '../lib/sessionMovement.js';
 import { BOARD_MOVEMENT_NODES } from '../lib/boardGraph.js';
 import {
@@ -417,6 +417,32 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
       });
       broadcastGameStatusChanged(io, session.id, statusPayload);
 
+      acknowledge?.({ ok: true, payload: statusPayload });
+    } catch (error) {
+      acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });
+    }
+  });
+
+  socket.on('game:end-session', async (payload: unknown, acknowledge?: (response: GameStatusChangeAck) => void) => {
+    try {
+      const input = parseGameStatusCommand(payload);
+      requireAdminUser(socket);
+
+      const session = await prisma.$transaction(
+        (tx) => endSessionByGM(tx, input.sessionId),
+        { isolationLevel: 'Serializable' }
+      );
+      const statusPayload = buildGameStatusChangedPayload(session);
+
+      broadcastLobbyUpdate(io, await buildLobbyPresenceState(session.id));
+      broadcastLobbyEvent(io, session.id, {
+        id: randomUUID(),
+        type: 'system',
+        message: 'El Game Master ha finalizado la partida.',
+        occurredAt: statusPayload.occurredAt,
+      });
+      broadcastGameStatusChanged(io, session.id, statusPayload);
+      scheduleRealtimeSessionCleanup(io, session.id);
       acknowledge?.({ ok: true, payload: statusPayload });
     } catch (error) {
       acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });

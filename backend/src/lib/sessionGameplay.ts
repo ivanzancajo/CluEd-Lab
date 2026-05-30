@@ -264,6 +264,28 @@ export async function resumeSession(client: SessionGameplayClient, sessionId: st
   return loadSessionSnapshotById(client, sessionId);
 }
 
+export async function endSessionByGM(client: SessionGameplayClient, sessionId: string) {
+  const session = await client.partida.findUnique({
+    where: { id: sessionId },
+    select: { id: true, status: true },
+  });
+
+  if (!session) {
+    throw new HttpError(404, 'La sesión solicitada no existe.');
+  }
+
+  if (session.status === EstadoPartida.FINALIZADA) {
+    throw new HttpError(409, 'La sesión ya está finalizada.');
+  }
+
+  await client.partida.update({
+    where: { id: sessionId },
+    data: { status: EstadoPartida.FINALIZADA },
+  });
+
+  return loadSessionSnapshotById(client, sessionId);
+}
+
 export async function loadTeamTerminalStateByAccessCode(
   client: TeamTerminalStateClient,
   accessCode: string,

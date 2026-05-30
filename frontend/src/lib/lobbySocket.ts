@@ -194,6 +194,7 @@ type ClientToServerEvents = {
   startGame: (payload: { accessCode: string }, acknowledge: (response: StartGameAck) => void) => void;
   'game:pause': (payload: { sessionId: string }, acknowledge: (response: GameStatusChangeAck) => void) => void;
   'game:resume': (payload: { sessionId: string }, acknowledge: (response: GameStatusChangeAck) => void) => void;
+  'game:end-session': (payload: { sessionId: string }, acknowledge: (response: GameStatusChangeAck) => void) => void;
   'game:trigger-resolution': (
     payload: { sessionId: string; mode: GameResolutionMode },
     acknowledge: (response: GameTriggerResolutionAck) => void
@@ -245,6 +246,12 @@ export function pauseGameFromBoard(socket: LobbySocketClient, sessionId: string)
 export function resumeGameFromBoard(socket: LobbySocketClient, sessionId: string) {
   return new Promise<GameStatusChangeAck>((resolve) => {
     socket.emit('game:resume', { sessionId }, resolve);
+  });
+}
+
+export function endSessionFromBoard(socket: LobbySocketClient, sessionId: string) {
+  return new Promise<GameStatusChangeAck>((resolve) => {
+    socket.emit('game:end-session', { sessionId }, resolve);
   });
 }
 

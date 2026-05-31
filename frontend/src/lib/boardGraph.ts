@@ -235,7 +235,6 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
     grid(17, 6),
     grid(18, 6),
     grid(19, 6),
-    grid(20, 6, -1.66, 0),
   ],
   'pasillo-superior-central->pasillo-izquierdo-superior': [
     grid(9, 4),
@@ -249,7 +248,7 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
     grid(1, 4),
     grid(0, 4),
   ],
-  'pasillo-superior-central->centro-norte': [grid(10, 5), grid(10, 6), grid(10, 7, 0, -1.64)],
+  'pasillo-superior-central->centro-norte': [grid(10, 5), grid(10, 6)],
   'pasillo-izquierdo-superior->pasillo-izquierdo-central': [grid(0, 7), grid(0, 8), grid(0, 9), grid(0, 10)],
   'pasillo-izquierdo-central->pasillo-izquierdo-inferior': [grid(0, 13), grid(0, 14), grid(0, 15), grid(0, 16), grid(0, 17)],
   'pasillo-izquierdo-central->centro-oeste': [grid(1, 12), grid(2, 12), grid(3, 12), grid(4, 12), grid(5, 12)],
@@ -258,7 +257,6 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
     grid(8, 9),
     grid(7, 10),
     grid(7, 11),
-    grid(7, 12, 0, -1.7),
   ],
   'spawn-azul->pasillo-izquierdo-inferior': [],
   'pasillo-izquierdo-inferior->pasillo-inferior-izquierdo': [
@@ -428,7 +426,7 @@ const EXCLUDED_SQUARE_GRID_POINTS = [
   ...columnRangePoints(10, [[4, 5], [17, 23]]),
   ...columnRangePoints(11, [[8, 8], [17, 17], [23, 23]]),
   ...columnRangePoints(12, [[4, 4], [6, 6], [9, 9]]),
-  ...columnRangePoints(13, [[4, 4], [6, 6], [20, 22]]),
+  ...columnRangePoints(13, [[4, 4], [6, 6], [10, 15], [20, 22]]),
   ...columnRangePoints(14, [[20, 20]]),
   ...columnRangePoints(15, [[9, 11], [13, 14]]),
   ...columnRangePoints(16, [[1, 4]]),

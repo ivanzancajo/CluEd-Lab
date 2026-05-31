@@ -744,41 +744,51 @@ describe('sessionMovement', () => {
     expect(BOARD_MOVEMENT_CONNECTIONS['square:grid:3:20']).toBeUndefined();
   });
 
-  it('la casilla de paso de pasillo-derecho-superior a pasillo-superior-derecho paso 7 existe y está conectada', () => {
-    const nodeId = 'square:pasillo-derecho-superior::pasillo-superior-derecho:7';
+  it('el último intermedio de pasillo-superior-derecho a pasillo-derecho-superior es :6 (grid 19,6), sin nodo duplicado en (20,6)', () => {
+    // El antiguo :7 (grid 20,6 con offset) era redundante con pasillo-derecho-superior (20,6) — eliminado
+    expect(BOARD_MOVEMENT_NODES['square:pasillo-derecho-superior::pasillo-superior-derecho:7']).toBeUndefined();
 
-    expect(BOARD_MOVEMENT_NODES[nodeId]).toBeDefined();
-    expect(BOARD_MOVEMENT_NODES[nodeId]?.gridPosition).toEqual({ col: 20, row: 6 });
-    expect((BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? []).length).toBeGreaterThan(0);
+    const nodeId6 = 'square:pasillo-derecho-superior::pasillo-superior-derecho:6';
+    expect(BOARD_MOVEMENT_NODES[nodeId6]).toBeDefined();
+    expect(BOARD_MOVEMENT_NODES[nodeId6]?.gridPosition).toEqual({ col: 19, row: 6 });
+    expect(BOARD_MOVEMENT_CONNECTIONS[nodeId6]).toContain('pasillo-derecho-superior');
+    expect(BOARD_MOVEMENT_CONNECTIONS['pasillo-derecho-superior']).toContain(nodeId6);
   });
 
-  it('la casilla de paso 5 entre centro-norte y centro-oeste existe y está conectada', () => {
-    const nodeId = 'square:centro-norte::centro-oeste:5';
+  it('el último intermedio de centro-norte a centro-oeste es :4 (grid 7,11), sin nodo duplicado en (7,12)', () => {
+    // El antiguo :5 (grid 7,12 con offset) era redundante con centro-oeste (7,12) — eliminado
+    expect(BOARD_MOVEMENT_NODES['square:centro-norte::centro-oeste:5']).toBeUndefined();
 
-    expect(BOARD_MOVEMENT_NODES[nodeId]).toBeDefined();
-    expect(BOARD_MOVEMENT_NODES[nodeId]?.gridPosition).toEqual({ col: 7, row: 12 });
-    expect((BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? []).length).toBeGreaterThan(0);
+    const nodeId4 = 'square:centro-norte::centro-oeste:4';
+    expect(BOARD_MOVEMENT_NODES[nodeId4]).toBeDefined();
+    expect(BOARD_MOVEMENT_NODES[nodeId4]?.gridPosition).toEqual({ col: 7, row: 11 });
+    expect(BOARD_MOVEMENT_CONNECTIONS[nodeId4]).toContain('centro-oeste');
+    expect(BOARD_MOVEMENT_CONNECTIONS['centro-oeste']).toContain(nodeId4);
   });
 
-  it('la casilla de paso 3 entre centro-norte y pasillo-superior-central existe y está conectada', () => {
-    const nodeId = 'square:centro-norte::pasillo-superior-central:3';
+  it('el último intermedio de pasillo-superior-central a centro-norte es :2 (grid 10,6), sin nodo duplicado en (10,7)', () => {
+    // El antiguo :3 (grid 10,7 con offset) era redundante con centro-norte (10,7) — eliminado
+    expect(BOARD_MOVEMENT_NODES['square:centro-norte::pasillo-superior-central:3']).toBeUndefined();
 
-    expect(BOARD_MOVEMENT_NODES[nodeId]).toBeDefined();
-    expect(BOARD_MOVEMENT_NODES[nodeId]?.gridPosition).toEqual({ col: 10, row: 7 });
-    expect((BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? []).length).toBeGreaterThan(0);
+    const nodeId2 = 'square:centro-norte::pasillo-superior-central:2';
+    expect(BOARD_MOVEMENT_NODES[nodeId2]).toBeDefined();
+    expect(BOARD_MOVEMENT_NODES[nodeId2]?.gridPosition).toEqual({ col: 10, row: 6 });
+    expect(BOARD_MOVEMENT_CONNECTIONS[nodeId2]).toContain('centro-norte');
+    expect(BOARD_MOVEMENT_CONNECTIONS['centro-norte']).toContain(nodeId2);
   });
 
-  it('la cadena de casillas entre centro-norte y centro-oeste: :1 y :2 están excluidas, :3–:5 conectan a centro-oeste', () => {
+  it('la cadena de casillas entre centro-norte y centro-oeste: :1 y :2 están excluidas, :3–:4 conectan a centro-oeste', () => {
     // :1 (col 9, row 8) excluida por columnRangePoints(9, [[8,8]])
     // :2 (col 8, row 9) excluida por columnRangePoints(8, [[8,14]])
+    // :5 (grid 7,12) era redundante con centro-oeste (7,12) — eliminado
     expect(BOARD_MOVEMENT_NODES['square:centro-norte::centro-oeste:1']).toBeUndefined();
     expect(BOARD_MOVEMENT_NODES['square:centro-norte::centro-oeste:2']).toBeUndefined();
+    expect(BOARD_MOVEMENT_NODES['square:centro-norte::centro-oeste:5']).toBeUndefined();
 
-    // La sub-cadena :3 → :4 → :5 → centro-oeste sí está completa
+    // La sub-cadena :3 → :4 → centro-oeste sí está completa
     const subChain = [
       'square:centro-norte::centro-oeste:3',
       'square:centro-norte::centro-oeste:4',
-      'square:centro-norte::centro-oeste:5',
       'centro-oeste',
     ];
 
@@ -793,18 +803,19 @@ describe('sessionMovement', () => {
     expect(BOARD_MOVEMENT_CONNECTIONS['centro-norte']).not.toContain('square:centro-norte::centro-oeste:3');
   });
 
-  it('la cadena de casillas entre centro-norte y pasillo-superior-central: :1 está excluida, :2 y :3 conectan a centro-norte', () => {
+  it('la cadena de casillas entre centro-norte y pasillo-superior-central: :1 está excluida, :2 conecta a centro-norte', () => {
     // :1 (col 10, row 5) excluida por columnRangePoints(10, [[4,5]])
+    // :3 (grid 10,7) era redundante con centro-norte (10,7) — eliminado
     expect(BOARD_MOVEMENT_NODES['square:centro-norte::pasillo-superior-central:1']).toBeUndefined();
+    expect(BOARD_MOVEMENT_NODES['square:centro-norte::pasillo-superior-central:3']).toBeUndefined();
 
     // pasillo-superior-central queda aislado del corredor (su único puente :1 fue eliminado)
     const pasilloCentroConnections = BOARD_MOVEMENT_CONNECTIONS['pasillo-superior-central'] ?? [];
     expect(pasilloCentroConnections).not.toContain('square:centro-norte::pasillo-superior-central:2');
 
-    // La sub-cadena :2 → :3 → centro-norte sí está completa
+    // La sub-cadena :2 → centro-norte sí está completa
     const subChain = [
       'square:centro-norte::pasillo-superior-central:2',
-      'square:centro-norte::pasillo-superior-central:3',
       'centro-norte',
     ];
 
@@ -817,7 +828,10 @@ describe('sessionMovement', () => {
   });
 
   it('la cadena de casillas entre pasillo-superior-derecho y pasillo-derecho-superior está completa y conectada en serie', () => {
-    // 7 casillas: :1 (15,5) → :2 (15,6) → :3 (16,6) → :4 (17,6) → :5 (18,6) → :6 (19,6) → :7 (20,6)
+    // 6 casillas: :1 (15,5) → :2 (15,6) → :3 (16,6) → :4 (17,6) → :5 (18,6) → :6 (19,6)
+    // :7 (20,6) era redundante con pasillo-derecho-superior (20,6) — eliminado
+    expect(BOARD_MOVEMENT_NODES['square:pasillo-derecho-superior::pasillo-superior-derecho:7']).toBeUndefined();
+
     const chain = [
       'pasillo-superior-derecho',
       'square:pasillo-derecho-superior::pasillo-superior-derecho:1',
@@ -826,7 +840,6 @@ describe('sessionMovement', () => {
       'square:pasillo-derecho-superior::pasillo-superior-derecho:4',
       'square:pasillo-derecho-superior::pasillo-superior-derecho:5',
       'square:pasillo-derecho-superior::pasillo-superior-derecho:6',
-      'square:pasillo-derecho-superior::pasillo-superior-derecho:7',
       'pasillo-derecho-superior',
     ];
 

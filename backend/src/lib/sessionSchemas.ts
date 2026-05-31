@@ -41,3 +41,7 @@ export type CreateSessionInput = z.infer<typeof createSessionSchema>;
 export type JoinSessionInput = z.infer<typeof joinSessionSchema>;
 export type MoveTeamInput = z.infer<typeof moveTeamSchema>;
 export type FinalAccusationInput = z.infer<typeof finalAccusationSchema>;
+
+export const auditLogQuerySchema = z.object({
+  format: z.enum(['json', 'csv']).optional().default('json'),
+});

@@ -324,3 +324,25 @@ export function getSessionErrorMessage(error: unknown, fallback: string) {
 
   return fallback;
 }
+
+export type AuditLogFormat = 'json' | 'csv';
+
+export async function downloadSessionAuditLog(
+  accessCode: string,
+  format: AuditLogFormat
+): Promise<void> {
+  const response = await api.get<Blob>(`/game/sessions/${accessCode}/audit-log`, {
+    params: { format },
+    responseType: 'blob',
+  });
+  const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
+  const blob = new Blob([response.data], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `registro-partida-${accessCode}.${format}`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}

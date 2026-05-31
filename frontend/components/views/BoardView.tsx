@@ -940,6 +940,7 @@ export function BoardView() {
           onClose={() => setShowGameOverModal(false)}
           winner={gameOverWinner}
           solution={gameOverSolution}
+          accessCode={sessionCode}
         />
       ) : null}
 

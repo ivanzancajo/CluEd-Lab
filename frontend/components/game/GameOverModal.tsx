@@ -1,14 +1,31 @@
+import { useState } from "react";
 import { m } from "motion/react";
 import type { TeamColor } from "../../src/lib/sessionApi";
+import { downloadSessionAuditLog } from "../../src/lib/sessionApi";
 
 interface GameOverModalProps {
   open: boolean;
   onClose: () => void;
   winner: { name: string; color: TeamColor } | null;
   solution: { subject: string; object: string; space: string } | null;
+  accessCode?: string;
 }
 
-export function GameOverModal({ open, onClose, winner, solution }: GameOverModalProps) {
+export function GameOverModal({ open, onClose, winner, solution, accessCode }: GameOverModalProps) {
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  async function handleDownload(format: 'json' | 'csv') {
+    if (!accessCode) return;
+    setIsDownloading(true);
+    try {
+      await downloadSessionAuditLog(accessCode, format);
+    } catch {
+      // el usuario puede reintentar
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
   if (!open) return null;
   const solutionItems = solution
     ? [
@@ -64,10 +81,30 @@ export function GameOverModal({ open, onClose, winner, solution }: GameOverModal
           </div>
         ) : null}
 
+        {accessCode ? (
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => void handleDownload('json')}
+              disabled={isDownloading}
+              className="flex-1 rounded-xl border border-cyan-700/50 bg-cyan-950/40 py-2.5 text-[11px] font-bold uppercase tracking-widest text-cyan-200 hover:bg-cyan-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Descargar JSON
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDownload('csv')}
+              disabled={isDownloading}
+              className="flex-1 rounded-xl border border-emerald-700/50 bg-emerald-950/40 py-2.5 text-[11px] font-bold uppercase tracking-widest text-emerald-200 hover:bg-emerald-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Descargar CSV
+            </button>
+          </div>
+        ) : null}
         <button
           type="button"
           onClick={onClose}
-          className="mt-5 w-full rounded-xl border border-slate-700 bg-slate-900 py-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-200 hover:bg-slate-800 transition-colors"
+          className="mt-3 w-full rounded-xl border border-slate-700 bg-slate-900 py-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-200 hover:bg-slate-800 transition-colors"
         >
           Cerrar
         </button>

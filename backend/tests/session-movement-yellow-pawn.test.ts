@@ -7,34 +7,21 @@ import {
   resolveCommittedMoveTargetNode,
 } from '../src/lib/sessionMovement.js';
 import {
-  BOARD_EXCLUDED_GRID_KEYS,
   BOARD_ROOM_DOOR_COORDINATES,
   getRoomEntryNodeByDoorNodeId,
-  type BoardMovementNode,
 } from '../src/lib/boardGraph.js';
 
-// ─── Constantes del corredor de salida amarillo ───────────────────────────────
+// ─── Comportamiento corregido del peón amarillo ───────────────────────────────
 //
-// spawn-amarillo (grid 22,7) se conecta al tablero a través de dos casillas
-// intermedias antes de alcanzar pasillo-derecho-superior (grid 20,6):
+// spawn-amarillo (grid 22,7) se conecta DIRECTAMENTE a pasillo-derecho-superior
+// (grid 20,6) en 1 solo paso, igual que el resto de spawns del tablero.
 //
-//   spawn-amarillo (22,7)
-//     └─ :2 (22,6)   ← paso 1 desde spawn
-//         └─ :1 (21,6)   ← paso 2 desde spawn
-//             └─ pasillo-derecho-superior (20,6)   ← paso 3 desde spawn
-//
-// Consecuencia: con tirada N el peón amarillo solo penetra el tablero N-2 pasos
-// efectivos (los dos primeros valores del dado se consumen por el corredor de
-// salida antes de llegar al primer cruce real del tablero).
+// El desfase N-2 anterior (causado por dos casillas intermedias en el corredor de
+// salida) ha sido eliminado. Con tirada 1 el peón puede alcanzar pasillo-derecho-
+// superior y desde allí acceder a todo el corredor derecho del tablero.
 //
 const SPAWN_AMARILLO_ID = 'spawn-amarillo';
-const PRIMER_PASO_ID = 'square:pasillo-derecho-superior::spawn-amarillo:2'; // grid (22,6)
-const SEGUNDO_PASO_ID = 'square:pasillo-derecho-superior::spawn-amarillo:1'; // grid (21,6)
-const PRIMER_CRUCE_ID = 'pasillo-derecho-superior'; // grid (20,6)
-
-function gridKey(col: number, row: number) {
-  return `${col}:${row}`;
-}
+const PRIMER_CRUCE_ID = 'pasillo-derecho-superior'; // grid (20,6) — 1 paso desde spawn
 
 function bfsMinDist(from: string, to: string): number {
   const visited = new Set([from]);
@@ -55,96 +42,37 @@ function bfsMinDist(from: string, to: string): number {
 // ═════════════════════════════════════════════════════════════════════════════
 describe('SCRUM-154 · Validación de fronteras y colisiones — peón amarillo', () => {
 
-  // ─── Grupo 1: Desfase N-2 en la salida del spawn amarillo ────────────────
-  describe('desfase N-2 en la salida del spawn amarillo', () => {
+  // ─── Grupo 1: Conexión directa al tablero (desfase N-2 eliminado) ─────────
+  describe('conexión directa al tablero (desfase N-2 eliminado)', () => {
 
-    it('los nodos del corredor de salida existen con las posiciones de grid correctas', () => {
-      const primerPaso = BOARD_MOVEMENT_NODES[PRIMER_PASO_ID];
-      const segundoPaso = BOARD_MOVEMENT_NODES[SEGUNDO_PASO_ID];
-      const primerCruce = BOARD_MOVEMENT_NODES[PRIMER_CRUCE_ID];
-
-      expect(primerPaso).toBeDefined();
-      expect(primerPaso?.gridPosition).toEqual({ col: 22, row: 6 });
-      expect(segundoPaso).toBeDefined();
-      expect(segundoPaso?.gridPosition).toEqual({ col: 21, row: 6 });
-      expect(primerCruce).toBeDefined();
-      expect(primerCruce?.gridPosition).toEqual({ col: 20, row: 6 });
+    it('spawn-amarillo se conecta directamente a pasillo-derecho-superior (1 hop)', () => {
+      const connections = BOARD_MOVEMENT_CONNECTIONS[SPAWN_AMARILLO_ID] ?? [];
+      expect(connections).toHaveLength(1);
+      expect(connections[0]).toBe(PRIMER_CRUCE_ID);
     });
 
-    it('el único adyacente desde spawn-amarillo es la primera casilla del corredor', () => {
+    it('el único adyacente desde spawn-amarillo es pasillo-derecho-superior', () => {
       const adjacent = getAdjacentMoveNodes(SPAWN_AMARILLO_ID);
-
       expect(adjacent).toHaveLength(1);
-      expect(adjacent[0]!.id).toBe(PRIMER_PASO_ID);
-      expect(adjacent[0]!.gridPosition).toEqual({ col: 22, row: 6 });
+      expect(adjacent[0]!.id).toBe(PRIMER_CRUCE_ID);
     });
 
-    it('tirada 1 → solo alcanza la primera casilla del corredor (paso 1)', () => {
+    it('la distancia en grafo desde spawn-amarillo a pasillo-derecho-superior es exactamente 1', () => {
+      expect(bfsMinDist(SPAWN_AMARILLO_ID, PRIMER_CRUCE_ID)).toBe(1);
+    });
+
+    it('tirada 1 → destino pasillo-derecho-superior (igual que cualquier otro spawn)', () => {
       const destinations = getReachableMoveNodes(SPAWN_AMARILLO_ID, [], 1);
-
-      expect(destinations).toHaveLength(1);
-      expect(destinations[0]!.id).toBe(PRIMER_PASO_ID);
-      expect(destinations[0]!.stepsRequired).toBe(1);
-    });
-
-    it('tirada 2 → solo alcanza la segunda casilla del corredor (paso 2)', () => {
-      const destinations = getReachableMoveNodes(SPAWN_AMARILLO_ID, [], 2);
-
-      expect(destinations).toHaveLength(1);
-      expect(destinations[0]!.id).toBe(SEGUNDO_PASO_ID);
-      expect(destinations[0]!.stepsRequired).toBe(2);
-    });
-
-    it('tirada 3 → alcanza el primer cruce real del tablero (pasillo-derecho-superior) a 3 pasos', () => {
-      const destinations = getReachableMoveNodes(SPAWN_AMARILLO_ID, [], 3);
       const ids = destinations.map((n) => n.id);
-
       expect(ids).toContain(PRIMER_CRUCE_ID);
       const cruce = destinations.find((n) => n.id === PRIMER_CRUCE_ID)!;
-      expect(cruce.stepsRequired).toBe(3);
+      expect(cruce.stepsRequired).toBe(1);
     });
 
-    it('pasillo-derecho-superior NO es alcanzable con tirada 1 ni 2 desde spawn-amarillo', () => {
-      const destRoll1 = getReachableMoveNodes(SPAWN_AMARILLO_ID, [], 1).map((n) => n.id);
-      const destRoll2 = getReachableMoveNodes(SPAWN_AMARILLO_ID, [], 2).map((n) => n.id);
-
-      expect(destRoll1).not.toContain(PRIMER_CRUCE_ID);
-      expect(destRoll2).not.toContain(PRIMER_CRUCE_ID);
-    });
-
-    it('documentación del desfase N-2: pasillo-derecho-superior requiere tirada mínima 3 desde spawn-amarillo', () => {
-      // Con tirada N, el peón amarillo penetra el tablero solo N-2 pasos efectivos
-      // porque el corredor de salida consume 2 valores del dado antes de llegar
-      // al primer cruce real. Tirada 1 y 2 no alcanzan ningún nodo del tablero principal.
-      for (let roll = 1; roll <= 2; roll++) {
-        const dests = getReachableMoveNodes(SPAWN_AMARILLO_ID, [], roll);
-        const reachesMainBoard = dests.some((n) => n.id === PRIMER_CRUCE_ID || n.gridPosition?.col <= 20);
-        expect(reachesMainBoard).toBe(false);
-      }
-
-      const destRoll3 = getReachableMoveNodes(SPAWN_AMARILLO_ID, [], 3);
-      const reachesMainBoardRoll3 = destRoll3.some((n) => n.gridPosition && n.gridPosition.col <= 20);
-      expect(reachesMainBoardRoll3).toBe(true);
-    });
-
-    it('bloqueo total: ocupar la primera casilla del corredor impide cualquier tirada', () => {
-      for (let roll = 1; roll <= 12; roll++) {
-        const dests = getReachableMoveNodes(SPAWN_AMARILLO_ID, [PRIMER_PASO_ID], roll);
-        expect(dests).toHaveLength(0);
-      }
-    });
-
-    it('bloqueo parcial: ocupar la segunda casilla no bloquea tirada 1 pero sí tirada 2', () => {
-      const destRoll1Blocked = getReachableMoveNodes(SPAWN_AMARILLO_ID, [SEGUNDO_PASO_ID], 1);
-      expect(destRoll1Blocked.map((n) => n.id)).toContain(PRIMER_PASO_ID);
-
-      const destRoll2Blocked = getReachableMoveNodes(SPAWN_AMARILLO_ID, [SEGUNDO_PASO_ID], 2);
-      expect(destRoll2Blocked).toHaveLength(0);
-    });
-
-    it('la distancia en grafo desde spawn-amarillo a pasillo-derecho-superior es exactamente 3', () => {
-      const dist = bfsMinDist(SPAWN_AMARILLO_ID, PRIMER_CRUCE_ID);
-      expect(dist).toBe(3);
+    it('tirada 2 → destinos a 2 pasos del spawn (nodos del corredor derecho)', () => {
+      const destinations = getReachableMoveNodes(SPAWN_AMARILLO_ID, [], 2);
+      expect(destinations.length).toBeGreaterThan(0);
+      destinations.forEach((n) => expect(n.stepsRequired).toBe(2));
     });
 
     it('tiradas 1-12 desde spawn-amarillo siempre producen al menos un destino', () => {
@@ -153,10 +81,27 @@ describe('SCRUM-154 · Validación de fronteras y colisiones — peón amarillo'
         expect(dests.length).toBeGreaterThan(0);
       }
     });
+
+    it('tirada 0 desde spawn-amarillo no produce ningún destino', () => {
+      expect(getReachableMoveNodes(SPAWN_AMARILLO_ID, [], 0)).toHaveLength(0);
+    });
+
+    it('bloquear pasillo-derecho-superior impide cualquier tirada desde spawn-amarillo', () => {
+      for (let roll = 1; roll <= 12; roll++) {
+        const dests = getReachableMoveNodes(SPAWN_AMARILLO_ID, [PRIMER_CRUCE_ID], roll);
+        expect(dests).toHaveLength(0);
+      }
+    });
+
+    it('ningún nodo intermedio de corredor existe ya entre spawn-amarillo y pasillo-derecho-superior', () => {
+      // Los nodos :1 y :2 del antiguo corredor de salida han sido eliminados.
+      expect(BOARD_MOVEMENT_NODES['square:pasillo-derecho-superior::spawn-amarillo:1']).toBeUndefined();
+      expect(BOARD_MOVEMENT_NODES['square:pasillo-derecho-superior::spawn-amarillo:2']).toBeUndefined();
+    });
   });
 
-  // ─── Grupo 2: Fronteras de muro en el corredor derecho ────────────────────
-  describe('fronteras de muro en el corredor derecho', () => {
+  // ─── Grupo 2: Fronteras de muro en la zona derecha del tablero ───────────
+  describe('fronteras de muro en la zona derecha del tablero', () => {
 
     it('no hay ningún nodo square con col > 22 (borde derecho del tablero)', () => {
       const beyondBoundary = Object.values(BOARD_MOVEMENT_NODES).filter(
@@ -165,15 +110,14 @@ describe('SCRUM-154 · Validación de fronteras y colisiones — peón amarillo'
       expect(beyondBoundary).toHaveLength(0);
     });
 
-    it('la casilla grid (22,6) existe y pertenece al corredor de salida amarillo', () => {
+    it('no existe ningún nodo en (22,6): el antiguo corredor de salida fue eliminado', () => {
       const nodeAt22_6 = Object.values(BOARD_MOVEMENT_NODES).find(
         (n) => n.gridPosition?.col === 22 && n.gridPosition?.row === 6
       );
-      expect(nodeAt22_6).toBeDefined();
-      expect(nodeAt22_6?.id).toBe(PRIMER_PASO_ID);
+      expect(nodeAt22_6).toBeUndefined();
     });
 
-    it('no existe ningún nodo en (22,5): el corredor no continúa hacia arriba desde el spawn', () => {
+    it('no existe ningún nodo en (22,5): no hay movimiento hacia arriba desde spawn-amarillo', () => {
       const nodeAt22_5 = Object.values(BOARD_MOVEMENT_NODES).find(
         (n) => n.gridPosition?.col === 22 && n.gridPosition?.row === 5
       );
@@ -187,40 +131,36 @@ describe('SCRUM-154 · Validación de fronteras y colisiones — peón amarillo'
       expect(nodeAt22_8).toBeUndefined();
     });
 
-    it('la única casilla square en col 22 adyacente al spawn es la primera casilla del corredor (22,6)', () => {
-      // spawn-amarillo está en (22,7); la única casilla de movimiento en la misma columna
-      // dentro del área de spawn (filas 0-8) es la primera casilla del corredor de salida.
+    it('no hay ningún nodo square en col 22 adyacente al área del spawn (filas 0-8)', () => {
       const squaresInSpawnZoneCol22 = Object.values(BOARD_MOVEMENT_NODES).filter(
         (n) => n.kind === 'square' && n.gridPosition?.col === 22 && (n.gridPosition?.row ?? 99) <= 8
       );
-      expect(squaresInSpawnZoneCol22).toHaveLength(1);
-      expect(squaresInSpawnZoneCol22[0]!.id).toBe(PRIMER_PASO_ID);
-    });
-
-    it('las casillas del corredor en col 21 son exactamente las dos del corredor de salida más grid:21:7 y grid:21:8', () => {
-      const squaresInCol21 = Object.values(BOARD_MOVEMENT_NODES).filter(
-        (n) => n.kind === 'square' && n.gridPosition?.col === 21
-      );
-      const ids = squaresInCol21.map((n) => n.id).sort();
-      // :1 del corredor + casillas grid de la zona inferior de la sala
-      expect(ids).toContain(SEGUNDO_PASO_ID);
-      // Todas deben ser de tipo square, sin rooms ni spawns
-      squaresInCol21.forEach((n) => expect(n.kind).toBe('square'));
+      expect(squaresInSpawnZoneCol22).toHaveLength(0);
     });
 
     it('spawn-amarillo solo tiene una conexión directa en el grafo expandido', () => {
       const connections = BOARD_MOVEMENT_CONNECTIONS[SPAWN_AMARILLO_ID] ?? [];
       expect(connections).toHaveLength(1);
-      expect(connections[0]).toBe(PRIMER_PASO_ID);
+      expect(connections[0]).toBe(PRIMER_CRUCE_ID);
+    });
+
+    it('square:grid:21:6 existe como casilla accesible desde el tablero (no desde el spawn)', () => {
+      // Tras eliminar el corredor de salida, (21,6) pasa a existir como casilla de
+      // IMAGE_ALIGNED conectada ortogonalmente a pasillo-derecho-superior y grid:21:7,
+      // pero NO conectada a spawn-amarillo.
+      const node = BOARD_MOVEMENT_NODES['square:grid:21:6'];
+      expect(node).toBeDefined();
+      expect(node?.gridPosition).toEqual({ col: 21, row: 6 });
+      // El spawn no forma parte de sus conexiones
+      const connections = BOARD_MOVEMENT_CONNECTIONS['square:grid:21:6'] ?? [];
+      expect(connections).not.toContain(SPAWN_AMARILLO_ID);
     });
   });
 
   // ─── Grupo 3: Escenarios límite de entrada a puertas ─────────────────────
-  describe('escenarios límite de entrada a puertas desde el corredor derecho', () => {
+  describe('escenarios límite de entrada a puertas', () => {
 
     it('BFS relajado: una puerta es destino válido aunque la tirada supere su distancia mínima', () => {
-      // Para cada sala, verificar que desde el nodo exterior inmediato de cada puerta,
-      // la puerta sigue siendo alcanzable aunque la tirada sea mayor que 1.
       const roomIds = Object.keys(BOARD_ROOM_DOOR_COORDINATES);
 
       roomIds.forEach((roomId) => {
@@ -232,23 +172,21 @@ describe('SCRUM-154 · Validación de fronteras y colisiones — peón amarillo'
           const exteriorNeighborIds = (BOARD_MOVEMENT_CONNECTIONS[doorNodeId] ?? []).filter(
             (nodeId) => nodeId !== roomId && BOARD_MOVEMENT_NODES[nodeId]?.kind === 'square'
           );
-
           if (exteriorNeighborIds.length === 0) return;
           const exteriorId = exteriorNeighborIds[0]!;
 
-          // Con tirada 1 (distancia exacta) la puerta está disponible
+          // Distancia exacta (roll=1): puerta accesible
           const roll1 = getReachableMoveNodes(exteriorId, [], 1).map((n) => n.id);
           expect(roll1).toContain(doorNodeId);
 
-          // Con tirada excedida (1 + 3) la puerta TAMBIÉN sigue siendo alcanzable
-          const rollExcess = getReachableMoveNodes(exteriorId, [], 4).map((n) => n.id);
-          expect(rollExcess).toContain(doorNodeId);
+          // Tirada excedida (roll=4): puerta TAMBIÉN accesible (exceso ignorado)
+          const roll4 = getReachableMoveNodes(exteriorId, [], 4).map((n) => n.id);
+          expect(roll4).toContain(doorNodeId);
         });
       });
     });
 
     it('una puerta es inalcanzable con tirada estrictamente inferior a su distancia mínima', () => {
-      // Para cada sala, desde un nodo a minDist pasos, tirada minDist-1 no llega a la puerta.
       const roomIds = Object.keys(BOARD_ROOM_DOOR_COORDINATES);
 
       roomIds.forEach((roomId) => {
@@ -257,7 +195,6 @@ describe('SCRUM-154 · Validación de fronteras y colisiones — peón amarillo'
         );
 
         doorNodeIds.forEach((doorNodeId) => {
-          // Desde el nodo exterior inmediato (a 1 paso), tirada 0 no llega
           const exteriorNeighborIds = (BOARD_MOVEMENT_CONNECTIONS[doorNodeId] ?? []).filter(
             (nodeId) => nodeId !== roomId && BOARD_MOVEMENT_NODES[nodeId]?.kind === 'square'
           );
@@ -270,7 +207,7 @@ describe('SCRUM-154 · Validación de fronteras y colisiones — peón amarillo'
       });
     });
 
-    it('una puerta ocupada por otro equipo no aparece en los destinos alcanzables', () => {
+    it('una puerta ocupada no aparece en los destinos alcanzables', () => {
       const roomIds = Object.keys(BOARD_ROOM_DOOR_COORDINATES);
 
       roomIds.forEach((roomId) => {
@@ -285,7 +222,6 @@ describe('SCRUM-154 · Validación de fronteras y colisiones — peón amarillo'
           if (exteriorNeighborIds.length === 0) return;
           const exteriorId = exteriorNeighborIds[0]!;
 
-          // Con la puerta ocupada no debe aparecer como destino
           const destWithBlocked = getReachableMoveNodes(exteriorId, [doorNodeId], 1).map((n) => n.id);
           expect(destWithBlocked).not.toContain(doorNodeId);
           expect(destWithBlocked).not.toContain(roomId);
@@ -317,6 +253,32 @@ describe('SCRUM-154 · Validación de fronteras y colisiones — peón amarillo'
         });
       });
     });
+
+    it('desde una sala, la puerta de otra sala es alcanzable con exceso de tirada', () => {
+      // Un equipo en sala-superior-derecha puede alcanzar la puerta de sala-media-derecha
+      // con una tirada mayor que la distancia mínima (BFS relajado desde sala).
+      const doorToSalaMediaDerecha = 'square:grid:16:9';
+      const minDist = bfsMinDist('sala-superior-derecha', doorToSalaMediaDerecha);
+      expect(minDist).toBeGreaterThan(0);
+
+      // Con tirada = minDist (exacto): alcanzable
+      const destsExact = getReachableMoveNodes('sala-superior-derecha', [], minDist).map((n) => n.id);
+      expect(destsExact).toContain(doorToSalaMediaDerecha);
+
+      // Con tirada = minDist + 2 (exceso): también alcanzable
+      const destsExcess = getReachableMoveNodes('sala-superior-derecha', [], minDist + 2).map((n) => n.id);
+      expect(destsExcess).toContain(doorToSalaMediaDerecha);
+    });
+
+    it('desde una sala, las salas no se encadenan como nodos de tránsito en el mismo turno', () => {
+      // Desde sala-superior-derecha, sala-inferior-izquierda (accesible por pasadizo secreto)
+      // no debe usarse como tránsito para alcanzar sus pasillos en el mismo turno.
+      // Las salas nunca son nodos de tránsito en getReachableMoveNodes.
+      for (let roll = 1; roll <= 8; roll++) {
+        const dests = getReachableMoveNodes('sala-superior-derecha', [], roll);
+        expect(dests.map((n) => n.id)).not.toContain('sala-inferior-izquierda');
+      }
+    });
   });
 
   // ─── Grupo 4: Colisiones y bloqueos en cuellos de botella ─────────────────
@@ -336,51 +298,26 @@ describe('SCRUM-154 · Validación de fronteras y colisiones — peón amarillo'
       });
     });
 
-    it('un nodo ocupado en el interior del corredor corta los destinos más allá de él', () => {
-      // Bloquear :1 (grid 21,6) convierte el corredor en un callejón sin salida:
-      //   - tirada 1 → :2 (22,6) sigue alcanzable (no pasa por :1)
-      //   - tirada 2+ → vacío (:2 es nodo de tránsito a paso 1, y :1 está bloqueado)
-      const roll1 = getReachableMoveNodes(SPAWN_AMARILLO_ID, [SEGUNDO_PASO_ID], 1);
-      expect(roll1.map((n) => n.id)).toContain(PRIMER_PASO_ID);
+    it('un nodo ocupado nunca aparece como destino en ninguna tirada desde spawn-amarillo', () => {
+      const firstJunction = PRIMER_CRUCE_ID;
 
-      for (let roll = 2; roll <= 6; roll++) {
-        const dests = getReachableMoveNodes(SPAWN_AMARILLO_ID, [SEGUNDO_PASO_ID], roll);
-        expect(dests).toHaveLength(0);
+      for (let roll = 1; roll <= 6; roll++) {
+        const dests = getReachableMoveNodes(SPAWN_AMARILLO_ID, [firstJunction], roll);
+        dests.forEach((dest) => {
+          expect(dest.id).not.toBe(firstJunction);
+        });
       }
     });
 
-    it('un nodo ocupado nunca aparece como destino ni como nodo de tránsito', () => {
-      // Verificar que el nodo bloqueado no aparece en la lista de destinos
-      // en ningún escenario con tiradas 1-6 desde spawn-amarillo.
-      const occupiedNodes = [PRIMER_PASO_ID, SEGUNDO_PASO_ID];
-
-      occupiedNodes.forEach((occupiedId) => {
-        for (let roll = 1; roll <= 6; roll++) {
-          const dests = getReachableMoveNodes(SPAWN_AMARILLO_ID, [occupiedId], roll);
-          dests.forEach((dest) => {
-            expect(dest.id).not.toBe(occupiedId);
-          });
-        }
-      });
-    });
-
-    it('tirada 0 desde spawn-amarillo no produce ningún destino', () => {
-      expect(getReachableMoveNodes(SPAWN_AMARILLO_ID, [], 0)).toHaveLength(0);
-    });
-
-    it('desde pasillo-derecho-superior con tirada 3, spawn-amarillo es alcanzable (3 pasos en grafo)', () => {
-      // El spawn-amarillo está a 3 pasos de pasillo-derecho-superior y el BFS no filtra spawns.
-      // Esto documenta que los nodos de tipo spawn SÍ pueden ser destinos de movimiento,
-      // lo que permite que un equipo regrese a su propia posición de salida si fuera necesario.
-      const dests = getReachableMoveNodes(PRIMER_CRUCE_ID, [], 3);
+    it('desde pasillo-derecho-superior con tirada 1, spawn-amarillo es alcanzable (1 paso en grafo)', () => {
+      const dests = getReachableMoveNodes(PRIMER_CRUCE_ID, [], 1);
       const ids = dests.map((n) => n.id);
       expect(ids).toContain(SPAWN_AMARILLO_ID);
       const spawnDest = dests.find((n) => n.id === SPAWN_AMARILLO_ID)!;
-      expect(spawnDest.stepsRequired).toBe(3);
+      expect(spawnDest.stepsRequired).toBe(1);
     });
 
     it('la sala-media-derecha no puede usarse como nodo de tránsito para llegar a su segunda puerta', () => {
-      // Regresión: el BFS relajado no debe atravesar salas como paso intermedio.
       const door1 = 'square:grid:16:9';
       const door2 = 'square:centro-este::pasillo-derecho-central:2';
 

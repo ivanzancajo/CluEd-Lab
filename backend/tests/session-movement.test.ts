@@ -90,9 +90,7 @@ describe('sessionMovement', () => {
       'spawn-azul': 'pasillo-izquierdo-inferior',
       'spawn-verde': 'pasillo-inferior-izquierdo',
       'spawn-blanco': 'pasillo-inferior-derecho',
-      // El edge se procesa desde pasillo-derecho-superior→spawn-amarillo (orden de iteración),
-      // por lo que el índice :2 queda adyacente al spawn (grid(22,6)) y :1 a pasillo-derecho-superior.
-      'spawn-amarillo': 'square:pasillo-derecho-superior::spawn-amarillo:2',
+      'spawn-amarillo': 'pasillo-derecho-superior',
     };
 
     Object.entries(expectedFirstMoveBySpawnNodeId).forEach(([spawnNodeId, expectedMoveNodeId]) => {
@@ -466,7 +464,9 @@ describe('sessionMovement', () => {
         seen.add(key);
 
         const b = BOARD_MOVEMENT_NODES[nId];
-        if (!b?.gridPosition || b.kind === 'room') return;
+        // Se excluyen salas y spawns: los spawns tienen conexiones de "salto largo"
+        // hacia su primer nodo de tablero, que no están restringidas a ser ortogonales.
+        if (!b?.gridPosition || b.kind === 'room' || b.kind === 'spawn') return;
 
         const dc = Math.abs(a.gridPosition.col - b.gridPosition.col);
         const dr = Math.abs(a.gridPosition.row - b.gridPosition.row);

@@ -320,7 +320,6 @@ const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
   ],
   'pasillo-derecho-central->pasillo-derecho-superior': [grid(20, 11), grid(20, 10), grid(20, 9)],
   'centro-este->pasillo-derecho-central': [grid(14, 12), grid(15, 12), grid(16, 12), grid(17, 12), grid(18, 12), grid(19, 12)],
-  'spawn-amarillo->pasillo-derecho-superior': [grid(22, 6), grid(21, 6)],
 };
 
 const BASE_MOVEMENT_CONNECTIONS: Record<string, readonly string[]> = {

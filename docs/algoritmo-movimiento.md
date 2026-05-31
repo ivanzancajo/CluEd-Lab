@@ -116,34 +116,22 @@ El BFS implementa esto añadiendo las puertas como destinos válidos en cuanto s
 
 ## 5. Caso especial: peón amarillo y el desfase N-2
 
-### 5.1 Descripción del corredor de salida
+### 5.1 Conexión directa al tablero
 
-El spawn del equipo amarillo (`spawn-amarillo`, grid 22,7) se encuentra en el borde derecho del tablero SVG, fuera del área de juego activa. El camino hacia el primer cruce real del tablero (`pasillo-derecho-superior`, grid 20,6) atraviesa **dos casillas intermedias** de corredor:
+El spawn del equipo amarillo (`spawn-amarillo`, grid 22,7) se conecta directamente a `pasillo-derecho-superior` (grid 20,6) en **un único paso**, al igual que el resto de spawns del tablero. No existe ningún corredor de salida intermedio.
 
 ```
 spawn-amarillo (22,7)
-  └── square:pasillo-derecho-superior::spawn-amarillo:2  (22,6)  ← paso 1
-        └── square:pasillo-derecho-superior::spawn-amarillo:1  (21,6)  ← paso 2
-              └── pasillo-derecho-superior  (20,6)  ← paso 3 (primer cruce del tablero)
+  └── pasillo-derecho-superior (20,6)  ← paso 1 (primer cruce del tablero)
 ```
 
-### 5.2 Consecuencia: desfase N-2
+Con tirada 1 el peón amarillo puede alcanzar `pasillo-derecho-superior` y desde allí acceder a todo el corredor derecho. No existe desfase respecto a los demás equipos.
 
-Con una tirada N desde el spawn amarillo, el peón solo penetra el tablero activo N-2 pasos efectivos, ya que los dos primeros valores del dado se consumen íntegramente en el corredor de salida:
+### 5.2 Historial: desfase N-2 (corregido en SCRUM-153)
 
-| Tirada | Casilla alcanzada                               | Área          |
-|--------|-------------------------------------------------|---------------|
-| 1      | square:…::spawn-amarillo:2 (grid 22,6)          | Corredor spawn |
-| 2      | square:…::spawn-amarillo:1 (grid 21,6)          | Corredor spawn |
-| 3      | `pasillo-derecho-superior` + casillas adyacentes | Tablero activo |
-| 4      | Nodos a 1 paso de `pasillo-derecho-superior`    | Tablero activo |
-| N ≥ 3  | Nodos a N-3 pasos de `pasillo-derecho-superior` | Tablero activo |
+En versiones anteriores del tablero, el corredor de salida de spawn-amarillo incluía dos casillas intermedias (grid 22,6 y 21,6), lo que implicaba que con tirada N el peón solo penetraba N-2 pasos efectivos en el tablero activo. Este comportamiento fue documentado en SCRUM-154 y corregido eliminando las casillas intermedias del `EXPLICIT_EDGE_GRID_POINTS` del `boardGraph.ts` (tanto backend como frontend).
 
-### 5.3 Justificación de diseño
-
-El corredor de dos casillas es el equivalente digital al **pasillo de entrada** que existe físicamente en el juego de tablero: la posición de spawn está intencionalmente fuera del área central para separar visualmente la zona de espera de la zona de juego. Las dos casillas intermedias representan esa transición y no constituyen un desequilibrio competitivo porque todos los spawns tienen corredores de salida de longitud similar.
-
-Esta mecánica está documentada y validada automáticamente en `backend/tests/session-movement-yellow-pawn.test.ts` (SCRUM-154).
+Esta corrección está validada automáticamente en `backend/tests/session-movement-yellow-pawn.test.ts` (SCRUM-154).
 
 ---
 

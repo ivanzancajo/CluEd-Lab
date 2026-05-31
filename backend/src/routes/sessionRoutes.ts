@@ -11,6 +11,7 @@ import {
   generateAccessCode,
 } from '../lib/sessionAccessCode.js';
 import {
+  auditLogQuerySchema,
   createSessionSchema,
   finalAccusationSchema,
   joinSessionSchema,
@@ -19,6 +20,7 @@ import {
   sessionAccessCodeParamsSchema,
   teamSessionStateParamsSchema,
 } from '../lib/sessionSchemas.js';
+import { loadSessionAuditLog, toJson, toCsv } from '../lib/sessionAuditLog.js';
 import {
   COLOR_LABELS,
   loadSessionSnapshotByAccessCode,
@@ -481,5 +483,31 @@ function respondUnexpectedError(res: Response, error: unknown) {
 
   res.status(500).json({ error: 'Se ha producido un error interno al gestionar la sesión.' });
 }
+
+router.get('/sessions/:accessCode/audit-log', verifyToken, async (req, res) => {
+  const accessCode = parseAccessCode(req.params, res);
+  if (!accessCode) return;
+
+  const query = parseBody(auditLogQuerySchema, req.query, res);
+  if (!query) return;
+
+  try {
+    const data = await loadSessionAuditLog(prisma, accessCode);
+    const format = query.format;
+    const filename = `registro-partida-${accessCode}.${format}`;
+
+    if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(toCsv(data));
+    } else {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(toJson(data));
+    }
+  } catch (error) {
+    respondUnexpectedError(res, error);
+  }
+});
 
 export default router;

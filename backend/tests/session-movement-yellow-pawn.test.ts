@@ -319,7 +319,7 @@ describe('SCRUM-154 · Validación de fronteras y colisiones — peón amarillo'
 
     it('la sala-media-derecha no puede usarse como nodo de tránsito para llegar a su segunda puerta', () => {
       const door1 = 'square:grid:16:9';
-      const door2 = 'square:centro-este::pasillo-derecho-central:2';
+      const door2 = 'square:grid:15:12';
 
       expect(BOARD_MOVEMENT_NODES[door1]).toBeDefined();
       expect(BOARD_MOVEMENT_NODES[door2]).toBeDefined();

@@ -304,9 +304,9 @@ describe('sessionMovement', () => {
   it('al confirmar cualquiera de las puertas de sala-media-derecha, el peón entra en la sala', () => {
     const roomNode = BOARD_MOVEMENT_NODES['sala-media-derecha'];
     const firstDoorNode = BOARD_MOVEMENT_NODES['square:grid:16:9'];
-    const secondDoorNode = BOARD_MOVEMENT_NODES['square:centro-este::pasillo-derecho-central:2'];
+    const secondDoorNode = BOARD_MOVEMENT_NODES['square:grid:15:12'];
     const fromFirstDoorCorridorNode = BOARD_MOVEMENT_NODES['square:grid:16:8'];
-    const fromSecondDoorCorridorNode = BOARD_MOVEMENT_NODES['square:centro-este::pasillo-derecho-central:1'];
+    const fromSecondDoorCorridorNode = BOARD_MOVEMENT_NODES['square:grid:14:12'];
 
     expect(roomNode).toBeDefined();
     expect(firstDoorNode).toBeDefined();
@@ -500,26 +500,9 @@ describe('sessionMovement', () => {
     expect(adjacentMoves[0]).toMatchObject({ kind: 'square' });
   });
 
-  it('desde centro-este solo existen tres salidas adyacentes válidas (norte, sur y este)', () => {
-    const adjacentMoves = getAdjacentMoveNodes('centro-este');
-
-    expect(adjacentMoves).toHaveLength(3);
-    expect(adjacentMoves).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'square:centro-este::centro-norte:4' }),
-        expect.objectContaining({ id: 'square:centro-este::centro-sur:1' }),
-        expect.objectContaining({ id: 'square:centro-este::pasillo-derecho-central:1' }),
-      ])
-    );
-  });
-
-  it('desde centro-este no ofrece dos casillas distintas de primer paso hacia el norte', () => {
-    const adjacentMoves = getAdjacentMoveNodes('centro-este');
-    const northboundFirstSteps = adjacentMoves.filter(
-      (node) => node.gridPosition?.col === 13 && (node.gridPosition?.row ?? 99) < 12
-    );
-
-    expect(northboundFirstSteps).toHaveLength(1);
+  it('centro-este y pasillo-derecho-central han sido eliminados del grafo', () => {
+    expect(BOARD_MOVEMENT_NODES['centro-este']).toBeUndefined();
+    expect(BOARD_MOVEMENT_NODES['pasillo-derecho-central']).toBeUndefined();
   });
 
   // ─── Tests exhaustivos de cobertura de movimiento ───────────────────────────
@@ -911,12 +894,12 @@ describe('sessionMovement', () => {
   });
 
   it('no permite atravesar una sala con múltiples puertas como nodo de tránsito', () => {
-    // sala-media-derecha tiene 2 puertas: square:grid:16:9 y square:centro-este::pasillo-derecho-central:2
+    // sala-media-derecha tiene 2 puertas: square:grid:16:9 y square:grid:15:12
     // Desde puerta 1 con tirada 2:
     //   paso 1 → sala-media-derecha [bug: BFS continuaba desde aquí]
     //   paso 2 → puerta 2 ← NO debe ocurrir; solo debe ser alcanzable desde la propia sala (exit)
     const door1NodeId = 'square:grid:16:9';
-    const door2NodeId = 'square:centro-este::pasillo-derecho-central:2';
+    const door2NodeId = 'square:grid:15:12';
 
     expect(BOARD_MOVEMENT_NODES[door1NodeId]).toBeDefined();
     expect(BOARD_MOVEMENT_NODES[door2NodeId]).toBeDefined();

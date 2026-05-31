@@ -90,7 +90,7 @@ describe('sessionMovement', () => {
       'spawn-azul': 'pasillo-izquierdo-inferior',
       'spawn-verde': 'pasillo-inferior-izquierdo',
       'spawn-blanco': 'pasillo-inferior-derecho',
-      'spawn-amarillo': 'pasillo-derecho-superior',
+      'spawn-amarillo': 'square:pasillo-derecho-superior::spawn-amarillo:2',
     };
 
     Object.entries(expectedFirstMoveBySpawnNodeId).forEach(([spawnNodeId, expectedMoveNodeId]) => {
@@ -553,7 +553,7 @@ describe('sessionMovement', () => {
   it('cada sala tiene el número esperado de puertas', () => {
     const expectedDoorCounts: Record<string, number> = {
       'sala-superior-izquierda': 1,
-      'sala-superior-centro': 2,
+      'sala-superior-centro': 3,
       'sala-superior-derecha': 1,
       'sala-media-izquierda': 2,
       'sala-media-izquierda-inferior': 2,

@@ -27,14 +27,16 @@ describe('Corredor derecho y sala-media-derecha — corrección de topología', 
       expect(neighbors).not.toContain('pasillo-derecho-central');
     });
 
-    it('pasillo-derecho-superior conecta con spawn-amarillo y pasillo-superior-derecho', () => {
+    it('pasillo-derecho-superior conecta con el intermedio de salida (21,6) y tiene nodo en (20,7)', () => {
       const neighbors = BOARD_MOVEMENT_CONNECTIONS['pasillo-derecho-superior'] ?? [];
-      expect(neighbors).toContain('spawn-amarillo');
-      const hasCorridorToRight = neighbors.some((id) => {
+      // El intermedio :1 de la arista spawn-amarillo→pasillo-derecho-superior ocupa (21,6)
+      expect(neighbors).toContain('square:pasillo-derecho-superior::spawn-amarillo:1');
+      // Conexión ortogonal hacia el corredor inferior (fila 7)
+      const hasCorridorBelow = neighbors.some((id) => {
         const n = BOARD_MOVEMENT_NODES[id];
         return n?.gridPosition?.col === 20 && n.gridPosition.row >= 7 && n.gridPosition.row <= 8;
       });
-      expect(hasCorridorToRight).toBe(true);
+      expect(hasCorridorBelow).toBe(true);
     });
 
     it('no existe ningún nodo square en cols 16-19 row 12 (interior de sala-media-derecha)', () => {

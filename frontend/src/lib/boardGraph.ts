@@ -227,6 +227,7 @@ const BASE_MOVEMENT_NODES: Record<string, BaseMovementNode> = Object.fromEntries
 
 const EXPLICIT_EDGE_GRID_POINTS: Record<string, readonly BoardGridPoint[]> = {
   'spawn-rojo->pasillo-superior-derecho': [grid(15, 1), grid(15, 2), grid(15, 3)],
+  'spawn-amarillo->pasillo-derecho-superior': [grid(21, 7), grid(21, 6)],
   'pasillo-superior-derecho->pasillo-superior-central': [grid(14, 4), grid(13, 4), grid(12, 4)],
   'pasillo-superior-derecho->pasillo-derecho-superior': [
     grid(15, 5),
@@ -303,7 +304,7 @@ const BASE_MOVEMENT_CONNECTIONS: Record<string, readonly string[]> = {
 
 const ROOM_ENTRY_DOOR_GRID_COORDINATES: Record<string, readonly BoardGridCoordinate[]> = {
   'sala-superior-izquierda': [{ col: 5, row: 3 }],
-  'sala-superior-centro': [{ col: 10, row: 6 }, { col: 11, row: 6 }],
+  'sala-superior-centro': [{ col: 8, row: 4 }, { col: 10, row: 6 }, { col: 11, row: 6 }],
   'sala-superior-derecha': [{ col: 16, row: 5 }],
   'sala-media-izquierda': [{ col: 5, row: 8 }, { col: 2, row: 10 }],
   'sala-media-izquierda-inferior': [{ col: 0, row: 12 }, { col: 4, row: 15 }],
@@ -426,7 +427,7 @@ const EXCLUDED_SQUARE_GRID_POINTS = [
   ...columnRangePoints(10, [[4, 5], [17, 23]]),
   ...columnRangePoints(11, [[8, 8], [17, 17], [23, 23]]),
   ...columnRangePoints(12, [[4, 4], [6, 6], [9, 9]]),
-  ...columnRangePoints(13, [[4, 4], [6, 6], [10, 15], [20, 22]]),
+  ...columnRangePoints(13, [[4, 4], [6, 6], [20, 22]]),
   ...columnRangePoints(14, [[20, 20]]),
   ...columnRangePoints(15, [[9, 11], [13, 14]]),
   ...columnRangePoints(16, [[1, 4]]),
@@ -451,12 +452,12 @@ const IMAGE_ALIGNED_EXTRA_GRID_POINTS = [
   ...rowRangePoints(7, [[6, 13], [14, 22]]),
   ...rowRangePoints(8, [[5, 8], [13, 21]]),
   ...rowRangePoints(9, [[6, 8], [13, 16]]),
-  ...rowRangePoints(10, [[2, 2], [5, 8], [14, 15]]),
-  ...rowRangePoints(11, [[0, 8], [14, 15]]),
-  ...rowRangePoints(12, [[6, 8], [14, 15]]),
-  ...rowRangePoints(13, [[5, 8], [14, 15]]),
-  ...rowRangePoints(14, [[5, 8], [14, 15]]),
-  ...rowRangePoints(15, [[4, 12], [14, 17]]),
+  ...rowRangePoints(10, [[2, 2], [5, 8], [13, 15]]),
+  ...rowRangePoints(11, [[0, 8], [13, 15]]),
+  ...rowRangePoints(12, [[6, 8], [13, 15]]),
+  ...rowRangePoints(13, [[5, 8], [13, 15]]),
+  ...rowRangePoints(14, [[5, 8], [13, 15]]),
+  ...rowRangePoints(15, [[4, 13], [14, 17]]),
   ...rowRangePoints(16, [[5, 21]]),
   ...rowRangePoints(17, [[1, 8], [13, 13], [15, 22]]),
   ...rowRangePoints(18, [[1, 6], [15, 16], [18, 18]]),

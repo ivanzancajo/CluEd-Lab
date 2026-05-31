@@ -115,9 +115,9 @@ describe('SCRUM-112 · Matriz de validación de movimientos', () => {
       }
       // pasillo-derecho-central ha sido eliminado
       expect(BOARD_MOVEMENT_NODES['pasillo-derecho-central']).toBeUndefined();
-      // pasillo-derecho-superior solo conecta con spawn-amarillo y el corredor hacia pasillo-superior-derecho
+      // pasillo-derecho-superior conecta con el intermedio de salida (21,6) y el corredor hacia pasillo-superior-derecho
       const neighborIds = BOARD_MOVEMENT_CONNECTIONS['pasillo-derecho-superior'] ?? [];
-      expect(neighborIds).toContain('spawn-amarillo');
+      expect(neighborIds).toContain('square:pasillo-derecho-superior::spawn-amarillo:1');
       expect(neighborIds).not.toContain('pasillo-derecho-central');
     });
 

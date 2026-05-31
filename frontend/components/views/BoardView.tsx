@@ -790,7 +790,7 @@ export function BoardView() {
             })}
           </div>
         </div>
-        {presenceState?.status === "FINALIZADA" && !showGameOverModal ? (
+        {presenceState?.status === "FINALIZADA" && (isBoardSolutionVisible || !showGameOverModal) ? (
           <div className="px-6 py-4">
             <h3 className="text-xs uppercase text-cyan-600 mb-3 flex items-center gap-2 font-bold tracking-widest">
               <Download className="size-4" /> Exportar Registro

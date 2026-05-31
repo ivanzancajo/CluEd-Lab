@@ -26,6 +26,8 @@ import { useExitGuard } from "../../src/hooks/useExitGuard";
 import { DiceAnimation } from "../DiceAnimation";
 import {
   createLobbySocketClient,
+  emitMatrixAnnotationUpdate,
+  emitMatrixCellUpdate,
   emitTeamHeartbeat,
   emitTeamRefutation,
   emitTeamSecretPassage,
@@ -442,6 +444,8 @@ export function TerminalView() {
     setCurrentMoveNode((previousNode) => mergePublicCurrentMoveNode(previousNode, state.session.teams, state.team.id));
     setTeamHand(state.hand.map((card) => mapHandCardToTerminalCard(card, sessionConfig)));
     setPublicCards(state.session.publicCards ?? []);
+    setMatrix(state.matrix ?? {});
+    setAnnotationText(state.annotation ?? '');
   };
 
   const refreshTerminalStateCtx = React.useRef({ sessionStatus });
@@ -1151,6 +1155,7 @@ export function TerminalView() {
 
     return () => {
       window.clearInterval(heartbeatIntervalId);
+      if (annotationDebounceRef.current) clearTimeout(annotationDebounceRef.current);
       lobbySocketRef.current = null;
       socket.removeAllListeners();
       socket.disconnect();
@@ -1230,13 +1235,32 @@ export function TerminalView() {
       : "ERROR DE ENLACE";
   
   // Matrix state: "row-col" -> 0 (neutral), 1 (doubt), 2 (discarded)
-  const [matrix, setMatrix] = useState<Record<string, number>>({});
-  
+  const [matrix, setMatrix] = useState<Record<string, 0 | 1 | 2>>({});
+  const [annotationText, setAnnotationText] = useState('');
+  const annotationDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleCellClick = (row: string, col: string) => {
     const key = `${row}-${col}`;
-    const current = matrix[key] || 0;
-    const next = (current + 1) % 3;
+    const current = matrix[key] ?? 0;
+    const next = ((current + 1) % 3) as 0 | 1 | 2;
     setMatrix(prev => ({ ...prev, [key]: next }));
+
+    const socket = lobbySocketRef.current;
+    if (socket && lobbyConnectionStatus === 'connected') {
+      void emitMatrixCellUpdate(socket, key, next).catch(() => {});
+    }
+  };
+
+  const handleAnnotationChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setAnnotationText(value);
+    if (annotationDebounceRef.current) clearTimeout(annotationDebounceRef.current);
+    annotationDebounceRef.current = setTimeout(() => {
+      const socket = lobbySocketRef.current;
+      if (socket && lobbyConnectionStatus === 'connected') {
+        void emitMatrixAnnotationUpdate(socket, value).catch(() => {});
+      }
+    }, 800);
   };
 
   const ownedItemIds = React.useMemo(() => new Set(teamHand.map(c => c.id)), [teamHand]);
@@ -2184,6 +2208,8 @@ export function TerminalView() {
                   }}
                   placeholder="Inicia registro de análisis lógico..."
                   spellCheck="false"
+                  value={annotationText}
+                  onChange={handleAnnotationChange}
                 ></textarea>
               </div>
             </m.div>

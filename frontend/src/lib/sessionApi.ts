@@ -178,6 +178,8 @@ export interface TeamTerminalState {
   team: LobbyTeam;
   hand: TeamHandCard[];
   pendingSuggestion: TeamPendingSuggestionState | null;
+  matrix: Record<string, 0 | 1 | 2>;
+  annotation: string;
 }
 
 export interface FinalAccusationVerdict {

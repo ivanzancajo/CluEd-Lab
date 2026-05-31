@@ -203,6 +203,14 @@ type ClientToServerEvents = {
     payload: { subjectElementId: string; objectElementId: string; spaceElementId: string },
     acknowledge: (response: GameFinalChanceSubmissionAck) => void
   ) => void;
+  'matrix:update-cell': (
+    payload: { key: string; state: 0 | 1 | 2 },
+    acknowledge: (response: { ok: boolean; error?: string }) => void
+  ) => void;
+  'matrix:update-annotation': (
+    payload: { content: string },
+    acknowledge: (response: { ok: boolean; error?: string }) => void
+  ) => void;
 };
 
 export type LobbySocketClient = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -292,6 +300,18 @@ export function submitFinalChanceAccusation(
 ) {
   return new Promise<GameFinalChanceSubmissionAck>((resolve) => {
     socket.emit('game:submit-final-chance', payload, resolve);
+  });
+}
+
+export function emitMatrixCellUpdate(socket: LobbySocketClient, key: string, state: 0 | 1 | 2) {
+  return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+    socket.emit('matrix:update-cell', { key, state }, resolve);
+  });
+}
+
+export function emitMatrixAnnotationUpdate(socket: LobbySocketClient, content: string) {
+  return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+    socket.emit('matrix:update-annotation', { content }, resolve);
   });
 }
 

@@ -7,6 +7,7 @@ import {
   BookOpen,
   Box,
   Clock,
+  Download,
   Flag,
   History,
   KeyRound,
@@ -56,8 +57,10 @@ import {
 import { getTeamMonitoringLabel, getTeamMonitoringStatus } from "../../src/lib/teamMonitoring";
 import { TEAM_METADATA } from "../../src/lib/teamMeta";
 import {
+  downloadSessionAuditLog,
   getGameSession,
   getSessionErrorMessage,
+  type AuditLogFormat,
   type GameResolutionMode,
   type LobbySession,
   type ResolutionCard,
@@ -111,6 +114,7 @@ export function BoardView() {
   const [boardDebugProbe, setBoardDebugProbe] = useState<BoardDebugProbe | null>(null);
   const [activeMotifSpace, setActiveMotifSpace] = useState<BoardSpaceLabel | null>(null);
   const [monitoringNow, setMonitoringNow] = useState(() => Date.now());
+  const [isDownloadingAudit, setIsDownloadingAudit] = useState(false);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setMonitoringNow(Date.now()), 1000);
@@ -512,6 +516,17 @@ export function BoardView() {
     }
   };
 
+  async function handleDownloadAudit(format: AuditLogFormat) {
+    setIsDownloadingAudit(true);
+    try {
+      await downloadSessionAuditLog(sessionCode, format);
+    } catch {
+      // el usuario puede reintentar
+    } finally {
+      setIsDownloadingAudit(false);
+    }
+  }
+
   return (
     <div className="flex w-full h-screen bg-[#020617] text-cyan-400 font-mono overflow-hidden">
       <div className="w-[380px] h-full bg-slate-900/40 border-r border-cyan-800/50 shadow-[4px_0_24px_-4px_rgba(6,182,212,0.15)] flex flex-col relative z-20 backdrop-blur-md">
@@ -775,6 +790,34 @@ export function BoardView() {
             })}
           </div>
         </div>
+        {presenceState?.status === "FINALIZADA" && !showGameOverModal ? (
+          <div className="px-6 py-4">
+            <h3 className="text-xs uppercase text-cyan-600 mb-3 flex items-center gap-2 font-bold tracking-widest">
+              <Download className="size-4" /> Exportar Registro
+            </h3>
+            <p className="mb-3 text-[10px] text-slate-500 leading-relaxed">
+              Historial completo de eventos de la partida: movimientos, sugerencias, refutaciones y acusaciones.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void handleDownloadAudit('json')}
+                disabled={isDownloadingAudit}
+                className="flex-1 rounded-lg border border-cyan-700/50 bg-cyan-950/40 py-2.5 text-[10px] font-bold uppercase tracking-widest text-cyan-200 hover:bg-cyan-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Descargar como JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDownloadAudit('csv')}
+                disabled={isDownloadingAudit}
+                className="flex-1 rounded-lg border border-emerald-700/50 bg-emerald-950/40 py-2.5 text-[10px] font-bold uppercase tracking-widest text-emerald-200 hover:bg-emerald-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Descargar como CSV
+              </button>
+            </div>
+          </div>
+        ) : null}
         </div>
       </div>
 

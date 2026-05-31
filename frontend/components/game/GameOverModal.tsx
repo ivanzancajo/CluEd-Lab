@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Download } from "lucide-react";
 import { m } from "motion/react";
 import type { TeamColor } from "../../src/lib/sessionApi";
 import { downloadSessionAuditLog } from "../../src/lib/sessionApi";
@@ -82,23 +83,34 @@ export function GameOverModal({ open, onClose, winner, solution, accessCode }: G
         ) : null}
 
         {accessCode ? (
-          <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              onClick={() => void handleDownload('json')}
-              disabled={isDownloading}
-              className="flex-1 rounded-xl border border-cyan-700/50 bg-cyan-950/40 py-2.5 text-[11px] font-bold uppercase tracking-widest text-cyan-200 hover:bg-cyan-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Descargar JSON
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleDownload('csv')}
-              disabled={isDownloading}
-              className="flex-1 rounded-xl border border-emerald-700/50 bg-emerald-950/40 py-2.5 text-[11px] font-bold uppercase tracking-widest text-emerald-200 hover:bg-emerald-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Descargar CSV
-            </button>
+          <div className="mt-5 rounded-xl border border-slate-700/60 bg-slate-900/60 p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Download className="size-3.5 text-slate-400" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">
+                Registro de eventos de la partida
+              </span>
+            </div>
+            <p className="mb-3 text-[10px] text-slate-500 leading-relaxed">
+              Historial completo de movimientos, sugerencias, refutaciones y acusaciones.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void handleDownload('json')}
+                disabled={isDownloading}
+                className="flex-1 rounded-lg border border-cyan-700/50 bg-cyan-950/40 py-2 text-[10px] font-bold uppercase tracking-widest text-cyan-200 hover:bg-cyan-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Descargar como JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDownload('csv')}
+                disabled={isDownloading}
+                className="flex-1 rounded-lg border border-emerald-700/50 bg-emerald-950/40 py-2 text-[10px] font-bold uppercase tracking-widest text-emerald-200 hover:bg-emerald-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Descargar como CSV
+              </button>
+            </div>
           </div>
         ) : null}
         <button

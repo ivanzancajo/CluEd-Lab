@@ -9,6 +9,8 @@ import {
   gameSuggestCommandSchema,
   gameStatusCommandSchema,
   hostLobbySubscriptionSchema,
+  matrixAnnotationUpdateSchema,
+  matrixCellUpdateSchema,
   startGameCommandSchema,
   teamSecretPassageCommandSchema,
   teamLobbySubscriptionSchema,
@@ -18,6 +20,8 @@ import {
   type GameSuggestCommandInput,
   type GameStatusCommandInput,
   type HostLobbySubscriptionInput,
+  type MatrixAnnotationUpdateInput,
+  type MatrixCellUpdateInput,
   type StartGameCommandInput,
   type TeamSecretPassageCommandInput,
   type TeamLobbySubscriptionInput,
@@ -201,6 +205,9 @@ type GameFinalChanceSubmissionAck =
       error: string;
     };
 
+type MatrixCellUpdateAck = { ok: true } | { ok: false; error: string };
+type MatrixAnnotationUpdateAck = { ok: true } | { ok: false; error: string };
+
 type LobbyClientToServerEvents = {
   'lobby:host-subscribe': (payload: unknown, acknowledge?: (response: LobbySubscribeAck) => void) => void;
   'lobby:team-subscribe': (payload: unknown, acknowledge?: (response: LobbySubscribeAck) => void) => void;
@@ -214,6 +221,8 @@ type LobbyClientToServerEvents = {
   'game:suggest': (payload: unknown, acknowledge?: (response: GameSuggestAck) => void) => void;
   'game:refute': (payload: unknown, acknowledge?: (response: GameRefuteAck) => void) => void;
   'game:submit-final-chance': (payload: unknown, acknowledge?: (response: GameFinalChanceSubmissionAck) => void) => void;
+  'matrix:update-cell': (payload: unknown, acknowledge?: (response: MatrixCellUpdateAck) => void) => void;
+  'matrix:update-annotation': (payload: unknown, acknowledge?: (response: MatrixAnnotationUpdateAck) => void) => void;
 };
 
 type LobbySocketData = {
@@ -776,6 +785,72 @@ function registerLobbyHandlers(io: Server, socket: LobbySocket) {
     }
   });
 
+  socket.on('matrix:update-cell', async (payload: unknown, acknowledge?: (response: MatrixCellUpdateAck) => void) => {
+    try {
+      if (socket.data.role !== 'team' || !socket.data.teamId) {
+        throw new HttpError(403, 'Solo los equipos pueden actualizar la matriz de deducción.');
+      }
+      const input = parseMatrixCellUpdate(payload);
+      const teamId = socket.data.teamId;
+
+      const table = await prisma.tablaRazonamiento.findFirst({ where: { equipoId: teamId } });
+      if (!table) throw new HttpError(404, 'La tabla de razonamiento del equipo no existe.');
+
+      const existing = await prisma.anotacion.findFirst({
+        where: { tablaId: table.id, content: { startsWith: '__matrix:' } },
+      });
+
+      let data: Record<string, 0 | 1 | 2> = {};
+      if (existing?.content) {
+        try { data = JSON.parse(existing.content.slice('__matrix:'.length)) as Record<string, 0 | 1 | 2>; } catch { /* start fresh */ }
+      }
+
+      if (input.state === 0) {
+        delete data[input.key];
+      } else {
+        data[input.key] = input.state;
+      }
+
+      const blob = '__matrix:' + JSON.stringify(data);
+      if (existing) {
+        await prisma.anotacion.update({ where: { id: existing.id }, data: { content: blob } });
+      } else {
+        await prisma.anotacion.create({ data: { tablaId: table.id, content: blob } });
+      }
+
+      acknowledge?.({ ok: true });
+    } catch (error) {
+      acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });
+    }
+  });
+
+  socket.on('matrix:update-annotation', async (payload: unknown, acknowledge?: (response: MatrixAnnotationUpdateAck) => void) => {
+    try {
+      if (socket.data.role !== 'team' || !socket.data.teamId) {
+        throw new HttpError(403, 'Solo los equipos pueden actualizar las anotaciones.');
+      }
+      const input = parseMatrixAnnotationUpdate(payload);
+      const teamId = socket.data.teamId;
+
+      const table = await prisma.tablaRazonamiento.findFirst({ where: { equipoId: teamId } });
+      if (!table) throw new HttpError(404, 'La tabla de razonamiento del equipo no existe.');
+
+      const existing = await prisma.anotacion.findFirst({
+        where: { tablaId: table.id, NOT: { content: { startsWith: '__matrix:' } } },
+      });
+
+      if (existing) {
+        await prisma.anotacion.update({ where: { id: existing.id }, data: { content: input.content } });
+      } else {
+        await prisma.anotacion.create({ data: { tablaId: table.id, content: input.content } });
+      }
+
+      acknowledge?.({ ok: true });
+    } catch (error) {
+      acknowledge?.({ ok: false, error: getSocketErrorMessage(error) });
+    }
+  });
+
   socket.on('disconnect', async () => {
     if (socket.data.role !== 'team' || !socket.data.sessionId || !socket.data.teamId) {
       return;
@@ -898,6 +973,22 @@ function parseGameFinalChanceAccusationCommand(payload: unknown): GameFinalChanc
     throw new HttpError(400, 'La acusación final de resolución no es válida.', parsed.error.issues.map((issue) => issue.message));
   }
 
+  return parsed.data;
+}
+
+function parseMatrixCellUpdate(payload: unknown): MatrixCellUpdateInput {
+  const parsed = matrixCellUpdateSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new HttpError(400, 'El payload de actualización de celda no es válido.', parsed.error.issues.map((issue) => issue.message));
+  }
+  return parsed.data;
+}
+
+function parseMatrixAnnotationUpdate(payload: unknown): MatrixAnnotationUpdateInput {
+  const parsed = matrixAnnotationUpdateSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new HttpError(400, 'El payload de actualización de anotación no es válido.', parsed.error.issues.map((issue) => issue.message));
+  }
   return parsed.data;
 }
 

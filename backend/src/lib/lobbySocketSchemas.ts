@@ -55,3 +55,15 @@ export type TeamSecretPassageCommandInput = z.infer<typeof teamSecretPassageComm
 export type GameSuggestCommandInput = z.infer<typeof gameSuggestCommandSchema>;
 export type GameRefuteCommandInput = z.infer<typeof gameRefuteCommandSchema>;
 export type GameFinalChanceAccusationCommandInput = z.infer<typeof gameFinalChanceAccusationCommandSchema>;
+
+export const matrixCellUpdateSchema = z.object({
+  key: z.string().min(1).max(300),
+  state: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+});
+
+export const matrixAnnotationUpdateSchema = z.object({
+  content: z.string().max(8000),
+});
+
+export type MatrixCellUpdateInput = z.infer<typeof matrixCellUpdateSchema>;
+export type MatrixAnnotationUpdateInput = z.infer<typeof matrixAnnotationUpdateSchema>;

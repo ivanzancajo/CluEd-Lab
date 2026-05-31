@@ -27,7 +27,7 @@ type SessionGameplayClient = Pick<
   'partida' | 'solucion' | 'tablaRazonamiento' | 'celdaRazonamiento' | 'cartaEquipo' | 'cartaPublica' | 'cluedoSkin' | 'evento'
 >;
 
-type TeamTerminalStateClient = Pick<typeof prisma, 'partida' | 'cartaEquipo' | 'cartaPublica' | 'cluedoSkin' | 'evento'>;
+type TeamTerminalStateClient = Pick<typeof prisma, 'partida' | 'cartaEquipo' | 'cartaPublica' | 'cluedoSkin' | 'evento' | 'tablaRazonamiento'>;
 
 type SessionTeamRecord = {
   id: string;
@@ -57,6 +57,8 @@ export type TeamTerminalState = {
   team: SessionTeamSnapshot;
   hand: TeamHandCard[];
   pendingSuggestion: TeamPendingSuggestionState | null;
+  matrix: Record<string, 0 | 1 | 2>;
+  annotation: string;
 };
 
 export async function initializeStartedSession(client: SessionGameplayClient, sessionId: string) {
@@ -323,6 +325,23 @@ export async function loadTeamTerminalStateByAccessCode(
     throw new HttpError(409, 'Las cartas de este equipo todavía no están disponibles.');
   }
 
+  const table = await client.tablaRazonamiento.findFirst({
+    where: { equipoId: teamId },
+    include: { annotations: { select: { content: true } } },
+  });
+
+  const matrixBlob = table?.annotations.find((a) => a.content?.startsWith('__matrix:'));
+  const annotationBlob = table?.annotations.find((a) => !a.content?.startsWith('__matrix:'));
+
+  let matrix: Record<string, 0 | 1 | 2> = {};
+  if (matrixBlob?.content) {
+    try {
+      matrix = JSON.parse(matrixBlob.content.slice('__matrix:'.length)) as Record<string, 0 | 1 | 2>;
+    } catch {
+      matrix = {};
+    }
+  }
+
   return {
     session,
     team,
@@ -341,6 +360,8 @@ export async function loadTeamTerminalStateByAccessCode(
       })
       .sort(sortHandCards),
     pendingSuggestion: await loadPendingTeamSuggestionStateByAccessCode(client, accessCode, teamId),
+    matrix,
+    annotation: annotationBlob?.content ?? '',
   };
 }
 

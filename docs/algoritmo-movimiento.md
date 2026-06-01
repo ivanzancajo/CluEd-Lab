@@ -116,22 +116,30 @@ El BFS implementa esto añadiendo las puertas como destinos válidos en cuanto s
 
 ## 5. Caso especial: peón amarillo y el desfase N-2
 
-### 5.1 Conexión directa al tablero
+### 5.1 Corredor de entrada con dos nodos intermedios
 
-El spawn del equipo amarillo (`spawn-amarillo`, grid 22,7) se conecta directamente a `pasillo-derecho-superior` (grid 20,6) en **un único paso**, al igual que el resto de spawns del tablero. No existe ningún corredor de salida intermedio.
+El spawn del equipo amarillo (`spawn-amarillo`, grid 22,7) llega a `pasillo-derecho-superior` (grid 20,6) a través de **dos nodos intermedios explícitos**:
 
 ```
 spawn-amarillo (22,7)
-  └── pasillo-derecho-superior (20,6)  ← paso 1 (primer cruce del tablero)
+  └── :2 → (21,7)                       ← paso 1 (primer paso del corredor)
+       └── :1 → (21,6)                  ← paso 2
+            └── pasillo-derecho-superior (20,6)  ← paso 3 (primer cruce del tablero)
 ```
 
-Con tirada 1 el peón amarillo puede alcanzar `pasillo-derecho-superior` y desde allí acceder a todo el corredor derecho. No existe desfase respecto a los demás equipos.
+Con tirada 3 el peón amarillo puede alcanzar `pasillo-derecho-superior` y, desde allí, acceder a todo el corredor derecho. Los nodos intermedios `square:pasillo-derecho-superior::spawn-amarillo:2` (21,7) y `square:pasillo-derecho-superior::spawn-amarillo:1` (21,6) son destinos válidos con tiradas 1 y 2 respectivamente.
+
+Este diseño equivale al corredor de salida de `spawn-rojo` (4 pasos al primer cruce) o `spawn-azul` (1 paso directo): cada spawn tiene su propia distancia de entrada al tablero activo según su posición geográfica en el SVG.
 
 ### 5.2 Historial: desfase N-2 (corregido en SCRUM-153)
 
-En versiones anteriores del tablero, el corredor de salida de spawn-amarillo incluía dos casillas intermedias (grid 22,6 y 21,6), lo que implicaba que con tirada N el peón solo penetraba N-2 pasos efectivos en el tablero activo. Este comportamiento fue documentado en SCRUM-154 y corregido eliminando las casillas intermedias del `EXPLICIT_EDGE_GRID_POINTS` del `boardGraph.ts` (tanto backend como frontend).
+En versiones anteriores del tablero, el corredor de salida de `spawn-amarillo` recorría las casillas (22,6) y (21,6) antes de llegar a `pasillo-derecho-superior` (20,6). El nodo (22,6) formaba una esquina con el spawn en la misma columna 22, lo que creaba una zona de muro inaccesible hacia arriba (22,5) y hacia abajo (22,8): el peón podía llegar a casillas fuera de los límites visuales del tablero.
 
-Esta corrección está validada automáticamente en `backend/tests/session-movement-yellow-pawn.test.ts` (SCRUM-154).
+La corrección redirigió la ruta hacia (21,7) → (21,6) → (20,6), manteniéndola íntegramente dentro del pasillo derecho (columnas 20-21, filas 6-7). El número total de pasos al primer cruce **no cambió** (sigue siendo 3); lo que se eliminó fue la casilla (22,6) y la posibilidad de que el peón se desplazara por la columna 22 fuera del spawn.
+
+Esta corrección está validada automáticamente en `backend/tests/session-movement-yellow-pawn.test.ts`:
+- `it('no existe ningún nodo en (22,6): el antiguo corredor de salida fue eliminado')`
+- `it('la distancia en grafo desde spawn-amarillo a pasillo-derecho-superior es exactamente 3')`
 
 ---
 
@@ -139,11 +147,12 @@ Esta corrección está validada automáticamente en `backend/tests/session-movem
 
 La corrección del algoritmo y la integridad del grafo se garantizan mediante tres archivos de tests unitarios:
 
-| Archivo de test                                      | Cobertura principal                                                    |
-|------------------------------------------------------|------------------------------------------------------------------------|
-| `session-movement.test.ts`                           | BFS relajado, puertas, pasadizos, conectividad general (190 tests)     |
-| `board-movement-matrix.test.ts`                      | Colisiones con muros, footprints de sala, unicidad de grilla (89 tests)|
-| `session-movement-yellow-pawn.test.ts`               | Desfase N-2 peón amarillo, fronteras de muro, bloqueos (29 tests)      |
+| Archivo de test                                      | Cobertura principal                                                              |
+|------------------------------------------------------|----------------------------------------------------------------------------------|
+| `session-movement.test.ts`                           | BFS relajado, puertas, pasadizos, conectividad general (61 tests)                |
+| `board-movement-matrix.test.ts`                      | Colisiones con muros, footprints de sala, unicidad de grilla (50 tests)          |
+| `session-movement-yellow-pawn.test.ts`               | Corredor de entrada amarillo, fronteras de muro, BFS relajado, bloqueos (27 tests)|
+| `session-movement-right-corridor.test.ts`            | Topología corredor derecho, puertas de `sala-media-derecha`, BFS lateral (20 tests)|
 
 Los tests pueden ejecutarse con:
 

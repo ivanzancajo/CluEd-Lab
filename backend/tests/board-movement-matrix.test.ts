@@ -105,24 +105,20 @@ describe('SCRUM-112 · Matriz de validación de movimientos', () => {
       });
     });
 
-    it('el corredor derecho (col 20, filas 9-13) forma parte del grafo y conecta pasillo-derecho-central con pasillo-derecho-superior', () => {
-      // Las celdas col=20 filas 9-11 son intermedios explícitos del corredor derecho
+    it('el corredor derecho (col 20, filas 7-8) forma parte del grafo tras eliminar pasillo-derecho-central', () => {
+      // Col 20 filas 9-11 eran intermedios explícitos del corredor hacia pasillo-derecho-central (ya eliminado)
       for (let row = 9; row <= 11; row++) {
         const corridorSquares = Object.values(BOARD_MOVEMENT_NODES).filter(
           (n) => n.kind === 'square' && n.gridPosition?.col === 20 && n.gridPosition?.row === row
         );
-        expect(corridorSquares.length).toBeGreaterThan(0);
+        expect(corridorSquares.length).toBe(0);
       }
-      // pasillo-derecho-central existe como nodo de navegación en (20, 12)
-      expect(BOARD_MOVEMENT_NODES['pasillo-derecho-central']).toBeDefined();
-      expect(BOARD_MOVEMENT_NODES['pasillo-derecho-central']?.gridPosition).toEqual({ col: 20, row: 12 });
-      // El corredor conecta pasillo-derecho-superior con pasillo-derecho-central
+      // pasillo-derecho-central ha sido eliminado
+      expect(BOARD_MOVEMENT_NODES['pasillo-derecho-central']).toBeUndefined();
+      // pasillo-derecho-superior conecta con el intermedio de salida (21,6) y el corredor hacia pasillo-superior-derecho
       const neighborIds = BOARD_MOVEMENT_CONNECTIONS['pasillo-derecho-superior'] ?? [];
-      const hasCorridorConnection = neighborIds.some((id) => {
-        const n = BOARD_MOVEMENT_NODES[id];
-        return n?.gridPosition?.col === 20 && n.gridPosition.row >= 7 && n.gridPosition.row <= 11;
-      });
-      expect(hasCorridorConnection).toBe(true);
+      expect(neighborIds).toContain('square:pasillo-derecho-superior::spawn-amarillo:1');
+      expect(neighborIds).not.toContain('pasillo-derecho-central');
     });
 
     it('ninguna celda excluida tiene conexiones en el grafo', () => {
@@ -802,33 +798,29 @@ describe('SCRUM-112 · Matriz de validación de movimientos', () => {
       expect(resolved?.kind).toBe('spawn');
     });
 
-    it('pasillo-derecho-central existe como nodo de navegación en la posición correcta (col=20, row=12)', () => {
-      const node = BOARD_MOVEMENT_NODES['pasillo-derecho-central'];
-      expect(node).toBeDefined();
-      expect(node?.kind).toBe('square');
-      expect(node?.gridPosition).toEqual({ col: 20, row: 12 });
+    it('pasillo-derecho-central y centro-este han sido eliminados del grafo', () => {
+      expect(BOARD_MOVEMENT_NODES['pasillo-derecho-central']).toBeUndefined();
+      expect(BOARD_MOVEMENT_NODES['centro-este']).toBeUndefined();
     });
 
-    it('spawn-amarillo conecta con pasillo-derecho-central a través del corredor derecho', () => {
-      function bfsDistance(from: string, to: string): number {
+    it('spawn-amarillo puede alcanzar sala-media-derecha a través del corredor derecho auto-conectado', () => {
+      function bfsReachable(from: string, to: string): boolean {
         const visited = new Set([from]);
-        const queue: [string, number][] = [[from, 0]];
+        const queue = [from];
         while (queue.length > 0) {
-          const [nodeId, dist] = queue.shift()!;
-          if (nodeId === to) return dist;
+          const nodeId = queue.shift()!;
+          if (nodeId === to) return true;
           for (const neighbor of (BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? [])) {
             if (!visited.has(neighbor)) {
               visited.add(neighbor);
-              queue.push([neighbor, dist + 1]);
+              queue.push(neighbor);
             }
           }
         }
-        return -1;
+        return false;
       }
 
-      const dist = bfsDistance('spawn-amarillo', 'pasillo-derecho-central');
-      expect(dist).toBeGreaterThan(0);
-      expect(dist).toBeLessThanOrEqual(10);
+      expect(bfsReachable('spawn-amarillo', 'sala-media-derecha')).toBe(true);
     });
 
     it('spawn-amarillo puede alcanzar spawn-blanco (corredor derecho completo navegable)', () => {
@@ -851,26 +843,12 @@ describe('SCRUM-112 · Matriz de validación de movimientos', () => {
       expect(bfsReachable('spawn-amarillo', 'spawn-blanco')).toBe(true);
     });
 
-    it('centro-este conecta con pasillo-derecho-central en ≤ 8 pasos', () => {
-      function bfsDistance(from: string, to: string): number {
-        const visited = new Set([from]);
-        const queue: [string, number][] = [[from, 0]];
-        while (queue.length > 0) {
-          const [nodeId, dist] = queue.shift()!;
-          if (nodeId === to) return dist;
-          for (const neighbor of (BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? [])) {
-            if (!visited.has(neighbor)) {
-              visited.add(neighbor);
-              queue.push([neighbor, dist + 1]);
-            }
-          }
-        }
-        return -1;
-      }
-
-      const dist = bfsDistance('centro-este', 'pasillo-derecho-central');
-      expect(dist).toBeGreaterThan(0);
-      expect(dist).toBeLessThanOrEqual(8);
+    it('la puerta square:grid:15:12 de sala-media-derecha es accesible desde el corredor central', () => {
+      const doorNode = BOARD_MOVEMENT_NODES['square:grid:15:12'];
+      expect(doorNode).toBeDefined();
+      expect(doorNode?.gridPosition).toEqual({ col: 15, row: 12 });
+      const neighbors = BOARD_MOVEMENT_CONNECTIONS['square:grid:15:12'] ?? [];
+      expect(neighbors).toContain('sala-media-derecha');
     });
 
     it('getReachableMoveNodes desde spawn-amarillo con tirada 1 a 6 devuelve destinos válidos del corredor', () => {

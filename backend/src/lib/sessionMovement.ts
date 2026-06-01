@@ -145,9 +145,10 @@ export function getReachableMoveNodes(currentNodeId: string, occupiedNodeIds: It
         return;
       }
 
-      // Entrada a sala: cuando no se parte de una sala y la casilla es puerta, es destino válido
-      // aunque los pasos sean menores que la tirada (exceso ignorado al confirmar la entrada).
-      if (!startingFromRoom && node.kind === 'square' && getRoomEntryNodeByDoorNodeId(linkedNodeId)) {
+      // Entrada a sala: si la casilla es puerta de una sala distinta a la actual, es destino
+      // válido aunque los pasos sean menores que la tirada (exceso ignorado al confirmar la entrada).
+      const doorRoomEntry = node.kind === 'square' ? getRoomEntryNodeByDoorNodeId(linkedNodeId) : null;
+      if (doorRoomEntry !== null && doorRoomEntry.id !== currentNodeId) {
         reachableNodes.set(linkedNodeId, { ...node, stepsRequired: nextSteps });
         if (nextSteps < diceRoll) {
           queue.push({ nodeId: linkedNodeId, steps: nextSteps });
@@ -167,8 +168,9 @@ export function getReachableMoveNodes(currentNodeId: string, occupiedNodeIds: It
         return;
       }
 
-      // Las salas no son nodos de tránsito salvo que el turno comience en una sala.
-      if (node.kind === 'room' && !startingFromRoom) {
+      // Las salas nunca son nodos de tránsito: el pasadizo secreto se resuelve mediante
+      // isSecretPassageMoveValid como acción independiente del movimiento por dados.
+      if (node.kind === 'room') {
         return;
       }
 

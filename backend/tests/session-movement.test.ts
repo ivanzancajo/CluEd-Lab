@@ -90,8 +90,6 @@ describe('sessionMovement', () => {
       'spawn-azul': 'pasillo-izquierdo-inferior',
       'spawn-verde': 'pasillo-inferior-izquierdo',
       'spawn-blanco': 'pasillo-inferior-derecho',
-      // El edge se procesa desde pasillo-derecho-superior→spawn-amarillo (orden de iteración),
-      // por lo que el índice :2 queda adyacente al spawn (grid(22,6)) y :1 a pasillo-derecho-superior.
       'spawn-amarillo': 'square:pasillo-derecho-superior::spawn-amarillo:2',
     };
 
@@ -306,9 +304,9 @@ describe('sessionMovement', () => {
   it('al confirmar cualquiera de las puertas de sala-media-derecha, el peón entra en la sala', () => {
     const roomNode = BOARD_MOVEMENT_NODES['sala-media-derecha'];
     const firstDoorNode = BOARD_MOVEMENT_NODES['square:grid:16:9'];
-    const secondDoorNode = BOARD_MOVEMENT_NODES['square:centro-este::pasillo-derecho-central:2'];
+    const secondDoorNode = BOARD_MOVEMENT_NODES['square:grid:15:12'];
     const fromFirstDoorCorridorNode = BOARD_MOVEMENT_NODES['square:grid:16:8'];
-    const fromSecondDoorCorridorNode = BOARD_MOVEMENT_NODES['square:centro-este::pasillo-derecho-central:1'];
+    const fromSecondDoorCorridorNode = BOARD_MOVEMENT_NODES['square:grid:14:12'];
 
     expect(roomNode).toBeDefined();
     expect(firstDoorNode).toBeDefined();
@@ -466,7 +464,9 @@ describe('sessionMovement', () => {
         seen.add(key);
 
         const b = BOARD_MOVEMENT_NODES[nId];
-        if (!b?.gridPosition || b.kind === 'room') return;
+        // Se excluyen salas y spawns: los spawns tienen conexiones de "salto largo"
+        // hacia su primer nodo de tablero, que no están restringidas a ser ortogonales.
+        if (!b?.gridPosition || b.kind === 'room' || b.kind === 'spawn') return;
 
         const dc = Math.abs(a.gridPosition.col - b.gridPosition.col);
         const dr = Math.abs(a.gridPosition.row - b.gridPosition.row);
@@ -500,26 +500,9 @@ describe('sessionMovement', () => {
     expect(adjacentMoves[0]).toMatchObject({ kind: 'square' });
   });
 
-  it('desde centro-este solo existen tres salidas adyacentes válidas (norte, sur y este)', () => {
-    const adjacentMoves = getAdjacentMoveNodes('centro-este');
-
-    expect(adjacentMoves).toHaveLength(3);
-    expect(adjacentMoves).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'square:centro-este::centro-norte:4' }),
-        expect.objectContaining({ id: 'square:centro-este::centro-sur:1' }),
-        expect.objectContaining({ id: 'square:centro-este::pasillo-derecho-central:1' }),
-      ])
-    );
-  });
-
-  it('desde centro-este no ofrece dos casillas distintas de primer paso hacia el norte', () => {
-    const adjacentMoves = getAdjacentMoveNodes('centro-este');
-    const northboundFirstSteps = adjacentMoves.filter(
-      (node) => node.gridPosition?.col === 13 && (node.gridPosition?.row ?? 99) < 12
-    );
-
-    expect(northboundFirstSteps).toHaveLength(1);
+  it('centro-este y pasillo-derecho-central han sido eliminados del grafo', () => {
+    expect(BOARD_MOVEMENT_NODES['centro-este']).toBeUndefined();
+    expect(BOARD_MOVEMENT_NODES['pasillo-derecho-central']).toBeUndefined();
   });
 
   // ─── Tests exhaustivos de cobertura de movimiento ───────────────────────────
@@ -570,7 +553,7 @@ describe('sessionMovement', () => {
   it('cada sala tiene el número esperado de puertas', () => {
     const expectedDoorCounts: Record<string, number> = {
       'sala-superior-izquierda': 1,
-      'sala-superior-centro': 2,
+      'sala-superior-centro': 3,
       'sala-superior-derecha': 1,
       'sala-media-izquierda': 2,
       'sala-media-izquierda-inferior': 2,
@@ -761,41 +744,51 @@ describe('sessionMovement', () => {
     expect(BOARD_MOVEMENT_CONNECTIONS['square:grid:3:20']).toBeUndefined();
   });
 
-  it('la casilla de paso de pasillo-derecho-superior a pasillo-superior-derecho paso 7 existe y está conectada', () => {
-    const nodeId = 'square:pasillo-derecho-superior::pasillo-superior-derecho:7';
+  it('el último intermedio de pasillo-superior-derecho a pasillo-derecho-superior es :6 (grid 19,6), sin nodo duplicado en (20,6)', () => {
+    // El antiguo :7 (grid 20,6 con offset) era redundante con pasillo-derecho-superior (20,6) — eliminado
+    expect(BOARD_MOVEMENT_NODES['square:pasillo-derecho-superior::pasillo-superior-derecho:7']).toBeUndefined();
 
-    expect(BOARD_MOVEMENT_NODES[nodeId]).toBeDefined();
-    expect(BOARD_MOVEMENT_NODES[nodeId]?.gridPosition).toEqual({ col: 20, row: 6 });
-    expect((BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? []).length).toBeGreaterThan(0);
+    const nodeId6 = 'square:pasillo-derecho-superior::pasillo-superior-derecho:6';
+    expect(BOARD_MOVEMENT_NODES[nodeId6]).toBeDefined();
+    expect(BOARD_MOVEMENT_NODES[nodeId6]?.gridPosition).toEqual({ col: 19, row: 6 });
+    expect(BOARD_MOVEMENT_CONNECTIONS[nodeId6]).toContain('pasillo-derecho-superior');
+    expect(BOARD_MOVEMENT_CONNECTIONS['pasillo-derecho-superior']).toContain(nodeId6);
   });
 
-  it('la casilla de paso 5 entre centro-norte y centro-oeste existe y está conectada', () => {
-    const nodeId = 'square:centro-norte::centro-oeste:5';
+  it('el último intermedio de centro-norte a centro-oeste es :4 (grid 7,11), sin nodo duplicado en (7,12)', () => {
+    // El antiguo :5 (grid 7,12 con offset) era redundante con centro-oeste (7,12) — eliminado
+    expect(BOARD_MOVEMENT_NODES['square:centro-norte::centro-oeste:5']).toBeUndefined();
 
-    expect(BOARD_MOVEMENT_NODES[nodeId]).toBeDefined();
-    expect(BOARD_MOVEMENT_NODES[nodeId]?.gridPosition).toEqual({ col: 7, row: 12 });
-    expect((BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? []).length).toBeGreaterThan(0);
+    const nodeId4 = 'square:centro-norte::centro-oeste:4';
+    expect(BOARD_MOVEMENT_NODES[nodeId4]).toBeDefined();
+    expect(BOARD_MOVEMENT_NODES[nodeId4]?.gridPosition).toEqual({ col: 7, row: 11 });
+    expect(BOARD_MOVEMENT_CONNECTIONS[nodeId4]).toContain('centro-oeste');
+    expect(BOARD_MOVEMENT_CONNECTIONS['centro-oeste']).toContain(nodeId4);
   });
 
-  it('la casilla de paso 3 entre centro-norte y pasillo-superior-central existe y está conectada', () => {
-    const nodeId = 'square:centro-norte::pasillo-superior-central:3';
+  it('el último intermedio de pasillo-superior-central a centro-norte es :2 (grid 10,6), sin nodo duplicado en (10,7)', () => {
+    // El antiguo :3 (grid 10,7 con offset) era redundante con centro-norte (10,7) — eliminado
+    expect(BOARD_MOVEMENT_NODES['square:centro-norte::pasillo-superior-central:3']).toBeUndefined();
 
-    expect(BOARD_MOVEMENT_NODES[nodeId]).toBeDefined();
-    expect(BOARD_MOVEMENT_NODES[nodeId]?.gridPosition).toEqual({ col: 10, row: 7 });
-    expect((BOARD_MOVEMENT_CONNECTIONS[nodeId] ?? []).length).toBeGreaterThan(0);
+    const nodeId2 = 'square:centro-norte::pasillo-superior-central:2';
+    expect(BOARD_MOVEMENT_NODES[nodeId2]).toBeDefined();
+    expect(BOARD_MOVEMENT_NODES[nodeId2]?.gridPosition).toEqual({ col: 10, row: 6 });
+    expect(BOARD_MOVEMENT_CONNECTIONS[nodeId2]).toContain('centro-norte');
+    expect(BOARD_MOVEMENT_CONNECTIONS['centro-norte']).toContain(nodeId2);
   });
 
-  it('la cadena de casillas entre centro-norte y centro-oeste: :1 y :2 están excluidas, :3–:5 conectan a centro-oeste', () => {
+  it('la cadena de casillas entre centro-norte y centro-oeste: :1 y :2 están excluidas, :3–:4 conectan a centro-oeste', () => {
     // :1 (col 9, row 8) excluida por columnRangePoints(9, [[8,8]])
     // :2 (col 8, row 9) excluida por columnRangePoints(8, [[8,14]])
+    // :5 (grid 7,12) era redundante con centro-oeste (7,12) — eliminado
     expect(BOARD_MOVEMENT_NODES['square:centro-norte::centro-oeste:1']).toBeUndefined();
     expect(BOARD_MOVEMENT_NODES['square:centro-norte::centro-oeste:2']).toBeUndefined();
+    expect(BOARD_MOVEMENT_NODES['square:centro-norte::centro-oeste:5']).toBeUndefined();
 
-    // La sub-cadena :3 → :4 → :5 → centro-oeste sí está completa
+    // La sub-cadena :3 → :4 → centro-oeste sí está completa
     const subChain = [
       'square:centro-norte::centro-oeste:3',
       'square:centro-norte::centro-oeste:4',
-      'square:centro-norte::centro-oeste:5',
       'centro-oeste',
     ];
 
@@ -810,18 +803,19 @@ describe('sessionMovement', () => {
     expect(BOARD_MOVEMENT_CONNECTIONS['centro-norte']).not.toContain('square:centro-norte::centro-oeste:3');
   });
 
-  it('la cadena de casillas entre centro-norte y pasillo-superior-central: :1 está excluida, :2 y :3 conectan a centro-norte', () => {
+  it('la cadena de casillas entre centro-norte y pasillo-superior-central: :1 está excluida, :2 conecta a centro-norte', () => {
     // :1 (col 10, row 5) excluida por columnRangePoints(10, [[4,5]])
+    // :3 (grid 10,7) era redundante con centro-norte (10,7) — eliminado
     expect(BOARD_MOVEMENT_NODES['square:centro-norte::pasillo-superior-central:1']).toBeUndefined();
+    expect(BOARD_MOVEMENT_NODES['square:centro-norte::pasillo-superior-central:3']).toBeUndefined();
 
     // pasillo-superior-central queda aislado del corredor (su único puente :1 fue eliminado)
     const pasilloCentroConnections = BOARD_MOVEMENT_CONNECTIONS['pasillo-superior-central'] ?? [];
     expect(pasilloCentroConnections).not.toContain('square:centro-norte::pasillo-superior-central:2');
 
-    // La sub-cadena :2 → :3 → centro-norte sí está completa
+    // La sub-cadena :2 → centro-norte sí está completa
     const subChain = [
       'square:centro-norte::pasillo-superior-central:2',
-      'square:centro-norte::pasillo-superior-central:3',
       'centro-norte',
     ];
 
@@ -834,7 +828,10 @@ describe('sessionMovement', () => {
   });
 
   it('la cadena de casillas entre pasillo-superior-derecho y pasillo-derecho-superior está completa y conectada en serie', () => {
-    // 7 casillas: :1 (15,5) → :2 (15,6) → :3 (16,6) → :4 (17,6) → :5 (18,6) → :6 (19,6) → :7 (20,6)
+    // 6 casillas: :1 (15,5) → :2 (15,6) → :3 (16,6) → :4 (17,6) → :5 (18,6) → :6 (19,6)
+    // :7 (20,6) era redundante con pasillo-derecho-superior (20,6) — eliminado
+    expect(BOARD_MOVEMENT_NODES['square:pasillo-derecho-superior::pasillo-superior-derecho:7']).toBeUndefined();
+
     const chain = [
       'pasillo-superior-derecho',
       'square:pasillo-derecho-superior::pasillo-superior-derecho:1',
@@ -843,7 +840,6 @@ describe('sessionMovement', () => {
       'square:pasillo-derecho-superior::pasillo-superior-derecho:4',
       'square:pasillo-derecho-superior::pasillo-superior-derecho:5',
       'square:pasillo-derecho-superior::pasillo-superior-derecho:6',
-      'square:pasillo-derecho-superior::pasillo-superior-derecho:7',
       'pasillo-derecho-superior',
     ];
 
@@ -911,12 +907,12 @@ describe('sessionMovement', () => {
   });
 
   it('no permite atravesar una sala con múltiples puertas como nodo de tránsito', () => {
-    // sala-media-derecha tiene 2 puertas: square:grid:16:9 y square:centro-este::pasillo-derecho-central:2
+    // sala-media-derecha tiene 2 puertas: square:grid:16:9 y square:grid:15:12
     // Desde puerta 1 con tirada 2:
     //   paso 1 → sala-media-derecha [bug: BFS continuaba desde aquí]
     //   paso 2 → puerta 2 ← NO debe ocurrir; solo debe ser alcanzable desde la propia sala (exit)
     const door1NodeId = 'square:grid:16:9';
-    const door2NodeId = 'square:centro-este::pasillo-derecho-central:2';
+    const door2NodeId = 'square:grid:15:12';
 
     expect(BOARD_MOVEMENT_NODES[door1NodeId]).toBeDefined();
     expect(BOARD_MOVEMENT_NODES[door2NodeId]).toBeDefined();

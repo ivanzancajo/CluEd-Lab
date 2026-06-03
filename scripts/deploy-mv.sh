@@ -433,6 +433,9 @@ npm run prisma:migrate:deploy
 unset DATABASE_URL
 popd >/dev/null
 
+log 'Configurando nginx del host con certificado SSL'
+setup_host_nginx
+
 log 'Levantando servicios productivos'
 docker compose --env-file "$COMPOSE_ENV_FILE" "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_SPEC_FILE" up -d --remove-orphans
 docker compose --env-file "$COMPOSE_ENV_FILE" "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_SPEC_FILE" ps

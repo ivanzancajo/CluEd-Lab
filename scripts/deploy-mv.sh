@@ -437,18 +437,18 @@ log 'Levantando servicios productivos'
 docker compose --env-file "$COMPOSE_ENV_FILE" "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_SPEC_FILE" up -d --remove-orphans
 docker compose --env-file "$COMPOSE_ENV_FILE" "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_SPEC_FILE" ps
 
-log 'Validando healthcheck, proxy HTTP y Socket.IO locales'
+log 'Validando healthcheck, frontend container y Socket.IO locales'
 wait_for_http http://127.0.0.1:4000/health 'healthcheck del backend'
-wait_for_http http://127.0.0.1/ 'proxy HTTP del frontend'
+wait_for_http http://127.0.0.1:8080/ 'frontend container'
 
 LOGIN_STATUS="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
   -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"incorrecta"}' \
-  http://127.0.0.1/api/auth/login)"
+  http://127.0.0.1:4000/api/auth/login)"
 
 [[ "$LOGIN_STATUS" == '401' ]] || fail "Se esperaba 401 en el login local y se obtuvo $LOGIN_STATUS"
 
-wait_for_http 'http://127.0.0.1/socket.io/?EIO=4&transport=polling' 'handshake de Socket.IO'
+wait_for_http 'http://127.0.0.1:4000/socket.io/?EIO=4&transport=polling' 'handshake de Socket.IO'
 
 log 'Despliegue completado correctamente'
 log 'Entrada publica esperada: http://virtual.lab.inf.uva.es:20382'

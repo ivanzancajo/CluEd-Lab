@@ -306,8 +306,10 @@ setup_host_nginx() {
   if [[ ! -f "$cert_path" ]]; then
     log 'Obteniendo certificado SSL con certbot (modo standalone)...'
     run_sudo "$SYSTEMCTL_BIN" stop nginx 2>/dev/null || true
+    # --http-01-port 20382: NAT UVa mapea puerto externo 80 → VM:20382
     run_sudo certbot certonly --standalone --non-interactive --agree-tos \
       --register-unsafely-without-email \
+      --http-01-port 20382 \
       -d virtual.lab.inf.uva.es
   fi
 

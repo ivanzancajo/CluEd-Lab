@@ -292,25 +292,28 @@ KNOWN_RECOVERY_MIGRATION_FILE="$BACKEND_DIR/prisma/migrations/$KNOWN_RECOVERY_MI
 [[ -n "$DB_NAME" ]] || fail 'No se pudo derivar la base de datos desde DATABASE_URL'
 
 setup_host_nginx() {
-  local packages_needed=()
-  command -v nginx   >/dev/null 2>&1 || packages_needed+=(nginx)
-  command -v certbot >/dev/null 2>&1 || packages_needed+=(certbot)
-
-  if (( ${#packages_needed[@]} > 0 )); then
-    log "Instalando paquetes: ${packages_needed[*]}"
+  if ! command -v nginx >/dev/null 2>&1; then
+    log 'Instalando nginx...'
     run_sudo apt-get update -qq
-    run_sudo apt-get install -y "${packages_needed[@]}"
+    run_sudo apt-get install -y nginx
   fi
 
-  local cert_path="/etc/letsencrypt/live/virtual.lab.inf.uva.es/fullchain.pem"
+  local cert_dir="/etc/letsencrypt/live/virtual.lab.inf.uva.es"
+  local cert_path="$cert_dir/fullchain.pem"
   if [[ ! -f "$cert_path" ]]; then
-    log 'Obteniendo certificado SSL con certbot (modo standalone)...'
-    run_sudo "$SYSTEMCTL_BIN" stop nginx 2>/dev/null || true
-    # --http-01-port 20382: NAT UVa mapea puerto externo 80 → VM:20382
-    run_sudo certbot certonly --standalone --non-interactive --agree-tos \
-      --register-unsafely-without-email \
-      --http-01-port 20382 \
-      -d virtual.lab.inf.uva.es
+    # El proxy de la UVa bloquea los retos HTTP-01 y TLS-ALPN-01 de Let's Encrypt.
+    # Se genera un certificado autofirmado en las mismas rutas que usaría certbot
+    # para no tener que modificar nginx.conf. El navegador muestra un aviso
+    # solo la primera vez; sustitúyelo por un cert real si el admin añade el
+    # registro DNS-01 TXT en el futuro.
+    log 'Generando certificado autofirmado (Let\'s Encrypt no accesible desde esta red)...'
+    run_sudo mkdir -p "$cert_dir"
+    run_sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+      -keyout "$cert_dir/privkey.pem" \
+      -out    "$cert_path" \
+      -subj   "/CN=virtual.lab.inf.uva.es" \
+      -addext "subjectAltName=DNS:virtual.lab.inf.uva.es"
+    log 'Certificado autofirmado generado en '"$cert_dir"
   fi
 
   run_sudo cp "$ROOT_DIR/deploy/nginx/nginx.conf" /etc/nginx/nginx.conf

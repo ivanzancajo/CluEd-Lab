@@ -85,14 +85,29 @@ Contenido recomendado para el usuario `usuario`:
 
 ```sudoers
 Runas_Alias TFG_POSTGRES = postgres
-Cmnd_Alias TFG_DEPLOY_POSTGRES = /usr/bin/psql -tAc *
-Cmnd_Alias TFG_DEPLOY_ROOT = /usr/bin/awk *, /usr/bin/stat *, /usr/bin/install *, /usr/bin/sed *, /usr/bin/grep *, /usr/bin/systemctl restart postgresql
+Cmnd_Alias TFG_DEPLOY_POSTGRES = /usr/bin/psql
+Cmnd_Alias TFG_DEPLOY_ROOT = /usr/bin/awk, /usr/bin/stat, /usr/bin/install, /usr/bin/sed, /usr/bin/grep, /usr/bin/systemctl restart postgresql
 Cmnd_Alias TFG_DEPLOY_NGINX = /usr/sbin/nginx, /usr/bin/systemctl enable nginx, /usr/bin/systemctl reload nginx, /usr/bin/systemctl start nginx, /usr/bin/systemctl is-active --quiet nginx, /usr/bin/cp, /usr/bin/mkdir, /usr/bin/openssl, /usr/bin/apt-get
 usuario ALL=(TFG_POSTGRES) NOPASSWD: TFG_DEPLOY_POSTGRES
 usuario ALL=(root) NOPASSWD: TFG_DEPLOY_ROOT, TFG_DEPLOY_NGINX
 ```
 
-`TFG_DEPLOY_NGINX` cubre los comandos de `setup_host_nginx()`: instalar nginx con apt-get, generar el certificado con openssl, crear directorios en `/etc/letsencrypt/`, copiar `nginx.conf` y gestionar el servicio con systemctl.
+Los comandos sin argumentos en la lista (como `/usr/bin/cp`) permiten cualquier argumento. Los de systemctl especifican los argumentos exactos para limitar el alcance. `TFG_DEPLOY_NGINX` cubre `setup_host_nginx()`: instalar nginx, generar el certificado, copiar `nginx.conf` y gestionar el servicio.
+
+Para crear o actualizar el fichero sin problemas de saltos de linea, usa `tee` con un heredoc en lugar de `visudo` interactivo:
+
+```bash
+sudo tee /etc/sudoers.d/tfg-deploy > /dev/null << 'SUDOERS'
+Runas_Alias TFG_POSTGRES = postgres
+Cmnd_Alias TFG_DEPLOY_POSTGRES = /usr/bin/psql
+Cmnd_Alias TFG_DEPLOY_ROOT = /usr/bin/awk, /usr/bin/stat, /usr/bin/install, /usr/bin/sed, /usr/bin/grep, /usr/bin/systemctl restart postgresql
+Cmnd_Alias TFG_DEPLOY_NGINX = /usr/sbin/nginx, /usr/bin/systemctl enable nginx, /usr/bin/systemctl reload nginx, /usr/bin/systemctl start nginx, /usr/bin/systemctl is-active --quiet nginx, /usr/bin/cp, /usr/bin/mkdir, /usr/bin/openssl, /usr/bin/apt-get
+usuario ALL=(TFG_POSTGRES) NOPASSWD: TFG_DEPLOY_POSTGRES
+usuario ALL=(root) NOPASSWD: TFG_DEPLOY_ROOT, TFG_DEPLOY_NGINX
+SUDOERS
+sudo chmod 440 /etc/sudoers.d/tfg-deploy
+sudo visudo -cf /etc/sudoers.d/tfg-deploy
+```
 
 Si el nombre del usuario o las rutas de los binarios cambian en tu MV, adapta ese bloque antes de guardarlo. El script usa esas rutas absolutas cuando llama a `sudo`, para que el `sudoers` restringido funcione igual en la ejecucion manual y en GitHub Actions.
 

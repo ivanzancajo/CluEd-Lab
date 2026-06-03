@@ -306,7 +306,7 @@ setup_host_nginx() {
     # para no tener que modificar nginx.conf. El navegador muestra un aviso
     # solo la primera vez; sustitúyelo por un cert real si el admin añade el
     # registro DNS-01 TXT en el futuro.
-    log 'Generando certificado autofirmado (Let\'s Encrypt no accesible desde esta red)...'
+    log "Generando certificado autofirmado (Let's Encrypt no accesible desde esta red)..."
     run_sudo mkdir -p "$cert_dir"
     run_sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
       -keyout "$cert_dir/privkey.pem" \

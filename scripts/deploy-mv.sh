@@ -186,7 +186,6 @@ FRONTEND_HOST_IP=$FRONTEND_HOST_IP
 FRONTEND_PUBLISHED_PORT=$FRONTEND_PUBLISHED_PORT
 BACKEND_HOST_IP=$BACKEND_HOST_IP
 BACKEND_PUBLISHED_PORT=$BACKEND_PUBLISHED_PORT
-CLOUDFLARE_TUNNEL_TOKEN=$CLOUDFLARE_TUNNEL_TOKEN
 EOF
 }
 
@@ -271,9 +270,6 @@ FRONTEND_HOST_IP="${FRONTEND_HOST_IP:-127.0.0.1}"
 FRONTEND_PUBLISHED_PORT="${FRONTEND_PUBLISHED_PORT:-8080}"
 BACKEND_HOST_IP="${BACKEND_HOST_IP:-127.0.0.1}"
 BACKEND_PUBLISHED_PORT="${BACKEND_PUBLISHED_PORT:-4000}"
-CLOUDFLARE_TUNNEL_TOKEN="${CLOUDFLARE_TUNNEL_TOKEN:-}"
-CLOUDFLARE_TUNNEL_URL="${CLOUDFLARE_TUNNEL_URL:-}"
-
 require_env PORT
 require_env ADMIN_USER
 require_env ADMIN_PASS_HASH
@@ -320,67 +316,6 @@ setup_host_nginx() {
   fi
 }
 
-CLOUDFLARE_QUICK_LOG='/tmp/cloudflared-quick.log'
-
-setup_quick_tunnel() {
-  run_sudo tee /etc/systemd/system/cloudflared-quick.service > /dev/null <<'UNIT'
-[Unit]
-Description=Cloudflare Quick Tunnel (acceso desde Eduroam)
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/cloudflared tunnel --url http://localhost:80
-StandardOutput=append:/tmp/cloudflared-quick.log
-StandardError=append:/tmp/cloudflared-quick.log
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-  run_sudo "$SYSTEMCTL_BIN" daemon-reload
-  run_sudo "$SYSTEMCTL_BIN" enable cloudflared-quick
-  run_sudo truncate -s 0 "$CLOUDFLARE_QUICK_LOG" 2>/dev/null || true
-  run_sudo "$SYSTEMCTL_BIN" restart cloudflared-quick
-}
-
-wait_for_quick_tunnel_url() {
-  local url=''
-  local attempts=30
-
-  for ((i = 1; i <= attempts; i += 1)); do
-    url="$(grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' "$CLOUDFLARE_QUICK_LOG" 2>/dev/null | head -1 || true)"
-    [[ -n "$url" ]] && break
-    sleep 1
-  done
-
-  printf '%s' "$url"
-}
-
-if [[ -z "$CLOUDFLARE_TUNNEL_TOKEN" ]] && command -v cloudflared >/dev/null 2>&1; then
-  log 'cloudflared detectado — configurando quick tunnel para acceso desde Eduroam'
-  setup_quick_tunnel
-  DETECTED_URL="$(wait_for_quick_tunnel_url)"
-  if [[ -n "$DETECTED_URL" ]]; then
-    CLOUDFLARE_TUNNEL_URL="$DETECTED_URL"
-    log "Quick tunnel activo: $CLOUDFLARE_TUNNEL_URL"
-  else
-    log 'ADVERTENCIA: no se pudo obtener URL del quick tunnel, continuando sin él'
-  fi
-fi
-
-if [[ -n "$CLOUDFLARE_TUNNEL_URL" ]]; then
-  ALLOWED_ORIGINS="$ALLOWED_ORIGINS,$CLOUDFLARE_TUNNEL_URL"
-  SOCKET_IO_CORS_ORIGIN="$SOCKET_IO_CORS_ORIGIN,$CLOUDFLARE_TUNNEL_URL"
-fi
-
-COMPOSE_PROFILE_ARGS=()
-if [[ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]]; then
-  COMPOSE_PROFILE_ARGS=(--profile tunnel)
-fi
-
 write_backend_env
 write_compose_env
 
@@ -392,8 +327,8 @@ run_sudo "$SED_BIN" -i "s/^#\\?listen_addresses.*/listen_addresses = '*'/" "$PG_
 run_sudo "$SED_BIN" -i "s/^#\\?port.*/port = 5432/" "$PG_CONF"
 
 log 'Construyendo imagenes y materializando la red de Docker Compose'
-docker compose --env-file "$COMPOSE_ENV_FILE" "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_SPEC_FILE" build
-docker compose --env-file "$COMPOSE_ENV_FILE" "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_SPEC_FILE" create
+docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" build
+docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" create
 
 SUBNET="$(docker network inspect ${COMPOSE_PROJECT_NAME}_default --format '{{(index .IPAM.Config 0).Subnet}}')"
 HOST_RULE="host    $DB_NAME    $DB_USER    $SUBNET    scram-sha-256"
@@ -437,8 +372,8 @@ log 'Configurando nginx del host con certificado SSL'
 setup_host_nginx
 
 log 'Levantando servicios productivos'
-docker compose --env-file "$COMPOSE_ENV_FILE" "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_SPEC_FILE" up -d --remove-orphans
-docker compose --env-file "$COMPOSE_ENV_FILE" "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_SPEC_FILE" ps
+docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" up -d --remove-orphans
+docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" ps
 
 log 'Validando healthcheck, frontend container y Socket.IO locales'
 wait_for_http http://127.0.0.1:4000/health 'healthcheck del backend'
@@ -454,7 +389,4 @@ LOGIN_STATUS="$(curl --silent --show-error --output /dev/null --write-out '%{htt
 wait_for_http 'http://127.0.0.1:4000/socket.io/?EIO=4&transport=polling' 'handshake de Socket.IO'
 
 log 'Despliegue completado correctamente'
-log 'Entrada publica esperada: http://virtual.lab.inf.uva.es:20382'
-if [[ -n "${CLOUDFLARE_TUNNEL_URL:-}" ]]; then
-  log "Acceso desde Eduroam:    $CLOUDFLARE_TUNNEL_URL"
-fi
+log 'Entrada publica: https://virtual.lab.inf.uva.es'

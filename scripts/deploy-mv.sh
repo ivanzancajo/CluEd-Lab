@@ -292,18 +292,23 @@ KNOWN_RECOVERY_MIGRATION_FILE="$BACKEND_DIR/prisma/migrations/$KNOWN_RECOVERY_MI
 [[ -n "$DB_NAME" ]] || fail 'No se pudo derivar la base de datos desde DATABASE_URL'
 
 setup_host_nginx() {
-  if ! command -v nginx >/dev/null 2>&1; then
-    log 'Instalando nginx...'
+  local packages_needed=()
+  command -v nginx   >/dev/null 2>&1 || packages_needed+=(nginx)
+  command -v certbot >/dev/null 2>&1 || packages_needed+=(certbot)
+
+  if (( ${#packages_needed[@]} > 0 )); then
+    log "Instalando paquetes: ${packages_needed[*]}"
     run_sudo apt-get update -qq
-    run_sudo apt-get install -y nginx
+    run_sudo apt-get install -y "${packages_needed[@]}"
   fi
 
   local cert_path="/etc/letsencrypt/live/virtual.lab.inf.uva.es/fullchain.pem"
   if [[ ! -f "$cert_path" ]]; then
-    log 'ADVERTENCIA: certificado SSL no encontrado en /etc/letsencrypt.'
-    log 'Obtén el certificado una vez con:'
-    log '  sudo certbot certonly --standalone -d virtual.lab.inf.uva.es'
-    log 'El despliegue continua pero nginx no arrancará hasta tener el certificado.'
+    log 'Obteniendo certificado SSL con certbot (modo standalone)...'
+    run_sudo "$SYSTEMCTL_BIN" stop nginx 2>/dev/null || true
+    run_sudo certbot certonly --standalone --non-interactive --agree-tos \
+      --register-unsafely-without-email \
+      -d virtual.lab.inf.uva.es
   fi
 
   run_sudo cp "$ROOT_DIR/deploy/nginx/nginx.conf" /etc/nginx/nginx.conf

@@ -6,7 +6,7 @@ Esta guia describe la automatizacion del despliegue validado en la MV del labora
 - un lanzador local opcional para ejecutar ese mismo flujo por SSH: [scripts/deploy-mv-manual.sh](../scripts/deploy-mv-manual.sh)
 - un workflow de GitHub Actions: [.github/workflows/deploy-mv-lab.yml](../.github/workflows/deploy-mv-lab.yml)
 
-La automatizacion asume el mismo escenario que [docs/despliegue-mv-pruebas.md](./despliegue-mv-pruebas.md): frontend y backend en Docker Compose, PostgreSQL en el host Linux y punto de entrada publico en `http://virtual.lab.inf.uva.es:20382`.
+La automatizacion asume el mismo escenario que [docs/despliegue-mv-pruebas.md](./despliegue-mv-pruebas.md): frontend y backend en Docker Compose, PostgreSQL en el host Linux, Nginx en el host como proxy inverso SSL y punto de entrada publico en `https://virtual.lab.inf.uva.es:20382`.
 
 ## Que resuelve el script
 
@@ -43,10 +43,10 @@ ADMIN_USER=admin
 ADMIN_PASS_HASH=$2b$10$REEMPLAZA_ESTE_HASH_BCRYPT
 JWT_SECRET=REEMPLAZA_ESTE_SECRETO
 DATABASE_URL=postgresql://cluedo_admin:TU_PASSWORD@host.docker.internal:5432/cluedo_db?schema=public
-ALLOWED_ORIGINS=http://virtual.lab.inf.uva.es:20382
-SOCKET_IO_CORS_ORIGIN=http://virtual.lab.inf.uva.es:20382
-FRONTEND_HOST_IP=0.0.0.0
-FRONTEND_PUBLISHED_PORT=80
+ALLOWED_ORIGINS=https://virtual.lab.inf.uva.es
+SOCKET_IO_CORS_ORIGIN=https://virtual.lab.inf.uva.es
+FRONTEND_HOST_IP=127.0.0.1
+FRONTEND_PUBLISHED_PORT=8080
 BACKEND_HOST_IP=127.0.0.1
 BACKEND_PUBLISHED_PORT=4000
 ```
@@ -86,10 +86,13 @@ Contenido recomendado para el usuario `usuario`:
 ```sudoers
 Runas_Alias TFG_POSTGRES = postgres
 Cmnd_Alias TFG_DEPLOY_POSTGRES = /usr/bin/psql -tAc *
-Cmnd_Alias TFG_DEPLOY_ROOT = /usr/bin/awk *, /usr/bin/stat *, /usr/bin/install *, /usr/bin/sed *, /usr/bin/systemctl restart postgresql, /usr/bin/grep *
+Cmnd_Alias TFG_DEPLOY_ROOT = /usr/bin/awk *, /usr/bin/stat *, /usr/bin/install *, /usr/bin/sed *, /usr/bin/grep *, /usr/bin/systemctl restart postgresql
+Cmnd_Alias TFG_DEPLOY_NGINX = /usr/sbin/nginx, /usr/bin/systemctl enable nginx, /usr/bin/systemctl reload nginx, /usr/bin/systemctl start nginx, /usr/bin/systemctl is-active --quiet nginx, /usr/bin/cp, /usr/bin/mkdir, /usr/bin/openssl, /usr/bin/apt-get
 usuario ALL=(TFG_POSTGRES) NOPASSWD: TFG_DEPLOY_POSTGRES
-usuario ALL=(root) NOPASSWD: TFG_DEPLOY_ROOT
+usuario ALL=(root) NOPASSWD: TFG_DEPLOY_ROOT, TFG_DEPLOY_NGINX
 ```
+
+`TFG_DEPLOY_NGINX` cubre los comandos de `setup_host_nginx()`: instalar nginx con apt-get, generar el certificado con openssl, crear directorios en `/etc/letsencrypt/`, copiar `nginx.conf` y gestionar el servicio con systemctl.
 
 Si el nombre del usuario o las rutas de los binarios cambian en tu MV, adapta ese bloque antes de guardarlo. El script usa esas rutas absolutas cuando llama a `sudo`, para que el `sudoers` restringido funcione igual en la ejecucion manual y en GitHub Actions.
 

@@ -267,8 +267,8 @@ fi
 
 PORT="${PORT:-4000}"
 SOCKET_IO_CORS_ORIGIN="${SOCKET_IO_CORS_ORIGIN:-${ALLOWED_ORIGINS:-}}"
-FRONTEND_HOST_IP="${FRONTEND_HOST_IP:-0.0.0.0}"
-FRONTEND_PUBLISHED_PORT="${FRONTEND_PUBLISHED_PORT:-80}"
+FRONTEND_HOST_IP="${FRONTEND_HOST_IP:-127.0.0.1}"
+FRONTEND_PUBLISHED_PORT="${FRONTEND_PUBLISHED_PORT:-8080}"
 BACKEND_HOST_IP="${BACKEND_HOST_IP:-127.0.0.1}"
 BACKEND_PUBLISHED_PORT="${BACKEND_PUBLISHED_PORT:-4000}"
 CLOUDFLARE_TUNNEL_TOKEN="${CLOUDFLARE_TUNNEL_TOKEN:-}"
@@ -294,6 +294,31 @@ KNOWN_RECOVERY_MIGRATION_FILE="$BACKEND_DIR/prisma/migrations/$KNOWN_RECOVERY_MI
 
 [[ -n "$DB_USER" ]] || fail 'No se pudo derivar el usuario de base de datos desde DATABASE_URL'
 [[ -n "$DB_NAME" ]] || fail 'No se pudo derivar la base de datos desde DATABASE_URL'
+
+setup_host_nginx() {
+  if ! command -v nginx >/dev/null 2>&1; then
+    log 'Instalando nginx...'
+    run_sudo apt-get update -qq
+    run_sudo apt-get install -y nginx
+  fi
+
+  local cert_path="/etc/letsencrypt/live/virtual.lab.inf.uva.es/fullchain.pem"
+  if [[ ! -f "$cert_path" ]]; then
+    log 'ADVERTENCIA: certificado SSL no encontrado en /etc/letsencrypt.'
+    log 'Obtén el certificado una vez con:'
+    log '  sudo certbot certonly --standalone -d virtual.lab.inf.uva.es'
+    log 'El despliegue continua pero nginx no arrancará hasta tener el certificado.'
+  fi
+
+  run_sudo cp "$ROOT_DIR/deploy/nginx/nginx.conf" /etc/nginx/nginx.conf
+  run_sudo nginx -t
+  run_sudo "$SYSTEMCTL_BIN" enable nginx
+  if run_sudo "$SYSTEMCTL_BIN" is-active --quiet nginx; then
+    run_sudo "$SYSTEMCTL_BIN" reload nginx
+  else
+    run_sudo "$SYSTEMCTL_BIN" start nginx
+  fi
+}
 
 CLOUDFLARE_QUICK_LOG='/tmp/cloudflared-quick.log'
 

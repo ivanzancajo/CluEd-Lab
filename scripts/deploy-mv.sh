@@ -181,12 +181,13 @@ EOF
 }
 
 write_compose_env() {
-  cat > "$COMPOSE_ENV_FILE" <<EOF
-FRONTEND_HOST_IP=$FRONTEND_HOST_IP
-FRONTEND_PUBLISHED_PORT=$FRONTEND_PUBLISHED_PORT
-BACKEND_HOST_IP=$BACKEND_HOST_IP
-BACKEND_PUBLISHED_PORT=$BACKEND_PUBLISHED_PORT
-EOF
+  {
+    printf 'FRONTEND_HOST_IP=%s\n'        "$FRONTEND_HOST_IP"
+    printf 'FRONTEND_PUBLISHED_PORT=%s\n' "$FRONTEND_PUBLISHED_PORT"
+    printf 'BACKEND_HOST_IP=%s\n'         "$BACKEND_HOST_IP"
+    printf 'BACKEND_PUBLISHED_PORT=%s\n'  "$BACKEND_PUBLISHED_PORT"
+    [[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]] && printf 'CLOUDFLARE_TUNNEL_TOKEN=%s\n' "$CLOUDFLARE_TUNNEL_TOKEN"
+  } > "$COMPOSE_ENV_FILE"
 }
 
 dedupe_pg_hba_rule() {
@@ -294,27 +295,22 @@ KNOWN_RECOVERY_MIGRATION_FILE="$BACKEND_DIR/prisma/migrations/$KNOWN_RECOVERY_MI
 setup_host_nginx() {
   local cert_dir="/etc/letsencrypt/live/virtual.lab.inf.uva.es"
   local cert_path="$cert_dir/fullchain.pem"
-  local acme_webroot='/var/www/certbot'
 
-  # ── Instalar nginx y certbot ────────────────────────────────────────────────
+  # ── Instalar nginx ──────────────────────────────────────────────────────────
   if ! command -v nginx >/dev/null 2>&1; then
     log 'Instalando nginx...'
     run_sudo apt-get update -qq
     run_sudo apt-get install -y nginx
   fi
 
-  if ! command -v certbot >/dev/null 2>&1; then
-    log 'Instalando certbot...'
-    run_sudo apt-get install -y certbot
-  fi
-
-  run_sudo mkdir -p "$acme_webroot"
-
-  # ── Certificado: autofirmado como punto de partida ─────────────────────────
-  # Si no existe ningún cert todavía, se genera uno autofirmado para que nginx
-  # pueda arrancar con el bloque SSL antes de que certbot valide con Let's Encrypt.
+  # ── Certificado autofirmado para el bloque HTTPS del puerto 443 ────────────
+  # El NAT del laboratorio no expone el puerto 80 del dominio directamente,
+  # por lo que Let's Encrypt HTTP-01 no es alcanzable. Se genera un certificado
+  # autofirmado una sola vez; el HTTPS se ofrece en :20383 con advertencia de
+  # navegador. El acceso desde Eduroam usa Cloudflare Tunnel, que proporciona
+  # TLS valido en su propio edge.
   if [[ ! -f "$cert_path" ]]; then
-    log 'Generando certificado autofirmado como marcador de posición...'
+    log 'Generando certificado autofirmado para el puerto 443...'
     run_sudo mkdir -p "$cert_dir"
     run_sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
       -keyout "$cert_dir/privkey.pem" \
@@ -332,44 +328,8 @@ setup_host_nginx() {
   else
     run_sudo "$SYSTEMCTL_BIN" start nginx
   fi
-
-  # ── Obtener/renovar certificado Let's Encrypt via HTTP-01 webroot ──────────
-  # nginx ya está escuchando en el puerto 80 y sirve /.well-known/acme-challenge/
-  # desde $acme_webroot, por lo que el desafío HTTP-01 de Let's Encrypt puede
-  # completarse ahora. Si CERTBOT_EMAIL no está definido se omite este paso.
-  local certbot_email="${CERTBOT_EMAIL:-}"
-  if [[ -n "$certbot_email" ]]; then
-    local needs_cert=0
-    if run_sudo openssl x509 -checkend 2592000 -noout -in "$cert_path" 2>/dev/null; then
-      # Cert válido más de 30 días; comprobar si es autofirmado (no tiene CA chain)
-      local issuer subject
-      issuer="$(run_sudo openssl x509 -noout -issuer -in "$cert_path" 2>/dev/null)"
-      subject="$(run_sudo openssl x509 -noout -subject -in "$cert_path" 2>/dev/null)"
-      [[ "$issuer" == "$subject" ]] && needs_cert=1 || log "Certificado Let's Encrypt vigente — omitiendo renovación"
-    else
-      needs_cert=1
-      log 'Certificado próximo a expirar — renovando...'
-    fi
-
-    if [[ "$needs_cert" -eq 1 ]]; then
-      log "Solicitando certificado Let's Encrypt para virtual.lab.inf.uva.es..."
-      if run_sudo certbot certonly --webroot \
-          -w "$acme_webroot" \
-          -d virtual.lab.inf.uva.es \
-          --non-interactive --agree-tos \
-          --email "$certbot_email" 2>&1 | while IFS= read -r line; do log "[certbot] $line"; done; then
-        log "Certificado Let's Encrypt instalado correctamente"
-        run_sudo "$SYSTEMCTL_BIN" reload nginx
-      else
-        log 'ADVERTENCIA: certbot no pudo obtener certificado. El sitio seguirá con certificado autofirmado.'
-      fi
-    fi
-  else
-    log 'CERTBOT_EMAIL no definido — se usará el certificado autofirmado. Añade CERTBOT_EMAIL=tu@email.com a .deploy/mv.backend.env para obtener un certificado de confianza.'
-  fi
 }
 
-write_backend_env
 write_compose_env
 
 PG_CONF="$(run_sudo -u postgres "$PSQL_BIN" -tAc 'show config_file' | xargs)"
@@ -421,11 +381,25 @@ npm run prisma:migrate:deploy
 unset DATABASE_URL
 popd >/dev/null
 
-log 'Configurando nginx del host con certificado SSL'
+log 'Configurando nginx del host'
 setup_host_nginx
 
+# ── Inyectar URL del Cloudflare Tunnel en CORS antes de escribir backend/.env ─
+# Si CLOUDFLARE_TUNNEL_TOKEN esta definido, el perfil 'tunnel' de Compose
+# arrancara el contenedor cloudflared. Para que el backend acepte peticiones
+# desde esa URL hay que incluirla en ALLOWED_ORIGINS antes de levantar.
+if [[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" && -n "${CLOUDFLARE_TUNNEL_URL:-}" ]]; then
+  log "Añadiendo Cloudflare Tunnel ($CLOUDFLARE_TUNNEL_URL) a ALLOWED_ORIGINS"
+  ALLOWED_ORIGINS="$ALLOWED_ORIGINS,$CLOUDFLARE_TUNNEL_URL"
+  SOCKET_IO_CORS_ORIGIN="$SOCKET_IO_CORS_ORIGIN,$CLOUDFLARE_TUNNEL_URL"
+fi
+
+write_backend_env
+
 log 'Levantando servicios productivos'
-docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" up -d --remove-orphans
+COMPOSE_UP_ARGS=(--env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" up -d --remove-orphans)
+[[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]] && COMPOSE_UP_ARGS+=(--profile tunnel)
+docker compose "${COMPOSE_UP_ARGS[@]}"
 docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" ps
 
 log 'Validando healthcheck, frontend container y Socket.IO locales'
@@ -442,4 +416,5 @@ LOGIN_STATUS="$(curl --silent --show-error --output /dev/null --write-out '%{htt
 wait_for_http 'http://127.0.0.1:4000/socket.io/?EIO=4&transport=polling' 'handshake de Socket.IO'
 
 log 'Despliegue completado correctamente'
-log 'Entrada publica: https://virtual.lab.inf.uva.es'
+log 'Acceso HTTP (fuera de Eduroam): http://virtual.lab.inf.uva.es:20382'
+[[ -n "${CLOUDFLARE_TUNNEL_URL:-}" ]] && log "Acceso Eduroam (Cloudflare Tunnel): $CLOUDFLARE_TUNNEL_URL"

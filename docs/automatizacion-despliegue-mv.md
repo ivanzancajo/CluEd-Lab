@@ -87,7 +87,7 @@ Contenido recomendado para el usuario `usuario`:
 Runas_Alias TFG_POSTGRES = postgres
 Cmnd_Alias TFG_DEPLOY_POSTGRES = /usr/bin/psql
 Cmnd_Alias TFG_DEPLOY_ROOT = /usr/bin/awk, /usr/bin/stat, /usr/bin/install, /usr/bin/sed, /usr/bin/grep, /usr/bin/systemctl restart postgresql
-Cmnd_Alias TFG_DEPLOY_NGINX = /usr/sbin/nginx, /usr/bin/systemctl enable nginx, /usr/bin/systemctl reload nginx, /usr/bin/systemctl start nginx, /usr/bin/systemctl is-active --quiet nginx, /usr/bin/cp, /usr/bin/mkdir, /usr/bin/openssl, /usr/bin/apt-get
+Cmnd_Alias TFG_DEPLOY_NGINX = /usr/sbin/nginx, /usr/bin/systemctl enable nginx, /usr/bin/systemctl reload nginx, /usr/bin/systemctl start nginx, /usr/bin/systemctl is-active --quiet nginx, /usr/bin/cp, /usr/bin/mkdir, /usr/bin/openssl, /usr/bin/apt-get, /usr/bin/certbot
 usuario ALL=(TFG_POSTGRES) NOPASSWD: TFG_DEPLOY_POSTGRES
 usuario ALL=(root) NOPASSWD: TFG_DEPLOY_ROOT, TFG_DEPLOY_NGINX
 ```
@@ -101,7 +101,7 @@ sudo tee /etc/sudoers.d/tfg-deploy > /dev/null << 'SUDOERS'
 Runas_Alias TFG_POSTGRES = postgres
 Cmnd_Alias TFG_DEPLOY_POSTGRES = /usr/bin/psql
 Cmnd_Alias TFG_DEPLOY_ROOT = /usr/bin/awk, /usr/bin/stat, /usr/bin/install, /usr/bin/sed, /usr/bin/grep, /usr/bin/systemctl restart postgresql
-Cmnd_Alias TFG_DEPLOY_NGINX = /usr/sbin/nginx, /usr/bin/systemctl enable nginx, /usr/bin/systemctl reload nginx, /usr/bin/systemctl start nginx, /usr/bin/systemctl is-active --quiet nginx, /usr/bin/cp, /usr/bin/mkdir, /usr/bin/openssl, /usr/bin/apt-get
+Cmnd_Alias TFG_DEPLOY_NGINX = /usr/sbin/nginx, /usr/bin/systemctl enable nginx, /usr/bin/systemctl reload nginx, /usr/bin/systemctl start nginx, /usr/bin/systemctl is-active --quiet nginx, /usr/bin/cp, /usr/bin/mkdir, /usr/bin/openssl, /usr/bin/apt-get, /usr/bin/certbot
 usuario ALL=(TFG_POSTGRES) NOPASSWD: TFG_DEPLOY_POSTGRES
 usuario ALL=(root) NOPASSWD: TFG_DEPLOY_ROOT, TFG_DEPLOY_NGINX
 SUDOERS
@@ -369,17 +369,24 @@ Si el workflow falla, revisa primero:
 - que la ref a desplegar sigue permitiendo `git pull --ff-only`
 - que `docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml ps` muestra ambos contenedores levantados
 
-Si la URL `http://...20382` sigue devolviendo 400 tras el despliegue:
+Si la redireccion HTTP → HTTPS no funciona o la app no carga:
 
 ```bash
-# Verificar que libnginx-mod-stream esta instalado
-dpkg -l libnginx-mod-stream
+# Comprobar redireccion HTTP
+curl -I http://virtual.lab.inf.uva.es/
+# Debe devolver 301 a https://
 
-# Verificar que el modulo stream esta cargado en nginx
-sudo nginx -T 2>/dev/null | grep -i stream
+# Comprobar que nginx escucha en 80 y 443
+sudo ss -tlnp | grep nginx
 
-# Comprobar la redireccion HTTP directamente desde la MV
-curl -I http://127.0.0.1:80/
+# Ver estado del certificado (autofirmado o Let's Encrypt)
+sudo openssl x509 -noout -issuer -dates \
+  -in /etc/letsencrypt/live/virtual.lab.inf.uva.es/fullchain.pem
+
+# Forzar solicitud Let's Encrypt si el cert sigue siendo autofirmado
+sudo certbot certonly --webroot -w /var/www/certbot \
+  -d virtual.lab.inf.uva.es --non-interactive --agree-tos \
+  --email TU@EMAIL.COM && sudo systemctl reload nginx
 
 # Ver logs de nginx
 sudo journalctl -u nginx --since '5 minutes ago'

@@ -5,11 +5,11 @@ const playerRules = [
   },
   {
     title: "Pasadizos",
-    body: "Si ya estás dentro de una sala puedes usar el pasadizo en tu turno para moverte directamente a la sala conectada, sin necesidad de haber entrado ese mismo turno. Usar el pasadizo no consume dados.",
+    body: "Si ya estás dentro de una sala puedes usar el pasadizo en tu turno para moverte directamente a la sala conectada, sin necesidad de haber entrado ese mismo turno. Usar el pasadizo no consume dados. Las 4 habitaciones de las esquinas del tablero disponen de pasadizo secreto que conecta diagonalmente con su sala opuesta.",
   },
   {
     title: "Sugerencias",
-    body: "Al entrar en una sala puedes sugerir un sospechoso y un objeto. Los equipos refutan en orden mostrando una carta si la tienen; solo tú ves qué carta se muestra.",
+    body: "Al entrar en una sala puedes lanzar una sugerencia/hipótesis sobre el caso o simplemente terminar tu turno sin sugerir. Si sugieres, indica un sospechoso y un objeto. Los equipos refutan en orden mostrando una carta si la tienen; solo tú ves qué carta se muestra.",
   },
   {
     title: "Acusación final",

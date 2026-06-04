@@ -146,6 +146,10 @@ export function BoardView() {
 
     if (presenceState.status === "FINALIZADA") {
       setTimeRemaining(presenceState.remainingSeconds);
+      setIsChangingGameStatus(false);
+      setIsResolutionDialogOpen(false);
+      setIsTriggeringResolution(false);
+      setActiveMotifSpace(null);
       return;
     }
 
@@ -403,6 +407,7 @@ export function BoardView() {
     color: team.color,
     positionX: team.positionX,
     positionY: team.positionY,
+    isEliminated: Boolean(team.eliminatedAt),
     opacity:
       getTeamMonitoringStatus(team, monitoringNow) === "connected"
         ? 1

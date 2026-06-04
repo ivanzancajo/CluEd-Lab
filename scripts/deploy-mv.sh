@@ -466,7 +466,7 @@ if [[ "${CLOUDFLARE_QUICK_TUNNEL:-}" == 'true' ]]; then
 fi
 
 log 'Despliegue completado correctamente'
-log 'Acceso HTTP (fuera de Eduroam): http://virtual.lab.inf.uva.es:20382'
+log 'Acceso HTTPS (fuera de Eduroam): https://virtual.lab.inf.uva.es:20382 (cert autofirmado — acepta advertencia en el navegador)'
 if [[ -n "${QUICK_TUNNEL_URL:-}" ]]; then
   log "Acceso Eduroam (Quick Tunnel): $QUICK_TUNNEL_URL"
 elif [[ -n "${CLOUDFLARE_TUNNEL_URL:-}" ]]; then

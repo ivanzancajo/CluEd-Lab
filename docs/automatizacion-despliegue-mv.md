@@ -6,7 +6,7 @@ Esta guia describe la automatizacion del despliegue validado en la MV del labora
 - un lanzador local opcional para ejecutar ese mismo flujo por SSH: [scripts/deploy-mv-manual.sh](../scripts/deploy-mv-manual.sh)
 - un workflow de GitHub Actions: [.github/workflows/deploy-mv-lab.yml](../.github/workflows/deploy-mv-lab.yml)
 
-La automatizacion asume el mismo escenario que [docs/despliegue-mv-pruebas.md](./despliegue-mv-pruebas.md): frontend y backend en Docker Compose, PostgreSQL en el host Linux, Nginx en el host como proxy inverso SSL y punto de entrada publico en `https://virtual.lab.inf.uva.es:20382`.
+La automatizacion asume el mismo escenario que [docs/despliegue-mv-pruebas.md](./despliegue-mv-pruebas.md): frontend y backend en Docker Compose, PostgreSQL en el host Linux, nginx en el host como proxy inverso HTTP y punto de entrada publico en `http://virtual.lab.inf.uva.es:20382`. Para acceso desde Eduroam se usa un Cloudflare Named Tunnel (opcional).
 
 ## Que resuelve el script
 
@@ -43,12 +43,14 @@ ADMIN_USER=admin
 ADMIN_PASS_HASH=$2b$10$REEMPLAZA_ESTE_HASH_BCRYPT
 JWT_SECRET=REEMPLAZA_ESTE_SECRETO
 DATABASE_URL=postgresql://cluedo_admin:TU_PASSWORD@host.docker.internal:5432/cluedo_db?schema=public
-ALLOWED_ORIGINS=https://virtual.lab.inf.uva.es
-SOCKET_IO_CORS_ORIGIN=https://virtual.lab.inf.uva.es
+ALLOWED_ORIGINS=http://virtual.lab.inf.uva.es:20382
+SOCKET_IO_CORS_ORIGIN=http://virtual.lab.inf.uva.es:20382
 FRONTEND_HOST_IP=127.0.0.1
 FRONTEND_PUBLISHED_PORT=8080
 BACKEND_HOST_IP=127.0.0.1
 BACKEND_PUBLISHED_PORT=4000
+# CLOUDFLARE_TUNNEL_TOKEN=<token-del-tunel>
+# CLOUDFLARE_TUNNEL_URL=https://<subdominio>.workers.dev
 ```
 
 4. Verifica que el usuario de despliegue puede elevar a `sudo`.
@@ -87,12 +89,12 @@ Contenido recomendado para el usuario `usuario`:
 Runas_Alias TFG_POSTGRES = postgres
 Cmnd_Alias TFG_DEPLOY_POSTGRES = /usr/bin/psql
 Cmnd_Alias TFG_DEPLOY_ROOT = /usr/bin/awk, /usr/bin/stat, /usr/bin/install, /usr/bin/sed, /usr/bin/grep, /usr/bin/systemctl restart postgresql
-Cmnd_Alias TFG_DEPLOY_NGINX = /usr/sbin/nginx, /usr/bin/systemctl enable nginx, /usr/bin/systemctl reload nginx, /usr/bin/systemctl start nginx, /usr/bin/systemctl is-active --quiet nginx, /usr/bin/cp, /usr/bin/mkdir, /usr/bin/openssl, /usr/bin/apt-get, /usr/bin/certbot
+Cmnd_Alias TFG_DEPLOY_NGINX = /usr/sbin/nginx, /usr/bin/systemctl enable nginx, /usr/bin/systemctl reload nginx, /usr/bin/systemctl start nginx, /usr/bin/systemctl is-active --quiet nginx, /usr/bin/cp, /usr/bin/mkdir, /usr/bin/openssl, /usr/bin/apt-get
 usuario ALL=(TFG_POSTGRES) NOPASSWD: TFG_DEPLOY_POSTGRES
 usuario ALL=(root) NOPASSWD: TFG_DEPLOY_ROOT, TFG_DEPLOY_NGINX
 ```
 
-Los comandos sin argumentos en la lista (como `/usr/bin/cp`) permiten cualquier argumento. Los de systemctl especifican los argumentos exactos para limitar el alcance. `TFG_DEPLOY_NGINX` cubre `setup_host_nginx()`: instalar nginx, generar el certificado, copiar `nginx.conf` y gestionar el servicio.
+Los comandos sin argumentos en la lista (como `/usr/bin/cp`) permiten cualquier argumento. Los de systemctl especifican los argumentos exactos para limitar el alcance. `TFG_DEPLOY_NGINX` cubre `setup_host_nginx()`: instalar nginx, generar el certificado autofirmado, copiar `nginx.conf` y gestionar el servicio. El Cloudflare Tunnel corre como contenedor Docker y no requiere permisos adicionales de sudo.
 
 Para crear o actualizar el fichero sin problemas de saltos de linea, usa `tee` con un heredoc en lugar de `visudo` interactivo:
 
@@ -101,7 +103,7 @@ sudo tee /etc/sudoers.d/tfg-deploy > /dev/null << 'SUDOERS'
 Runas_Alias TFG_POSTGRES = postgres
 Cmnd_Alias TFG_DEPLOY_POSTGRES = /usr/bin/psql
 Cmnd_Alias TFG_DEPLOY_ROOT = /usr/bin/awk, /usr/bin/stat, /usr/bin/install, /usr/bin/sed, /usr/bin/grep, /usr/bin/systemctl restart postgresql
-Cmnd_Alias TFG_DEPLOY_NGINX = /usr/sbin/nginx, /usr/bin/systemctl enable nginx, /usr/bin/systemctl reload nginx, /usr/bin/systemctl start nginx, /usr/bin/systemctl is-active --quiet nginx, /usr/bin/cp, /usr/bin/mkdir, /usr/bin/openssl, /usr/bin/apt-get, /usr/bin/certbot
+Cmnd_Alias TFG_DEPLOY_NGINX = /usr/sbin/nginx, /usr/bin/systemctl enable nginx, /usr/bin/systemctl reload nginx, /usr/bin/systemctl start nginx, /usr/bin/systemctl is-active --quiet nginx, /usr/bin/cp, /usr/bin/mkdir, /usr/bin/openssl, /usr/bin/apt-get
 usuario ALL=(TFG_POSTGRES) NOPASSWD: TFG_DEPLOY_POSTGRES
 usuario ALL=(root) NOPASSWD: TFG_DEPLOY_ROOT, TFG_DEPLOY_NGINX
 SUDOERS
@@ -369,25 +371,27 @@ Si el workflow falla, revisa primero:
 - que la ref a desplegar sigue permitiendo `git pull --ff-only`
 - que `docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml ps` muestra ambos contenedores levantados
 
-Si la redireccion HTTP → HTTPS no funciona o la app no carga:
+Si la app no carga por `http://virtual.lab.inf.uva.es:20382`:
 
 ```bash
-# Comprobar redireccion HTTP
-curl -I http://virtual.lab.inf.uva.es/
-# Debe devolver 301 a https://
-
-# Comprobar que nginx escucha en 80 y 443
+# Comprobar que nginx escucha en 80
 sudo ss -tlnp | grep nginx
 
-# Ver estado del certificado (autofirmado o Let's Encrypt)
-sudo openssl x509 -noout -issuer -dates \
-  -in /etc/letsencrypt/live/virtual.lab.inf.uva.es/fullchain.pem
-
-# Forzar solicitud Let's Encrypt si el cert sigue siendo autofirmado
-sudo certbot certonly --webroot -w /var/www/certbot \
-  -d virtual.lab.inf.uva.es --non-interactive --agree-tos \
-  --email TU@EMAIL.COM && sudo systemctl reload nginx
+# Comprobar que el proxy HTTP funciona localmente
+curl -I http://127.0.0.1:80/
 
 # Ver logs de nginx
 sudo journalctl -u nginx --since '5 minutes ago'
+```
+
+Si el Cloudflare Tunnel no funciona:
+
+```bash
+# Ver estado del contenedor cloudflared
+docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml \
+  --profile tunnel ps
+
+# Ver logs del contenedor cloudflared
+docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml \
+  --profile tunnel logs cloudflared --tail=50
 ```

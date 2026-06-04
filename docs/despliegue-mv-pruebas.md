@@ -2,7 +2,7 @@
 
 Esta guia cubre el despliegue productivo actual en una MV Linux donde el frontend y el backend corren en Docker Compose, pero PostgreSQL permanece fuera de Docker en el host de la propia MV.
 
-Para la MV del laboratorio con acceso publico en `virtual.lab.inf.uva.es`, puerto SSH `20381` y publicacion web `20382 -> 80` (y `20383 -> 443`), el script de despliegue configura automaticamente nginx en el host con TLS y redireccion HTTP → HTTPS.
+Para la MV del laboratorio con acceso publico en `virtual.lab.inf.uva.es`, puerto SSH `20381` y publicacion web `20382 -> 80` (y `20383 -> 443`), el script de despliegue configura automaticamente nginx en el host como proxy inverso HTTP y, opcionalmente, activa un Cloudflare Tunnel para acceso desde redes con puertos no estandar bloqueados (Eduroam).
 
 Si quieres dejar el despliegue reproducible para futuras actualizaciones y automatizarlo con GitHub Actions, usa [scripts/deploy-mv.sh](../scripts/deploy-mv.sh) y la guia de [docs/automatizacion-despliegue-mv.md](./automatizacion-despliegue-mv.md).
 
@@ -10,15 +10,15 @@ Se ha validado sobre la rama `develop` del repositorio. Si tu copia local tiene 
 
 ## Arquitectura esperada
 
-- El punto de entrada publico es `https://virtual.lab.inf.uva.es` (puerto 443 estandar, accesible desde Eduroam).
-- Una peticion HTTP a `http://virtual.lab.inf.uva.es` recibe un `301` automatico a HTTPS.
-- El nginx del host (Ubuntu, fuera de Docker) termina TLS en el puerto 443 y proxea `/api`, `/socket.io` y `/` a los contenedores internos.
+- El punto de entrada fuera de Eduroam es `http://virtual.lab.inf.uva.es:20382` (HTTP, NAT lab: externo `:20382` → VM:80).
+- El nginx del host (Ubuntu, fuera de Docker) escucha en el puerto 80 y proxea directamente `/api`, `/socket.io` y `/` a los contenedores internos sin redireccion HTTPS.
+- El puerto 443 (externo `:20383`) esta disponible con un certificado autofirmado; el navegador mostrara advertencia de seguridad porque Let's Encrypt no puede validar el dominio via HTTP-01 a traves del NAT del laboratorio.
 - El contenedor `frontend` sirve unicamente ficheros estaticos en `127.0.0.1:8080`.
 - El contenedor `backend` escucha en `127.0.0.1:4000`.
 - El backend conecta con PostgreSQL del host Linux mediante `host.docker.internal:5432`.
-- El certificado TLS lo gestiona certbot (Let's Encrypt) si se define `CERTBOT_EMAIL`; en caso contrario se usa un certificado autofirmado y el navegador mostrara una advertencia.
+- Para acceso desde Eduroam se usa un Cloudflare Named Tunnel: `cloudflared` corre como contenedor Docker con el perfil `tunnel` y abre una conexion saliente hacia Cloudflare, que publica la app en una URL HTTPS con certificado valido accesible en el puerto 443 estandar.
 
-Consecuencia importante: los origenes CORS deben usar `https://virtual.lab.inf.uva.es` (sin numero de puerto).
+Consecuencia importante: los origenes CORS deben incluir `http://virtual.lab.inf.uva.es:20382` y, si el tunnel esta activo, tambien la URL del tunnel.
 
 ## Alcance y fuera de alcance
 
@@ -33,7 +33,7 @@ Esta guia si cubre:
 Esta guia no cubre:
 
 - Aprovisionamiento de la MV.
-- Configuracion inicial del cortafuegos para abrir los puertos 80 y 443.
+- Configuracion inicial del cortafuegos del host.
 - Reglas de firewall externas.
 - Gestion de secretos del sistema operativo.
 
@@ -41,8 +41,7 @@ Esta guia no cubre:
 
 - Docker Engine y plugin de Docker Compose.
 - Acceso shell a la MV.
-- Puertos `80` y `443` accesibles desde el exterior (el laboratorio los expone directamente).
-- nginx instalado en el host (`apt install nginx`); el script instala certbot automaticamente si falta.
+- nginx instalado en el host (`apt install nginx`); el script lo instala automaticamente si falta.
 - PostgreSQL 14 o superior ejecutandose en el host Linux de la MV.
 - Node.js 22 en la MV si vas a ejecutar comandos de Prisma directamente alli para alinear una base de datos existente.
 
@@ -93,7 +92,7 @@ BACKEND_HOST_IP=127.0.0.1
 BACKEND_PUBLISHED_PORT=4000
 ```
 
-Con esto, Docker publica el frontend solo en `127.0.0.1:8080` (inaccesible desde fuera del host). El nginx del host lo proxea en HTTPS y lo expone como `https://virtual.lab.inf.uva.es:20382`, y el backend queda igualmente restringido a `127.0.0.1:4000`.
+Con esto, Docker publica el frontend solo en `127.0.0.1:8080` (inaccesible desde fuera del host). El nginx del host lo proxea en HTTP y lo expone como `http://virtual.lab.inf.uva.es:20382`, y el backend queda igualmente restringido a `127.0.0.1:4000`.
 
 ## Configurar PostgreSQL en el host Linux
 
@@ -147,7 +146,7 @@ Notas:
 
 ## Ejemplo completo de backend/.env
 
-Usa `https://` sin numero de puerto (el puerto 443 es el estandar HTTPS):
+El origen CORS usa `http://` con el puerto externo `20382` (NAT lab: externo `:20382` → VM:80):
 
 ```dotenv
 PORT=4000
@@ -155,21 +154,17 @@ ADMIN_USER=admin
 ADMIN_PASS_HASH=$2b$10$REEMPLAZA_ESTE_HASH_BCRYPT
 JWT_SECRET=REEMPLAZA_ESTE_SECRETO
 DATABASE_URL=postgresql://cluedo_admin:TU_PASSWORD@host.docker.internal:5432/cluedo_db?schema=public
-ALLOWED_ORIGINS=https://virtual.lab.inf.uva.es
-SOCKET_IO_CORS_ORIGIN=https://virtual.lab.inf.uva.es
+ALLOWED_ORIGINS=http://virtual.lab.inf.uva.es:20382
+SOCKET_IO_CORS_ORIGIN=http://virtual.lab.inf.uva.es:20382
 FRONTEND_HOST_IP=127.0.0.1
 FRONTEND_PUBLISHED_PORT=8080
 BACKEND_HOST_IP=127.0.0.1
 BACKEND_PUBLISHED_PORT=4000
-# CERTBOT_EMAIL=tu@email.com
+# CLOUDFLARE_TUNNEL_TOKEN=<token-del-tunel>
+# CLOUDFLARE_TUNNEL_URL=https://<subdominio>.workers.dev
 ```
 
-Si vas a exponer temporalmente la aplicacion con un tunel HTTPS saliente, incluye tambien ese origen en ambas variables, separado por comas. Ejemplo:
-
-```dotenv
-ALLOWED_ORIGINS=https://virtual.lab.inf.uva.es,https://tu-subdominio.trycloudflare.com
-SOCKET_IO_CORS_ORIGIN=https://virtual.lab.inf.uva.es,https://tu-subdominio.trycloudflare.com
-```
+Cuando el tunnel esta activo el script añade `CLOUDFLARE_TUNNEL_URL` automaticamente a `ALLOWED_ORIGINS`, por lo que no hace falta editarlo a mano.
 
 ## Alineacion previa de Prisma en una base existente
 
@@ -292,96 +287,36 @@ Para automatizarlo desde GitHub Actions por SSH, consulta [docs/automatizacion-d
 
 ## Acceso desde Eduroam: Cloudflare Named Tunnel
 
-El puerto 20382 asignado por el laboratorio es no estandar y Eduroam lo bloquea antes de que el trafico llegue a nginx. La solucion es un tunel saliente: cloudflared abre una conexion desde la MV hacia la red de Cloudflare y publica la app en una URL HTTPS en el puerto 443, que Eduroam si permite. Al ser una conexion saliente no es necesario abrir puertos adicionales en el laboratorio.
+El puerto 20382 asignado por el laboratorio es no estandar y Eduroam lo bloquea. La solucion es un Named Tunnel de Cloudflare: `cloudflared` corre como contenedor Docker y abre una conexion saliente hacia Cloudflare, que publica la app en una URL HTTPS con certificado valido accesible en el puerto 443 estandar. No hace falta abrir puertos adicionales en el laboratorio.
 
-Este proceso se hace una sola vez. El token generado se guarda como secreto en GitHub y en `.deploy/mv.backend.env` para que cada despliegue automatico arranque el tunel y configure CORS correctamente.
-
-### Configuracion inicial del tunel (una sola vez)
+### Configuracion inicial (una sola vez)
 
 1. Crea una cuenta gratuita en cloudflare.com.
-2. Instala `cloudflared` en la MV (descarga desde la documentacion oficial de Cloudflare).
-3. Autentica cloudflared con tu cuenta: `cloudflared tunnel login`
-4. Crea el tunel: `cloudflared tunnel create cluedo-tfg`
-5. En el Cloudflare Dashboard, ve al tunel creado y añade un Public Hostname que apunte a `http://localhost:80` (HTTP, sin TLS entre cloudflared y nginx).
-6. Obtén el token del tunel: `cloudflared tunnel token cluedo-tfg`
-7. Anota la URL publica asignada al tunel (del tipo `https://cluedo-tfg.tudominio.workers.dev` o la que hayas configurado).
+2. En el Cloudflare Dashboard → Zero Trust → Networks → Tunnels, crea un nuevo tunnel llamado por ejemplo `cluedo-tfg`.
+3. En la configuracion del tunnel, añade un **Public Hostname** que apunte a `http://localhost:80`.
+4. Copia el **token** del tunnel desde el dashboard.
+5. Anota la URL publica del Public Hostname (del tipo `https://cluedo-tfg.example.workers.dev`).
 
-### Añadir el token y la URL al entorno de despliegue
+### Añadir el token y la URL al entorno
 
-En la MV, edita `.deploy/mv.backend.env` y añade al final:
+En la MV, edita `.deploy/mv.backend.env` y descomenta:
 
 ```dotenv
-CLOUDFLARE_TUNNEL_TOKEN=<token obtenido en el paso 6>
-CLOUDFLARE_TUNNEL_URL=https://<subdominio>.workers.dev
+CLOUDFLARE_TUNNEL_TOKEN=<token copiado del dashboard>
+CLOUDFLARE_TUNNEL_URL=https://<public-hostname-configurado>
 ```
 
-En GitHub → Settings del repositorio:
-
-- **Secrets** → añade `CLOUDFLARE_TUNNEL_TOKEN` con el mismo token.
-- **Variables** → añade `CLOUDFLARE_TUNNEL_URL` con la URL publica del tunel.
+En GitHub → Settings del repositorio añade el mismo token como secreto `CLOUDFLARE_TUNNEL_TOKEN` para que el workflow automatico tambien lo use.
 
 ### Como funciona en cada despliegue
 
 El script `deploy-mv.sh` detecta que `CLOUDFLARE_TUNNEL_TOKEN` esta definido y:
 
-1. Añade `CLOUDFLARE_TUNNEL_URL` a `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` del backend.
-2. Activa el perfil `tunnel` de Docker Compose, que arranca el servicio `cloudflared`.
-3. El servicio `cloudflared` se conecta automaticamente al tunel nombrado usando el token.
+1. Escribe `CLOUDFLARE_TUNNEL_TOKEN` en `docker-compose.lab.env` para que Compose lo pase al contenedor.
+2. Añade `CLOUDFLARE_TUNNEL_URL` a `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` antes de arrancar el backend.
+3. Levanta los contenedores con `--profile tunnel`, que activa el servicio `cloudflared` definido en `docker-compose.prod.yml`.
 
-Tras el despliegue la app queda accesible en la URL del tunel desde cualquier red, incluida Eduroam.
-
-### Verificacion desde Eduroam
-
-```bash
-curl -I https://<url-del-tunel>
-curl -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"incorrecta"}' \
-  https://<url-del-tunel>/api/auth/login   # debe devolver 401
-curl -i "https://<url-del-tunel>/socket.io/?EIO=4&transport=polling"   # debe devolver 200
-```
-
----
-
-## Alternativa temporal si el tunel nombrado no esta configurado
-
-Si la MV funciona internamente pero no puedes abrir `http://IP_O_DNS_PUBLICO_DE_LA_MV:8080` desde tu equipo cliente, puedes levantar un tunel HTTPS saliente temporal sin tocar la red del hipervisor. El caso mas practico validado ha sido Cloudflare Tunnel en modo quick tunnel (sin cuenta).
-
-1. Arranca el tunel desde la MV:
-
-```bash
-docker run --rm --network host cloudflare/cloudflared:latest tunnel --no-autoupdate --url http://127.0.0.1:80
-```
-
-2. Espera a que imprima una URL publica del tipo `https://algo.trycloudflare.com`.
-3. Anade esa URL a `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` dentro de `backend/.env`.
-4. Recrea solo el backend para recargar CORS:
-
-```bash
-cd /home/usuario/TFG
-docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml up -d --force-recreate backend
-```
-
-5. Valida la URL del tunel desde el cliente:
-
-```bash
-curl -I --max-time 15 https://tu-subdominio.trycloudflare.com
-curl -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"incorrecta"}' \
-  https://tu-subdominio.trycloudflare.com/api/auth/login
-curl -i "https://tu-subdominio.trycloudflare.com/socket.io/?EIO=4&transport=polling"
-```
-
-Mantén vivo el proceso o contenedor de `cloudflared`: cuando se detiene, la URL deja de ser valida.
-
-Si `cloudflared` falla al crear el quick tunnel o la MV no tiene escritorio grafico, usa un tunel SSH local desde tu equipo cliente hasta el puerto `80` de la MV. Si el laboratorio publica SSH por un puerto alternativo, añade `-p`:
-
-```bash
-ssh -N -L 8080:127.0.0.1:80 usuario@IP_O_HOST_DE_LA_MV
-# Ejemplo con puerto SSH no estandar:
-ssh -p 20381 -N -L 8080:127.0.0.1:80 usuario@virtual.lab.inf.uva.es
-```
-
-En ese caso, abre `http://127.0.0.1:8080` en el navegador de tu equipo cliente. Si el navegador accede por `localhost` o `127.0.0.1`, recuerda incluir temporalmente esos origenes en `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` antes de recrear el backend.
+Tras el despliegue la app queda accesible en la URL del tunnel desde cualquier red, incluida Eduroam.
 
 ## Verificaciones con curl
 
@@ -393,21 +328,12 @@ curl http://127.0.0.1:4000/health
 
 Debes recibir un JSON con el estado del servidor.
 
-### Redireccion HTTP → HTTPS
-
-```bash
-curl -I http://virtual.lab.inf.uva.es/
-```
-
-Debes recibir `301 Moved Permanently` con `Location: https://virtual.lab.inf.uva.es/`.
-
 ### Proxy REST desde la URL publica del frontend
 
 ```bash
-# Con certificado Let's Encrypt no se necesita -k; con autofirmado añadelo
 curl -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"incorrecta"}' \
-  https://virtual.lab.inf.uva.es/api/auth/login
+  http://virtual.lab.inf.uva.es:20382/api/auth/login
 ```
 
 Debes recibir `401`, lo cual confirma que nginx esta reenviando `/api` al backend.
@@ -415,19 +341,28 @@ Debes recibir `401`, lo cual confirma que nginx esta reenviando `/api` al backen
 ### Proxy Socket.IO a traves de nginx
 
 ```bash
-curl -i "https://virtual.lab.inf.uva.es/socket.io/?EIO=4&transport=polling"
+curl -i "http://virtual.lab.inf.uva.es:20382/socket.io/?EIO=4&transport=polling"
 ```
 
 Debes ver una respuesta `200` con el payload inicial del handshake de Socket.IO.
 
+### Verificacion desde la URL del Cloudflare Tunnel (Eduroam)
+
+```bash
+curl -I https://<url-del-tunel>
+curl -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"incorrecta"}' \
+  https://<url-del-tunel>/api/auth/login   # debe devolver 401
+curl -i "https://<url-del-tunel>/socket.io/?EIO=4&transport=polling"   # debe devolver 200
+```
+
 ### Verificacion visual desde un navegador externo
 
-Una vez validados `GET /health`, `POST /api/auth/login`, `GET /api/config/skins` y `socket.io`, abre un navegador en `https://virtual.lab.inf.uva.es`. Con certificado Let's Encrypt la conexion es segura sin advertencias; con autofirmado aparecera "La conexion no es privada" la primera vez.
+Abre un navegador en `http://virtual.lab.inf.uva.es:20382` (fuera de Eduroam) o en la URL del tunnel (Eduroam).
 
 Checklist minimo:
 
-- `http://virtual.lab.inf.uva.es` redirige automaticamente a `https://`.
-- La portada carga en `https://virtual.lab.inf.uva.es`.
+- La portada carga correctamente.
 - El login de administrador funciona.
 - En `Configurar CluedoSkin` aparecen skins remotas.
 - En `Crear sesion` aparecen skins remotas.

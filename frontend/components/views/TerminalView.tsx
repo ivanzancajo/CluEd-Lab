@@ -1211,7 +1211,7 @@ export function TerminalView() {
 
   const currentTeamMeta = teamColor ? getTeamMeta(teamColor) : null;
   const hasActiveTeams = boardTeams.some((team) => !team.falseAccusation && !team.eliminatedAt);
-  const eliminatedMovementMessage = "Equipo eliminado. El peón queda fijo y sigue bloqueando puertas si las ocupa.";
+  const eliminatedMovementMessage = "Equipo eliminado. Tu peón permanece fijo en el tablero.";
   const eliminatedMoveErrorMessage = "Equipo eliminado. El peón ya no puede moverse.";
   const eliminatedSuggestionMessage = "Equipo eliminado. No puede sugerir ni acusar, pero debe refutar si se le pide.";
   const eliminatedRefuteMessage = "Aunque estés eliminado, debes mostrar una carta para refutar.";
@@ -1267,9 +1267,10 @@ export function TerminalView() {
 
   const boardSpaces = mapBoardSpaces(boardTheme);
   const storedTeamIdForPawns = getStoredTeamId();
-  const boardPawns = boardTeams.reduce<{ id: string; color: string; positionX: number; positionY: number; opacity: number; isCurrent: boolean }[]>((acc, team) => {
+  const boardPawns = boardTeams.reduce<{ id: string; color: TeamColor; positionX: number; positionY: number; opacity: number; isCurrent: boolean; isEliminated: boolean }[]>((acc, team) => {
     if (team.id === storedTeamIdForPawns) {
-      acc.push({ id: team.id, color: team.color, positionX: team.positionX, positionY: team.positionY, opacity: 1, isCurrent: true });
+      const eliminated = Boolean(team.eliminatedAt || team.falseAccusation);
+      acc.push({ id: team.id, color: team.color, positionX: team.positionX, positionY: team.positionY, opacity: 1, isCurrent: true, isEliminated: eliminated });
     }
     return acc;
   }, []);
@@ -1945,7 +1946,7 @@ export function TerminalView() {
 
                     {!sessionTurn ? (
                       <p className="mt-3 text-[11px] text-slate-400">
-                        Sincronizando el estado del turno actual.
+                        Sincronizando turno...
                       </p>
                     ) : isTeamEliminated ? (
                       <p className="mt-3 text-[11px] text-slate-400">
@@ -1953,21 +1954,21 @@ export function TerminalView() {
                       </p>
                     ) : !isMyTurn ? (
                       <p className="mt-3 text-[11px] text-slate-400">
-                        Ahora mismo juega {currentTurnLabel}. Se habilitará el lanzamiento de dados automáticamente cuando llegue tu turno.
+                        Es el turno de {currentTurnLabel}. Los dados se activarán automáticamente cuando sea tu turno.
                       </p>
                     ) : sessionTurn.dice === null ? (
                       <div className="mt-3 space-y-3">
                         <p className="text-[11px] text-slate-400">
-                          Tira los dados para poder realizar un movimiento.
+                          Tira los dados para moverte.
                         </p>
                       </div>
                     ) : isLoadingMoves ? (
                       <p className="mt-3 text-[11px] text-cyan-200 uppercase tracking-[0.18em]">
-                        Preparando selector de destino…
+                        Calculando destinos posibles...
                       </p>
                     ) : destinationNodes.length === 0 ? (
                       <p className="mt-3 text-[11px] text-slate-400">
-                        La tirada actual no deja destinos seleccionables en el tablero.
+                        No hay destinos válidos para esta tirada.
                       </p>
                     ) : null}
 
@@ -1985,6 +1986,20 @@ export function TerminalView() {
                       </div>
                     ) : null}
                   </div>
+                </div>
+              ) : null}
+
+              {sessionStatus === "EN_CURSO" && isMyTurn && !isTeamEliminated ? (
+                <div className="w-full px-4 pt-2">
+                  <button
+                    data-cy="terminal-end-turn-submit"
+                    type="button"
+                    onClick={() => void handleEndTurnFromRoom()}
+                    disabled={isEndingTurn || isResolutionBlockingGameplay}
+                    className="w-full rounded-2xl border border-slate-600 bg-slate-900/75 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isEndingTurn ? "Cerrando..." : "Terminar turno"}
+                  </button>
                 </div>
               ) : null}
 
@@ -2424,7 +2439,7 @@ export function TerminalView() {
                   ) : (
                     <>
                       {activeSuggestion ? (
-                        <div data-cy="terminal-active-suggestion" className="rounded-[26px] border border-slate-700/80 bg-[linear-gradient(135deg,rgba(8,47,73,0.42),rgba(15,23,42,0.88))] p-5 shadow-[0_10px_30px_rgba(8,47,73,0.18)]">
+                        <div data-cy="terminal-active-suggestion" className="overflow-hidden rounded-[26px] border border-slate-700/80 bg-[linear-gradient(135deg,rgba(8,47,73,0.42),rgba(15,23,42,0.88))] p-5 shadow-[0_10px_30px_rgba(8,47,73,0.18)]">
                           <div className="flex items-start justify-between gap-4">
                             <div>
                               <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-200">Sugerencia activa</p>
@@ -2445,7 +2460,7 @@ export function TerminalView() {
                               { label: catNames.c2, element: activeSuggestion.object, tone: "border-emerald-700/70 bg-emerald-950/30 text-emerald-100", icon: <Box className="size-4 text-emerald-300" /> },
                               { label: catNames.c3, element: activeSuggestion.space, tone: "border-rose-700/70 bg-rose-950/30 text-rose-100", icon: <MapPin className="size-4 text-rose-300" /> },
                             ].map((item) => (
-                              <div key={item.label} className={`rounded-2xl border p-3 ${item.tone}`}>
+                              <div key={item.label} className={`min-w-0 rounded-2xl border p-3 ${item.tone}`}>
                                 <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em]">
                                   {item.icon}
                                   {item.label}
@@ -2595,24 +2610,15 @@ export function TerminalView() {
                             </p>
                           </div>
 
-                          <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+                          <div className="mt-3">
                             <button
                               data-cy="terminal-suggest-submit"
                               type="button"
                               onClick={() => void handleSubmitSuggestion()}
                               disabled={!suggestionPreview || isSubmittingSuggestion || isResolutionBlockingGameplay || !canUseRealtimeSuggestion}
-                              className="rounded-2xl bg-cyan-500 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.3)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                              className="w-full rounded-2xl bg-cyan-500 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.3)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {isSubmittingSuggestion ? "Enviando sugerencia..." : "Lanzar sugerencia"}
-                            </button>
-                            <button
-                              data-cy="terminal-end-turn-submit"
-                              type="button"
-                              onClick={() => void handleEndTurnFromRoom()}
-                              disabled={isEndingTurn || isResolutionBlockingGameplay}
-                              className="rounded-2xl border border-slate-600 bg-slate-900/75 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {isEndingTurn ? "Cerrando..." : "Terminar turno"}
                             </button>
                           </div>
                         </div>

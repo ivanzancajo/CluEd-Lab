@@ -2,7 +2,7 @@
 
 Esta guia cubre el despliegue productivo actual en una MV Linux donde el frontend y el backend corren en Docker Compose, pero PostgreSQL permanece fuera de Docker en el host de la propia MV.
 
-Para la MV del laboratorio con acceso publico en `virtual.lab.inf.uva.es`, puerto SSH `20381` y publicacion web `20382 -> 80`, esta guia asume que el frontend se publica en el puerto `80` interno de la MV mediante variables de Compose.
+Para la MV del laboratorio con acceso publico en `virtual.lab.inf.uva.es`, puerto SSH `20381` y publicacion web `20382 -> 80` (y `20383 -> 443`), el script de despliegue configura automaticamente nginx en el host con TLS y redireccion HTTP → HTTPS.
 
 Si quieres dejar el despliegue reproducible para futuras actualizaciones y automatizarlo con GitHub Actions, usa [scripts/deploy-mv.sh](../scripts/deploy-mv.sh) y la guia de [docs/automatizacion-despliegue-mv.md](./automatizacion-despliegue-mv.md).
 
@@ -10,15 +10,15 @@ Se ha validado sobre la rama `develop` del repositorio. Si tu copia local tiene 
 
 ## Arquitectura esperada
 
-- El punto de entrada publico es `http://virtual.lab.inf.uva.es:20382`.
-- El contenedor `frontend` sirve la SPA compilada con nginx.
-- nginx proxyea `/api` y `/socket.io` al servicio `backend` dentro de la red de Docker Compose.
-- El contenedor `backend` lee sus variables reales desde `backend/.env`.
-- El puerto publicado del `frontend` se controla con variables de Compose; en la MV del laboratorio debe ser `80`.
-- El puerto publicado del `backend` puede quedar ligado a `127.0.0.1` para no exponerlo fuera de la MV.
+- El punto de entrada publico es `https://virtual.lab.inf.uva.es:20382` (o `:20383`).
+- Una peticion HTTP a `http://...20382` recibe un `301` automatico a HTTPS; ya no devuelve 400.
+- El nginx del host (Ubuntu, fuera de Docker) termina TLS, hace la redireccion y proxea `/api`, `/socket.io` y `/` a los contenedores.
+- El contenedor `frontend` sirve unicamente ficheros estaticos (sin proxy propio) en `127.0.0.1:8080`.
+- El contenedor `backend` escucha en `127.0.0.1:4000`.
 - El backend conecta con PostgreSQL del host Linux mediante `host.docker.internal:5432`.
+- El certificado TLS es autofirmado (generado automaticamente por el script). El navegador mostrara una advertencia la primera vez; acepta la excepcion o usa el tunel Cloudflare para evitar la advertencia.
 
-Consecuencia importante: el origen permitido del backend debe ser la URL publica real del frontend, no `localhost`, para que REST y Socket.IO funcionen desde navegador al desplegar por IP o DNS de la MV.
+Consecuencia importante: el origen permitido del backend debe ser la URL publica real del frontend con `https://`, no `http://` ni `localhost`.
 
 ## Alcance y fuera de alcance
 
@@ -33,7 +33,7 @@ Esta guia si cubre:
 Esta guia no cubre:
 
 - Aprovisionamiento de la MV.
-- TLS o certificados.
+- Certificados firmados por una CA publica (Let's Encrypt no es accesible desde la red del laboratorio; el script genera un certificado autofirmado).
 - Reglas de firewall externas.
 - Gestion de secretos del sistema operativo.
 
@@ -41,7 +41,8 @@ Esta guia no cubre:
 
 - Docker Engine y plugin de Docker Compose.
 - Acceso shell a la MV.
-- Puerto `80` libre en la MV para publicar el frontend dentro del host.
+- nginx instalado en el host (`apt install nginx`); el script instala `libnginx-mod-stream` automaticamente si falta.
+- Puerto `80` libre para nginx del host (el frontend Docker ocupa el `8080` local).
 - Regla de publicacion del laboratorio `20382 -> 80` operativa desde el cliente que vaya a abrir la aplicacion.
 - PostgreSQL 14 o superior ejecutandose en el host Linux de la MV.
 - Node.js 22 en la MV si vas a ejecutar comandos de Prisma directamente alli para alinear una base de datos existente.
@@ -87,13 +88,13 @@ cp docker-compose.lab.env.example docker-compose.lab.env
 El archivo resultante debe dejar estos valores:
 
 ```dotenv
-FRONTEND_HOST_IP=0.0.0.0
-FRONTEND_PUBLISHED_PORT=80
+FRONTEND_HOST_IP=127.0.0.1
+FRONTEND_PUBLISHED_PORT=8080
 BACKEND_HOST_IP=127.0.0.1
 BACKEND_PUBLISHED_PORT=4000
 ```
 
-Con esto, Docker publicara la SPA en `80` dentro de la MV, que el laboratorio expone hacia fuera como `http://virtual.lab.inf.uva.es:20382`, y mantendra el backend accesible solo desde la propia maquina en `127.0.0.1:4000`.
+Con esto, Docker publica el frontend solo en `127.0.0.1:8080` (inaccesible desde fuera del host). El nginx del host lo proxea en HTTPS y lo expone como `https://virtual.lab.inf.uva.es:20382`, y el backend queda igualmente restringido a `127.0.0.1:4000`.
 
 ## Configurar PostgreSQL en el host Linux
 
@@ -147,7 +148,7 @@ Notas:
 
 ## Ejemplo completo de backend/.env
 
-Usa la IP o el DNS publico real de la MV en ambos origenes CORS:
+Usa siempre `https://` en los origenes CORS, ya que nginx termina TLS antes de que llegue al backend:
 
 ```dotenv
 PORT=4000
@@ -155,17 +156,19 @@ ADMIN_USER=admin
 ADMIN_PASS_HASH=$2b$10$REEMPLAZA_ESTE_HASH_BCRYPT
 JWT_SECRET=REEMPLAZA_ESTE_SECRETO
 DATABASE_URL=postgresql://cluedo_admin:TU_PASSWORD@host.docker.internal:5432/cluedo_db?schema=public
-ALLOWED_ORIGINS=http://virtual.lab.inf.uva.es:20382
-SOCKET_IO_CORS_ORIGIN=http://virtual.lab.inf.uva.es:20382
+ALLOWED_ORIGINS=https://virtual.lab.inf.uva.es:20382
+SOCKET_IO_CORS_ORIGIN=https://virtual.lab.inf.uva.es:20382
+FRONTEND_HOST_IP=127.0.0.1
+FRONTEND_PUBLISHED_PORT=8080
+BACKEND_HOST_IP=127.0.0.1
+BACKEND_PUBLISHED_PORT=4000
 ```
-
-Si despliegas con DNS o con TLS por delante, sustituye ambos origenes por la URL publica final, por ejemplo `https://cluedo.ejemplo.com`.
 
 Si vas a exponer temporalmente la aplicacion con un tunel HTTPS saliente, incluye tambien ese origen en ambas variables, separado por comas. Ejemplo:
 
 ```dotenv
-ALLOWED_ORIGINS=http://virtual.lab.inf.uva.es:20382,https://tu-subdominio.trycloudflare.com
-SOCKET_IO_CORS_ORIGIN=http://virtual.lab.inf.uva.es:20382,https://tu-subdominio.trycloudflare.com
+ALLOWED_ORIGINS=https://virtual.lab.inf.uva.es:20382,https://tu-subdominio.trycloudflare.com
+SOCKET_IO_CORS_ORIGIN=https://virtual.lab.inf.uva.es:20382,https://tu-subdominio.trycloudflare.com
 ```
 
 ## Alineacion previa de Prisma en una base existente
@@ -390,12 +393,21 @@ curl http://127.0.0.1:4000/health
 
 Debes recibir un JSON con el estado del servidor.
 
+### Redireccion HTTP → HTTPS
+
+```bash
+curl -I http://virtual.lab.inf.uva.es:20382/
+```
+
+Debes recibir un `301 Moved Permanently` con `Location: https://virtual.lab.inf.uva.es:20382/`. Si recibes `400 Bad Request` con "plain HTTP request was sent to HTTPS port", el modulo stream no esta activo; revisa que `libnginx-mod-stream` este instalado y que nginx haya recargado la configuracion.
+
 ### Proxy REST desde la URL publica del frontend
 
 ```bash
-curl -H "Content-Type: application/json" \
+# -k ignora la advertencia del certificado autofirmado
+curl -k -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"incorrecta"}' \
-  http://virtual.lab.inf.uva.es:20382/api/auth/login
+  https://virtual.lab.inf.uva.es:20382/api/auth/login
 ```
 
 Debes recibir `401`, lo cual confirma que nginx esta reenviando `/api` al backend.
@@ -403,18 +415,19 @@ Debes recibir `401`, lo cual confirma que nginx esta reenviando `/api` al backen
 ### Proxy Socket.IO a traves de nginx
 
 ```bash
-curl -i "http://virtual.lab.inf.uva.es:20382/socket.io/?EIO=4&transport=polling"
+curl -ik "https://virtual.lab.inf.uva.es:20382/socket.io/?EIO=4&transport=polling"
 ```
 
 Debes ver una respuesta `200` con el payload inicial del handshake de Socket.IO.
 
 ### Verificacion visual desde un navegador externo
 
-Una vez validados `GET /health`, `POST /api/auth/login`, `GET /api/config/skins` y `socket.io`, comprueba la UI desde un navegador real, ya sea por IP publica, por quick tunnel HTTPS o por tunel SSH local.
+Una vez validados `GET /health`, `POST /api/auth/login`, `GET /api/config/skins` y `socket.io`, comprueba la UI desde un navegador real. La primera vez el navegador mostrara "La conexion no es privada" porque el certificado es autofirmado; acepta la excepcion de seguridad para continuar.
 
 Checklist minimo:
 
-- La portada carga en `http://virtual.lab.inf.uva.es:20382`.
+- `http://virtual.lab.inf.uva.es:20382` redirige automaticamente a `https://`.
+- La portada carga en `https://virtual.lab.inf.uva.es:20382`.
 - El login de administrador funciona.
 - En `Configurar CluedoSkin` aparecen skins remotas.
 - En `Crear sesion` aparecen skins remotas.
@@ -432,6 +445,6 @@ docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml logs
 Pistas utiles:
 
 - Si el backend no arranca, revisa primero `DATABASE_URL`, conectividad a `host.docker.internal:5432` y estado de Prisma.
-- Si la SPA carga pero fallan las peticiones del navegador, revisa `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` contra la URL publica real de la MV.
+- Si la SPA carga pero fallan las peticiones del navegador, revisa que `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` usen `https://` y el puerto correcto.
 - Si `/api` funciona pero `socket.io` no, confirma que el acceso se hace por la URL publica del frontend en `20382` y no llamando al backend por otra origin distinta.
 - Si la app funciona dentro de la MV pero no desde el cliente, el problema ya no es Docker: revisa si la red del laboratorio publica la IP de la MV o usa la alternativa del tunel HTTPS temporal.

@@ -23,7 +23,7 @@ import {
   type LobbyPresenceState,
   type LobbySocketClient,
 } from "../../src/lib/lobbySocket";
-import { getStoredSessionCode, getStoredSessionId, storeHostLobbySession } from "../../src/lib/lobbyStorage";
+import { clearStoredSession, getStoredSessionCode, getStoredSessionId, getStoredSessionStatus, storeHostLobbySession } from "../../src/lib/lobbyStorage";
 import { getTeamMonitoringLabel, getTeamMonitoringStatus } from "../../src/lib/teamMonitoring";
 import { TEAM_METADATA } from "../../src/lib/teamMeta";
 import { getGameSession, getSessionErrorMessage, startGameSession } from "../../src/lib/sessionApi";
@@ -36,7 +36,13 @@ const MINIMUM_TEAMS_TO_START = 3;
 export function LobbyView() {
   const navigate = useNavigate();
   const socketRef = useRef<LobbySocketClient | null>(null);
-  const [sessionCode, setSessionCode] = useState(() => getStoredSessionCode() || "N/A");
+  const [sessionCode, setSessionCode] = useState(() => {
+    if (getStoredSessionStatus() === "FINALIZADA") {
+      clearStoredSession();
+      return "N/A";
+    }
+    return getStoredSessionCode() || "N/A";
+  });
   const [presenceState, setPresenceState] = useState<LobbyPresenceState | null>(null);
   const [events, setEvents] = useState<LobbyEventMessage[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<LobbyConnectionStatus>("idle");

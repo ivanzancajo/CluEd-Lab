@@ -39,6 +39,19 @@ export function clearStoredTeamContext() {
   removeStoredValue(TEAM_NAME_KEY);
 }
 
+export function clearStoredSession() {
+  removeStoredValue(SESSION_ID_KEY);
+  removeStoredValue(SESSION_CODE_KEY);
+  removeStoredValue(SESSION_STATUS_KEY);
+  removeStoredValue(SESSION_STARTED_AT_KEY);
+  removeStoredValue(SESSION_DURATION_SECONDS_KEY);
+  removeStoredValue(ACTIVE_CONFIG_KEY);
+  removeStoredValue(DURATION_KEY);
+  removeStoredValue(GAME_TITLE_KEY);
+  removeStoredValue(CENTER_IMAGE_KEY);
+  clearStoredTeamContext();
+}
+
 export function getStoredSessionId() {
   return getStoredValue(SESSION_ID_KEY);
 }

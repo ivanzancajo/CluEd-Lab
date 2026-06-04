@@ -285,38 +285,46 @@ El script:
 
 Para automatizarlo desde GitHub Actions por SSH, consulta [docs/automatizacion-despliegue-mv.md](./automatizacion-despliegue-mv.md).
 
-## Acceso desde Eduroam: Cloudflare Named Tunnel
+## Acceso desde Eduroam: Cloudflare Tunnel
 
-El puerto 20382 asignado por el laboratorio es no estandar y Eduroam lo bloquea. La solucion es un Named Tunnel de Cloudflare: `cloudflared` corre como contenedor Docker y abre una conexion saliente hacia Cloudflare, que publica la app en una URL HTTPS con certificado valido accesible en el puerto 443 estandar. No hace falta abrir puertos adicionales en el laboratorio.
+El puerto 20382 asignado por el laboratorio es no estandar y Eduroam lo bloquea. La solucion es un tunnel de Cloudflare: `cloudflared` corre como contenedor Docker (perfil `tunnel` de `docker-compose.prod.yml`) y abre una conexion saliente hacia Cloudflare, que publica la app en una URL HTTPS con certificado valido accesible en el puerto 443 estandar. No hace falta abrir puertos adicionales en el laboratorio.
 
-### Configuracion inicial (una sola vez)
+Hay dos variantes segun si tienes dominio propio en Cloudflare:
 
-1. Crea una cuenta gratuita en cloudflare.com.
-2. En el Cloudflare Dashboard → Zero Trust → Networks → Tunnels, crea un nuevo tunnel llamado por ejemplo `cluedo-tfg`.
-3. En la configuracion del tunnel, añade un **Public Hostname** que apunte a `http://localhost:80`.
-4. Copia el **token** del tunnel desde el dashboard.
-5. Anota la URL publica del Public Hostname (del tipo `https://cluedo-tfg.example.workers.dev`).
+### Opcion A — Quick Tunnel (sin cuenta ni dominio)
 
-### Añadir el token y la URL al entorno
+La mas sencilla. Cloudflare asigna una URL del tipo `https://palabras-random.trycloudflare.com` al arrancar el contenedor. La URL es estable mientras el contenedor no se reinicie.
 
 En la MV, edita `.deploy/mv.backend.env` y descomenta:
 
 ```dotenv
-CLOUDFLARE_TUNNEL_TOKEN=<token copiado del dashboard>
+CLOUDFLARE_QUICK_TUNNEL=true
+```
+
+El script `deploy-mv.sh` detecta esta variable y:
+
+1. Levanta los contenedores con `--profile tunnel`, arrancando `cloudflared` en modo Quick Tunnel (`--url http://localhost:80`).
+2. Espera hasta 45 segundos a que el contenedor emita su URL en los logs.
+3. Añade la URL a `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` en `backend/.env`.
+4. Reinicia solo el contenedor `backend` para que aplique el nuevo CORS.
+
+Al terminar el despliegue el log muestra la URL asignada. Si el contenedor se reinicia, la URL cambia: vuelve a ejecutar `deploy-mv.sh` para que el script la detecte y actualice CORS automaticamente.
+
+### Opcion B — Named Tunnel (cuenta gratuita de Cloudflare + dominio, URL estable)
+
+Requiere un dominio gestionado en Cloudflare DNS. Ofrece una URL fija que no cambia en reinicios.
+
+1. En el Cloudflare Dashboard → Zero Trust → Networks → Tunnels, crea un tunnel.
+2. Añade un **Public Hostname** apuntando a `http://localhost:80`.
+3. Copia el **token** del tunnel.
+4. En la MV, edita `.deploy/mv.backend.env` y descomenta:
+
+```dotenv
+CLOUDFLARE_TUNNEL_TOKEN=<token-del-tunel>
 CLOUDFLARE_TUNNEL_URL=https://<public-hostname-configurado>
 ```
 
-En GitHub → Settings del repositorio añade el mismo token como secreto `CLOUDFLARE_TUNNEL_TOKEN` para que el workflow automatico tambien lo use.
-
-### Como funciona en cada despliegue
-
-El script `deploy-mv.sh` detecta que `CLOUDFLARE_TUNNEL_TOKEN` esta definido y:
-
-1. Escribe `CLOUDFLARE_TUNNEL_TOKEN` en `docker-compose.lab.env` para que Compose lo pase al contenedor.
-2. Añade `CLOUDFLARE_TUNNEL_URL` a `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` antes de arrancar el backend.
-3. Levanta los contenedores con `--profile tunnel`, que activa el servicio `cloudflared` definido en `docker-compose.prod.yml`.
-
-Tras el despliegue la app queda accesible en la URL del tunnel desde cualquier red, incluida Eduroam.
+El script inyecta `CLOUDFLARE_TUNNEL_URL` en `ALLOWED_ORIGINS` antes de arrancar el backend y activa el contenedor `cloudflared` con el token.
 
 ## Verificaciones con curl
 

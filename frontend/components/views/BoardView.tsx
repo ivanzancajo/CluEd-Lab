@@ -146,6 +146,10 @@ export function BoardView() {
 
     if (presenceState.status === "FINALIZADA") {
       setTimeRemaining(presenceState.remainingSeconds);
+      setIsChangingGameStatus(false);
+      setIsResolutionDialogOpen(false);
+      setIsTriggeringResolution(false);
+      setActiveMotifSpace(null);
       return;
     }
 

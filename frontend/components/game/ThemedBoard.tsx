@@ -25,6 +25,7 @@ type ThemedBoardTeam = {
   positionY: number;
   opacity?: number;
   isCurrent?: boolean;
+  isEliminated?: boolean;
 };
 
 type ThemedBoardProps = {
@@ -152,7 +153,7 @@ export function ThemedBoard({
           <m.div
             key={team.id}
             initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: team.opacity ?? 1 }}
+            animate={{ scale: 1, opacity: team.isEliminated ? 0.55 : (team.opacity ?? 1) }}
             transition={{ type: 'spring', stiffness: 220, damping: 16 }}
             data-cy={`board-pawn-${team.color.toLowerCase()}`}
             className={joinClasses(
@@ -166,9 +167,19 @@ export function ThemedBoard({
               height: `${PAWN_SIZE_PERCENT}%`,
               backgroundColor: teamMeta.hexColor,
               borderColor: teamMeta.hexColor,
+              filter: team.isEliminated ? 'grayscale(0.6)' : undefined,
             }}
           >
-            {team.isCurrent ? (
+            {team.isEliminated ? (
+              <svg
+                viewBox="0 0 10 10"
+                className="absolute size-[60%] stroke-red-500"
+                style={{ strokeWidth: 2, strokeLinecap: 'round' }}
+              >
+                <line x1="2" y1="2" x2="8" y2="8" />
+                <line x1="8" y1="2" x2="2" y2="8" />
+              </svg>
+            ) : team.isCurrent ? (
               <Crosshair className="size-[56%] text-white" />
             ) : (
               <div className="size-[30%] rounded-full bg-white/45 backdrop-blur-sm" />

@@ -403,6 +403,7 @@ export function BoardView() {
     color: team.color,
     positionX: team.positionX,
     positionY: team.positionY,
+    isEliminated: Boolean(team.eliminatedAt),
     opacity:
       getTeamMonitoringStatus(team, monitoringNow) === "connected"
         ? 1

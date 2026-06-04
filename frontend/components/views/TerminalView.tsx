@@ -1988,14 +1988,14 @@ export function TerminalView() {
                 </div>
               ) : null}
 
-              {sessionStatus === "EN_CURSO" && isMyTurn && !isTeamEliminated ? (
+              {sessionStatus === "EN_CURSO" && isMyTurn && !isTeamEliminated && resolvedCurrentMoveNode?.kind === "room" ? (
                 <div className="w-full px-4 pt-2">
                   <button
                     data-cy="terminal-end-turn-submit"
                     type="button"
                     onClick={() => void handleEndTurnFromRoom()}
-                    disabled={isEndingTurn || isResolutionBlockingGameplay}
-                    className="w-full rounded-2xl border border-slate-500 bg-slate-800 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-100 shadow-sm transition-all hover:bg-slate-700 hover:border-slate-400 disabled:cursor-not-allowed disabled:border-slate-700/50 disabled:bg-slate-900/40 disabled:text-slate-600 disabled:shadow-none"
+                    disabled={isEndingTurn}
+                    className="w-full rounded-2xl border border-slate-500 bg-slate-800 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-100 shadow-sm transition-all hover:bg-slate-700 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isEndingTurn ? "Cerrando..." : "Terminar turno"}
                   </button>

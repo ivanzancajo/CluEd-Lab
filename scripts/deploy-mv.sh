@@ -431,12 +431,13 @@ fi
 write_backend_env
 
 log 'Levantando servicios productivos'
-COMPOSE_UP_ARGS=(--env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" up -d --remove-orphans)
+# --profile es un flag global de docker compose, debe ir antes del subcomando
+COMPOSE_BASE_ARGS=(--env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE")
 if [[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]] || [[ "${CLOUDFLARE_QUICK_TUNNEL:-}" == 'true' ]]; then
-  COMPOSE_UP_ARGS+=(--profile tunnel)
+  COMPOSE_BASE_ARGS+=(--profile tunnel)
 fi
-docker compose "${COMPOSE_UP_ARGS[@]}"
-docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" ps
+docker compose "${COMPOSE_BASE_ARGS[@]}" up -d --remove-orphans
+docker compose "${COMPOSE_BASE_ARGS[@]}" ps
 
 log 'Validando healthcheck, frontend container y Socket.IO locales'
 wait_for_http http://127.0.0.1:4000/health 'healthcheck del backend'

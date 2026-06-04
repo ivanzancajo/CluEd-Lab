@@ -364,7 +364,23 @@ Despues de eso, los despliegues futuros pueden quedar en manos del workflow.
 Si el workflow falla, revisa primero:
 
 - que `MV_SSH_PRIVATE_KEY` corresponde a una clave publica instalada en la MV
-- que el usuario remoto puede ejecutar sin password los comandos `sudo` restringidos documentados para PostgreSQL
+- que el usuario remoto puede ejecutar sin password los comandos `sudo` restringidos documentados para PostgreSQL y nginx
 - que `.deploy/mv.backend.env` sigue presente en la MV
 - que la ref a desplegar sigue permitiendo `git pull --ff-only`
 - que `docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml ps` muestra ambos contenedores levantados
+
+Si la URL `http://...20382` sigue devolviendo 400 tras el despliegue:
+
+```bash
+# Verificar que libnginx-mod-stream esta instalado
+dpkg -l libnginx-mod-stream
+
+# Verificar que el modulo stream esta cargado en nginx
+sudo nginx -T 2>/dev/null | grep -i stream
+
+# Comprobar la redireccion HTTP directamente desde la MV
+curl -I http://127.0.0.1:80/
+
+# Ver logs de nginx
+sudo journalctl -u nginx --since '5 minutes ago'
+```

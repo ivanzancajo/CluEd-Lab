@@ -295,7 +295,10 @@ setup_host_nginx() {
   if ! command -v nginx >/dev/null 2>&1; then
     log 'Instalando nginx...'
     run_sudo apt-get update -qq
-    run_sudo apt-get install -y nginx
+    run_sudo apt-get install -y nginx libnginx-mod-stream
+  elif ! dpkg -l libnginx-mod-stream 2>/dev/null | grep -q '^ii'; then
+    log 'Instalando módulo stream de nginx...'
+    run_sudo apt-get install -y libnginx-mod-stream
   fi
 
   local cert_dir="/etc/letsencrypt/live/virtual.lab.inf.uva.es"

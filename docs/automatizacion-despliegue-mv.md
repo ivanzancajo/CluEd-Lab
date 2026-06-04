@@ -6,7 +6,7 @@ Esta guia describe la automatizacion del despliegue validado en la MV del labora
 - un lanzador local opcional para ejecutar ese mismo flujo por SSH: [scripts/deploy-mv-manual.sh](../scripts/deploy-mv-manual.sh)
 - un workflow de GitHub Actions: [.github/workflows/deploy-mv-lab.yml](../.github/workflows/deploy-mv-lab.yml)
 
-La automatizacion asume el mismo escenario que [docs/despliegue-mv-pruebas.md](./despliegue-mv-pruebas.md): frontend y backend en Docker Compose, PostgreSQL en el host Linux, nginx en el host como proxy inverso HTTP y punto de entrada publico en `http://virtual.lab.inf.uva.es:20382`. Para acceso desde Eduroam se usa un Cloudflare Named Tunnel (opcional).
+La automatizacion asume el mismo escenario que [docs/despliegue-mv-pruebas.md](./despliegue-mv-pruebas.md): frontend y backend en Docker Compose, PostgreSQL en el host Linux, nginx en el host como proxy inverso HTTP y punto de entrada publico en `https://virtual.lab.inf.uva.es:20382`. Para acceso desde Eduroam se usa un Cloudflare Named Tunnel (opcional).
 
 ## Que resuelve el script
 
@@ -43,8 +43,8 @@ ADMIN_USER=admin
 ADMIN_PASS_HASH=$2b$10$REEMPLAZA_ESTE_HASH_BCRYPT
 JWT_SECRET=REEMPLAZA_ESTE_SECRETO
 DATABASE_URL=postgresql://cluedo_admin:TU_PASSWORD@host.docker.internal:5432/cluedo_db?schema=public
-ALLOWED_ORIGINS=http://virtual.lab.inf.uva.es:20382
-SOCKET_IO_CORS_ORIGIN=http://virtual.lab.inf.uva.es:20382
+ALLOWED_ORIGINS=https://virtual.lab.inf.uva.es:20382
+SOCKET_IO_CORS_ORIGIN=https://virtual.lab.inf.uva.es:20382
 FRONTEND_HOST_IP=127.0.0.1
 FRONTEND_PUBLISHED_PORT=8080
 BACKEND_HOST_IP=127.0.0.1
@@ -371,7 +371,7 @@ Si el workflow falla, revisa primero:
 - que la ref a desplegar sigue permitiendo `git pull --ff-only`
 - que `docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml ps` muestra ambos contenedores levantados
 
-Si la app no carga por `http://virtual.lab.inf.uva.es:20382`:
+Si la app no carga por `https://virtual.lab.inf.uva.es:20382`:
 
 ```bash
 # Comprobar que nginx escucha en 80

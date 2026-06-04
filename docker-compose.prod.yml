@@ -33,7 +33,7 @@ services:
 
   cloudflared:
     image: cloudflare/cloudflared:latest
-    command: ${CLOUDFLARE_TUNNEL_CMD:-tunnel --no-autoupdate --url http://localhost:80}
+    command: ${CLOUDFLARE_TUNNEL_CMD:-tunnel --no-autoupdate --url http://localhost:8081}
     environment:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
     network_mode: host

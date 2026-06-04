@@ -10,15 +10,15 @@ Se ha validado sobre la rama `develop` del repositorio. Si tu copia local tiene 
 
 ## Arquitectura esperada
 
-- El punto de entrada fuera de Eduroam es `http://virtual.lab.inf.uva.es:20382` (HTTP, NAT lab: externo `:20382` → VM:80).
-- El nginx del host (Ubuntu, fuera de Docker) escucha en el puerto 80 y proxea directamente `/api`, `/socket.io` y `/` a los contenedores internos sin redireccion HTTPS.
-- El puerto 443 (externo `:20383`) esta disponible con un certificado autofirmado; el navegador mostrara advertencia de seguridad porque Let's Encrypt no puede validar el dominio via HTTP-01 a traves del NAT del laboratorio.
+- El punto de entrada fuera de Eduroam es `https://virtual.lab.inf.uva.es:20382` (HTTPS, NAT lab: externo `:20382` → VM:80). El navegador mostrara una advertencia de certificado autofirmado en el primer acceso; se puede continuar haciendo clic en "Avanzado".
+- El nginx del host (Ubuntu, fuera de Docker) escucha en el puerto 80 con TLS (cert autofirmado) y proxea `/api`, `/socket.io` y `/` a los contenedores internos. El Cloudflare Tunnel usa el puerto interno `8081` (HTTP, solo loopback) para no interferir con el TLS del puerto 80.
+- El puerto 443 (externo `:20383`) tambien sirve HTTPS con el mismo certificado autofirmado.
 - El contenedor `frontend` sirve unicamente ficheros estaticos en `127.0.0.1:8080`.
 - El contenedor `backend` escucha en `127.0.0.1:4000`.
 - El backend conecta con PostgreSQL del host Linux mediante `host.docker.internal:5432`.
 - Para acceso desde Eduroam se usa un Cloudflare Named Tunnel: `cloudflared` corre como contenedor Docker con el perfil `tunnel` y abre una conexion saliente hacia Cloudflare, que publica la app en una URL HTTPS con certificado valido accesible en el puerto 443 estandar.
 
-Consecuencia importante: los origenes CORS deben incluir `http://virtual.lab.inf.uva.es:20382` y, si el tunnel esta activo, tambien la URL del tunnel.
+Consecuencia importante: los origenes CORS deben incluir `https://virtual.lab.inf.uva.es:20382` y, si el tunnel esta activo, tambien la URL del tunnel.
 
 ## Alcance y fuera de alcance
 
@@ -92,7 +92,7 @@ BACKEND_HOST_IP=127.0.0.1
 BACKEND_PUBLISHED_PORT=4000
 ```
 
-Con esto, Docker publica el frontend solo en `127.0.0.1:8080` (inaccesible desde fuera del host). El nginx del host lo proxea en HTTP y lo expone como `http://virtual.lab.inf.uva.es:20382`, y el backend queda igualmente restringido a `127.0.0.1:4000`.
+Con esto, Docker publica el frontend solo en `127.0.0.1:8080` (inaccesible desde fuera del host). El nginx del host lo proxea en HTTPS (cert autofirmado) y lo expone como `https://virtual.lab.inf.uva.es:20382`, y el backend queda igualmente restringido a `127.0.0.1:4000`.
 
 ## Configurar PostgreSQL en el host Linux
 
@@ -154,8 +154,8 @@ ADMIN_USER=admin
 ADMIN_PASS_HASH=$2b$10$REEMPLAZA_ESTE_HASH_BCRYPT
 JWT_SECRET=REEMPLAZA_ESTE_SECRETO
 DATABASE_URL=postgresql://cluedo_admin:TU_PASSWORD@host.docker.internal:5432/cluedo_db?schema=public
-ALLOWED_ORIGINS=http://virtual.lab.inf.uva.es:20382
-SOCKET_IO_CORS_ORIGIN=http://virtual.lab.inf.uva.es:20382
+ALLOWED_ORIGINS=https://virtual.lab.inf.uva.es:20382
+SOCKET_IO_CORS_ORIGIN=https://virtual.lab.inf.uva.es:20382
 FRONTEND_HOST_IP=127.0.0.1
 FRONTEND_PUBLISHED_PORT=8080
 BACKEND_HOST_IP=127.0.0.1
@@ -262,7 +262,7 @@ docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml up -
 docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml ps
 ```
 
-La entrada publica para usuarios debe ser siempre `http://virtual.lab.inf.uva.es:20382`. Aunque el backend publica `4000`, en esta MV queda ligado a `127.0.0.1` y el frontend productivo sigue trabajando same-origin a traves de nginx.
+La entrada publica para usuarios debe ser siempre `https://virtual.lab.inf.uva.es:20382`. Aunque el backend publica `4000`, en esta MV queda ligado a `127.0.0.1` y el frontend productivo sigue trabajando same-origin a traves de nginx.
 
 ## Script reproducible de despliegue
 
@@ -339,9 +339,10 @@ Debes recibir un JSON con el estado del servidor.
 ### Proxy REST desde la URL publica del frontend
 
 ```bash
-curl -H "Content-Type: application/json" \
+# -k acepta el certificado autofirmado
+curl -k -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"incorrecta"}' \
-  http://virtual.lab.inf.uva.es:20382/api/auth/login
+  https://virtual.lab.inf.uva.es:20382/api/auth/login
 ```
 
 Debes recibir `401`, lo cual confirma que nginx esta reenviando `/api` al backend.
@@ -349,7 +350,7 @@ Debes recibir `401`, lo cual confirma que nginx esta reenviando `/api` al backen
 ### Proxy Socket.IO a traves de nginx
 
 ```bash
-curl -i "http://virtual.lab.inf.uva.es:20382/socket.io/?EIO=4&transport=polling"
+curl -ki "https://virtual.lab.inf.uva.es:20382/socket.io/?EIO=4&transport=polling"
 ```
 
 Debes ver una respuesta `200` con el payload inicial del handshake de Socket.IO.
@@ -366,7 +367,7 @@ curl -i "https://<url-del-tunel>/socket.io/?EIO=4&transport=polling"   # debe de
 
 ### Verificacion visual desde un navegador externo
 
-Abre un navegador en `http://virtual.lab.inf.uva.es:20382` (fuera de Eduroam) o en la URL del tunnel (Eduroam).
+Abre un navegador en `https://virtual.lab.inf.uva.es:20382` (fuera de Eduroam; acepta la advertencia del certificado autofirmado la primera vez) o en la URL del tunnel (Eduroam, sin advertencia).
 
 Checklist minimo:
 

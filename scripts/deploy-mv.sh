@@ -396,6 +396,7 @@ run_sudo "$AWK_BIN" -v rule="$(canonicalize_pg_hba_rule "$HOST_RULE")" '
 log 'Alineando Prisma desde el host'
 pushd "$BACKEND_DIR" >/dev/null
 npm ci
+SAVED_DATABASE_URL="$DATABASE_URL"
 export DATABASE_URL="$HOST_DATABASE_URL"
 npm run prisma:generate
 npm run prisma:validate
@@ -410,7 +411,8 @@ if [[ -f "$KNOWN_RECOVERY_MIGRATION_FILE" ]]; then
 fi
 
 npm run prisma:migrate:deploy
-unset DATABASE_URL
+DATABASE_URL="$SAVED_DATABASE_URL"
+unset SAVED_DATABASE_URL
 popd >/dev/null
 
 log 'Configurando nginx del host'

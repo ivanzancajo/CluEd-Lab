@@ -1269,8 +1269,7 @@ export function TerminalView() {
   const storedTeamIdForPawns = getStoredTeamId();
   const boardPawns = boardTeams.reduce<{ id: string; color: TeamColor; positionX: number; positionY: number; opacity: number; isCurrent: boolean; isEliminated: boolean }[]>((acc, team) => {
     if (team.id === storedTeamIdForPawns) {
-      const eliminated = Boolean(team.eliminatedAt || team.falseAccusation);
-      acc.push({ id: team.id, color: team.color, positionX: team.positionX, positionY: team.positionY, opacity: 1, isCurrent: true, isEliminated: eliminated });
+      acc.push({ id: team.id, color: team.color, positionX: team.positionX, positionY: team.positionY, opacity: 1, isCurrent: true, isEliminated: false });
     }
     return acc;
   }, []);
@@ -1996,7 +1995,7 @@ export function TerminalView() {
                     type="button"
                     onClick={() => void handleEndTurnFromRoom()}
                     disabled={isEndingTurn || isResolutionBlockingGameplay}
-                    className="w-full rounded-2xl border border-slate-600 bg-slate-900/75 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-full rounded-2xl border border-slate-500 bg-slate-800 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-100 shadow-sm transition-all hover:bg-slate-700 hover:border-slate-400 disabled:cursor-not-allowed disabled:border-slate-700/50 disabled:bg-slate-900/40 disabled:text-slate-600 disabled:shadow-none"
                   >
                     {isEndingTurn ? "Cerrando..." : "Terminar turno"}
                   </button>
@@ -2454,18 +2453,18 @@ export function TerminalView() {
                             </div>
                           </div>
 
-                          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                          <div className="mt-4 flex flex-col divide-y divide-slate-700/40">
                             {[
-                              { label: catNames.c1, element: activeSuggestion.subject, tone: "border-cyan-700/70 bg-cyan-950/30 text-cyan-100", icon: <User className="size-4 text-cyan-300" /> },
-                              { label: catNames.c2, element: activeSuggestion.object, tone: "border-emerald-700/70 bg-emerald-950/30 text-emerald-100", icon: <Box className="size-4 text-emerald-300" /> },
-                              { label: catNames.c3, element: activeSuggestion.space, tone: "border-rose-700/70 bg-rose-950/30 text-rose-100", icon: <MapPin className="size-4 text-rose-300" /> },
+                              { label: catNames.c1, element: activeSuggestion.subject, labelClass: "text-cyan-400", icon: <User className="size-3 text-cyan-400" /> },
+                              { label: catNames.c2, element: activeSuggestion.object, labelClass: "text-emerald-400", icon: <Box className="size-3 text-emerald-400" /> },
+                              { label: catNames.c3, element: activeSuggestion.space, labelClass: "text-rose-400", icon: <MapPin className="size-3 text-rose-400" /> },
                             ].map((item) => (
-                              <div key={item.label} className={`min-w-0 rounded-2xl border p-3 ${item.tone}`}>
-                                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em]">
+                              <div key={item.label} className="flex items-center justify-between gap-3 py-2">
+                                <div className={`flex shrink-0 items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.2em] ${item.labelClass}`}>
                                   {item.icon}
                                   {item.label}
                                 </div>
-                                <p className="mt-2 text-sm font-semibold">{item.element.name}</p>
+                                <p className="text-right text-sm font-semibold text-white">{item.element.name}</p>
                               </div>
                             ))}
                           </div>

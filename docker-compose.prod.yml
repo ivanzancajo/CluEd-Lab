@@ -33,9 +33,9 @@ services:
 
   cloudflared:
     image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate run
+    command: ${CLOUDFLARE_TUNNEL_CMD:-tunnel --no-autoupdate --url http://localhost:80}
     environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
     network_mode: host
     restart: unless-stopped
     profiles:

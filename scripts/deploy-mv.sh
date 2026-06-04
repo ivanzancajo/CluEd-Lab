@@ -186,8 +186,40 @@ write_compose_env() {
     printf 'FRONTEND_PUBLISHED_PORT=%s\n' "$FRONTEND_PUBLISHED_PORT"
     printf 'BACKEND_HOST_IP=%s\n'         "$BACKEND_HOST_IP"
     printf 'BACKEND_PUBLISHED_PORT=%s\n'  "$BACKEND_PUBLISHED_PORT"
-    [[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]] && printf 'CLOUDFLARE_TUNNEL_TOKEN=%s\n' "$CLOUDFLARE_TUNNEL_TOKEN"
+    if [[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]]; then
+      printf 'CLOUDFLARE_TUNNEL_TOKEN=%s\n' "$CLOUDFLARE_TUNNEL_TOKEN"
+      printf 'CLOUDFLARE_TUNNEL_CMD=%s\n'   'tunnel --no-autoupdate run'
+    fi
   } > "$COMPOSE_ENV_FILE"
+}
+
+# Espera hasta 45s a que el contenedor cloudflared emita su URL publica.
+wait_for_quick_tunnel_url() {
+  local i url
+  for ((i = 0; i < 15; i++)); do
+    sleep 3
+    url="$(docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" \
+      logs cloudflared 2>/dev/null \
+      | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1 || true)"
+    [[ -n "$url" ]] && printf '%s' "$url" && return 0
+  done
+  return 1
+}
+
+# Añade una URL a ALLOWED_ORIGINS y SOCKET_IO_CORS_ORIGIN en backend/.env
+# si todavia no esta incluida, y reinicia el contenedor backend.
+apply_tunnel_cors() {
+  local url="$1"
+  local current_origins current_sio
+  current_origins="$(grep '^ALLOWED_ORIGINS=' "$BACKEND_ENV_FILE" | cut -d= -f2-)"
+  current_sio="$(grep '^SOCKET_IO_CORS_ORIGIN=' "$BACKEND_ENV_FILE" | cut -d= -f2-)"
+  if ! printf '%s' "$current_origins" | grep -qF "$url"; then
+    "$SED_BIN" -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=${current_origins},${url}|" "$BACKEND_ENV_FILE"
+    "$SED_BIN" -i "s|^SOCKET_IO_CORS_ORIGIN=.*|SOCKET_IO_CORS_ORIGIN=${current_sio},${url}|" "$BACKEND_ENV_FILE"
+    log 'Reiniciando backend para aplicar CORS del tunnel...'
+    docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" restart backend
+    wait_for_http http://127.0.0.1:4000/health 'healthcheck del backend tras CORS update'
+  fi
 }
 
 dedupe_pg_hba_rule() {
@@ -384,12 +416,12 @@ popd >/dev/null
 log 'Configurando nginx del host'
 setup_host_nginx
 
-# ── Inyectar URL del Cloudflare Tunnel en CORS antes de escribir backend/.env ─
-# Si CLOUDFLARE_TUNNEL_TOKEN esta definido, el perfil 'tunnel' de Compose
-# arrancara el contenedor cloudflared. Para que el backend acepte peticiones
-# desde esa URL hay que incluirla en ALLOWED_ORIGINS antes de levantar.
+# Named Tunnel: la URL es conocida en tiempo de despliegue; se inyecta en CORS
+# antes de escribir backend/.env para que el backend la acepte desde el primer arranque.
+# Quick Tunnel: la URL la asigna Cloudflare al arrancar el contenedor; se extrae
+# de los logs despues de levantar los servicios y se aplica con restart del backend.
 if [[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" && -n "${CLOUDFLARE_TUNNEL_URL:-}" ]]; then
-  log "Añadiendo Cloudflare Tunnel ($CLOUDFLARE_TUNNEL_URL) a ALLOWED_ORIGINS"
+  log "Añadiendo Named Tunnel ($CLOUDFLARE_TUNNEL_URL) a ALLOWED_ORIGINS"
   ALLOWED_ORIGINS="$ALLOWED_ORIGINS,$CLOUDFLARE_TUNNEL_URL"
   SOCKET_IO_CORS_ORIGIN="$SOCKET_IO_CORS_ORIGIN,$CLOUDFLARE_TUNNEL_URL"
 fi
@@ -398,7 +430,9 @@ write_backend_env
 
 log 'Levantando servicios productivos'
 COMPOSE_UP_ARGS=(--env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" up -d --remove-orphans)
-[[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]] && COMPOSE_UP_ARGS+=(--profile tunnel)
+if [[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]] || [[ "${CLOUDFLARE_QUICK_TUNNEL:-}" == 'true' ]]; then
+  COMPOSE_UP_ARGS+=(--profile tunnel)
+fi
 docker compose "${COMPOSE_UP_ARGS[@]}"
 docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_SPEC_FILE" ps
 
@@ -415,6 +449,23 @@ LOGIN_STATUS="$(curl --silent --show-error --output /dev/null --write-out '%{htt
 
 wait_for_http 'http://127.0.0.1:4000/socket.io/?EIO=4&transport=polling' 'handshake de Socket.IO'
 
+# Quick Tunnel: extraer URL de logs del contenedor y aplicar CORS
+if [[ "${CLOUDFLARE_QUICK_TUNNEL:-}" == 'true' ]]; then
+  log 'Esperando URL del Cloudflare Quick Tunnel (max 45s)...'
+  if QUICK_TUNNEL_URL="$(wait_for_quick_tunnel_url)"; then
+    log "Quick Tunnel activo: $QUICK_TUNNEL_URL"
+    apply_tunnel_cors "$QUICK_TUNNEL_URL"
+  else
+    log 'ADVERTENCIA: No se obtuvo URL del Quick Tunnel en 45s.'
+    log "Consulta la URL con: docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml logs cloudflared"
+    log 'Una vez obtenida, añadela a ALLOWED_ORIGINS en .deploy/mv.backend.env y vuelve a desplegar.'
+  fi
+fi
+
 log 'Despliegue completado correctamente'
 log 'Acceso HTTP (fuera de Eduroam): http://virtual.lab.inf.uva.es:20382'
-[[ -n "${CLOUDFLARE_TUNNEL_URL:-}" ]] && log "Acceso Eduroam (Cloudflare Tunnel): $CLOUDFLARE_TUNNEL_URL"
+if [[ -n "${QUICK_TUNNEL_URL:-}" ]]; then
+  log "Acceso Eduroam (Quick Tunnel): $QUICK_TUNNEL_URL"
+elif [[ -n "${CLOUDFLARE_TUNNEL_URL:-}" ]]; then
+  log "Acceso Eduroam (Named Tunnel): $CLOUDFLARE_TUNNEL_URL"
+fi

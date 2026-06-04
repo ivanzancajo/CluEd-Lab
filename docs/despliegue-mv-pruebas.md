@@ -10,15 +10,15 @@ Se ha validado sobre la rama `develop` del repositorio. Si tu copia local tiene 
 
 ## Arquitectura esperada
 
-- El punto de entrada publico es `https://virtual.lab.inf.uva.es:20382` (o `:20383`).
-- Una peticion HTTP a `http://...20382` recibe un `301` automatico a HTTPS; ya no devuelve 400.
-- El nginx del host (Ubuntu, fuera de Docker) termina TLS, hace la redireccion y proxea `/api`, `/socket.io` y `/` a los contenedores.
-- El contenedor `frontend` sirve unicamente ficheros estaticos (sin proxy propio) en `127.0.0.1:8080`.
+- El punto de entrada publico es `https://virtual.lab.inf.uva.es` (puerto 443 estandar, accesible desde Eduroam).
+- Una peticion HTTP a `http://virtual.lab.inf.uva.es` recibe un `301` automatico a HTTPS.
+- El nginx del host (Ubuntu, fuera de Docker) termina TLS en el puerto 443 y proxea `/api`, `/socket.io` y `/` a los contenedores internos.
+- El contenedor `frontend` sirve unicamente ficheros estaticos en `127.0.0.1:8080`.
 - El contenedor `backend` escucha en `127.0.0.1:4000`.
 - El backend conecta con PostgreSQL del host Linux mediante `host.docker.internal:5432`.
-- El certificado TLS es autofirmado (generado automaticamente por el script). El navegador mostrara una advertencia la primera vez; acepta la excepcion o usa el tunel Cloudflare para evitar la advertencia.
+- El certificado TLS lo gestiona certbot (Let's Encrypt) si se define `CERTBOT_EMAIL`; en caso contrario se usa un certificado autofirmado y el navegador mostrara una advertencia.
 
-Consecuencia importante: el origen permitido del backend debe ser la URL publica real del frontend con `https://`, no `http://` ni `localhost`.
+Consecuencia importante: los origenes CORS deben usar `https://virtual.lab.inf.uva.es` (sin numero de puerto).
 
 ## Alcance y fuera de alcance
 
@@ -33,7 +33,7 @@ Esta guia si cubre:
 Esta guia no cubre:
 
 - Aprovisionamiento de la MV.
-- Certificados firmados por una CA publica (Let's Encrypt no es accesible desde la red del laboratorio; el script genera un certificado autofirmado).
+- Configuracion inicial del cortafuegos para abrir los puertos 80 y 443.
 - Reglas de firewall externas.
 - Gestion de secretos del sistema operativo.
 
@@ -41,9 +41,8 @@ Esta guia no cubre:
 
 - Docker Engine y plugin de Docker Compose.
 - Acceso shell a la MV.
-- nginx instalado en el host (`apt install nginx`); el script instala `libnginx-mod-stream` automaticamente si falta.
-- Puerto `80` libre para nginx del host (el frontend Docker ocupa el `8080` local).
-- Regla de publicacion del laboratorio `20382 -> 80` operativa desde el cliente que vaya a abrir la aplicacion.
+- Puertos `80` y `443` accesibles desde el exterior (el laboratorio los expone directamente).
+- nginx instalado en el host (`apt install nginx`); el script instala certbot automaticamente si falta.
 - PostgreSQL 14 o superior ejecutandose en el host Linux de la MV.
 - Node.js 22 en la MV si vas a ejecutar comandos de Prisma directamente alli para alinear una base de datos existente.
 
@@ -148,7 +147,7 @@ Notas:
 
 ## Ejemplo completo de backend/.env
 
-Usa siempre `https://` en los origenes CORS, ya que nginx termina TLS antes de que llegue al backend:
+Usa `https://` sin numero de puerto (el puerto 443 es el estandar HTTPS):
 
 ```dotenv
 PORT=4000
@@ -156,19 +155,20 @@ ADMIN_USER=admin
 ADMIN_PASS_HASH=$2b$10$REEMPLAZA_ESTE_HASH_BCRYPT
 JWT_SECRET=REEMPLAZA_ESTE_SECRETO
 DATABASE_URL=postgresql://cluedo_admin:TU_PASSWORD@host.docker.internal:5432/cluedo_db?schema=public
-ALLOWED_ORIGINS=https://virtual.lab.inf.uva.es:20382
-SOCKET_IO_CORS_ORIGIN=https://virtual.lab.inf.uva.es:20382
+ALLOWED_ORIGINS=https://virtual.lab.inf.uva.es
+SOCKET_IO_CORS_ORIGIN=https://virtual.lab.inf.uva.es
 FRONTEND_HOST_IP=127.0.0.1
 FRONTEND_PUBLISHED_PORT=8080
 BACKEND_HOST_IP=127.0.0.1
 BACKEND_PUBLISHED_PORT=4000
+# CERTBOT_EMAIL=tu@email.com
 ```
 
 Si vas a exponer temporalmente la aplicacion con un tunel HTTPS saliente, incluye tambien ese origen en ambas variables, separado por comas. Ejemplo:
 
 ```dotenv
-ALLOWED_ORIGINS=https://virtual.lab.inf.uva.es:20382,https://tu-subdominio.trycloudflare.com
-SOCKET_IO_CORS_ORIGIN=https://virtual.lab.inf.uva.es:20382,https://tu-subdominio.trycloudflare.com
+ALLOWED_ORIGINS=https://virtual.lab.inf.uva.es,https://tu-subdominio.trycloudflare.com
+SOCKET_IO_CORS_ORIGIN=https://virtual.lab.inf.uva.es,https://tu-subdominio.trycloudflare.com
 ```
 
 ## Alineacion previa de Prisma en una base existente
@@ -396,18 +396,18 @@ Debes recibir un JSON con el estado del servidor.
 ### Redireccion HTTP → HTTPS
 
 ```bash
-curl -I http://virtual.lab.inf.uva.es:20382/
+curl -I http://virtual.lab.inf.uva.es/
 ```
 
-Debes recibir un `301 Moved Permanently` con `Location: https://virtual.lab.inf.uva.es:20382/`. Si recibes `400 Bad Request` con "plain HTTP request was sent to HTTPS port", el modulo stream no esta activo; revisa que `libnginx-mod-stream` este instalado y que nginx haya recargado la configuracion.
+Debes recibir `301 Moved Permanently` con `Location: https://virtual.lab.inf.uva.es/`.
 
 ### Proxy REST desde la URL publica del frontend
 
 ```bash
-# -k ignora la advertencia del certificado autofirmado
-curl -k -H "Content-Type: application/json" \
+# Con certificado Let's Encrypt no se necesita -k; con autofirmado añadelo
+curl -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"incorrecta"}' \
-  https://virtual.lab.inf.uva.es:20382/api/auth/login
+  https://virtual.lab.inf.uva.es/api/auth/login
 ```
 
 Debes recibir `401`, lo cual confirma que nginx esta reenviando `/api` al backend.
@@ -415,19 +415,19 @@ Debes recibir `401`, lo cual confirma que nginx esta reenviando `/api` al backen
 ### Proxy Socket.IO a traves de nginx
 
 ```bash
-curl -ik "https://virtual.lab.inf.uva.es:20382/socket.io/?EIO=4&transport=polling"
+curl -i "https://virtual.lab.inf.uva.es/socket.io/?EIO=4&transport=polling"
 ```
 
 Debes ver una respuesta `200` con el payload inicial del handshake de Socket.IO.
 
 ### Verificacion visual desde un navegador externo
 
-Una vez validados `GET /health`, `POST /api/auth/login`, `GET /api/config/skins` y `socket.io`, comprueba la UI desde un navegador real. La primera vez el navegador mostrara "La conexion no es privada" porque el certificado es autofirmado; acepta la excepcion de seguridad para continuar.
+Una vez validados `GET /health`, `POST /api/auth/login`, `GET /api/config/skins` y `socket.io`, abre un navegador en `https://virtual.lab.inf.uva.es`. Con certificado Let's Encrypt la conexion es segura sin advertencias; con autofirmado aparecera "La conexion no es privada" la primera vez.
 
 Checklist minimo:
 
-- `http://virtual.lab.inf.uva.es:20382` redirige automaticamente a `https://`.
-- La portada carga en `https://virtual.lab.inf.uva.es:20382`.
+- `http://virtual.lab.inf.uva.es` redirige automaticamente a `https://`.
+- La portada carga en `https://virtual.lab.inf.uva.es`.
 - El login de administrador funciona.
 - En `Configurar CluedoSkin` aparecen skins remotas.
 - En `Crear sesion` aparecen skins remotas.

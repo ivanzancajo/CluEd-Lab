@@ -292,33 +292,38 @@ KNOWN_RECOVERY_MIGRATION_FILE="$BACKEND_DIR/prisma/migrations/$KNOWN_RECOVERY_MI
 [[ -n "$DB_NAME" ]] || fail 'No se pudo derivar la base de datos desde DATABASE_URL'
 
 setup_host_nginx() {
+  local cert_dir="/etc/letsencrypt/live/virtual.lab.inf.uva.es"
+  local cert_path="$cert_dir/fullchain.pem"
+  local acme_webroot='/var/www/certbot'
+
+  # ── Instalar nginx y certbot ────────────────────────────────────────────────
   if ! command -v nginx >/dev/null 2>&1; then
     log 'Instalando nginx...'
     run_sudo apt-get update -qq
-    run_sudo apt-get install -y nginx libnginx-mod-stream
-  elif ! dpkg -l libnginx-mod-stream 2>/dev/null | grep -q '^ii'; then
-    log 'Instalando módulo stream de nginx...'
-    run_sudo apt-get install -y libnginx-mod-stream
+    run_sudo apt-get install -y nginx
   fi
 
-  local cert_dir="/etc/letsencrypt/live/virtual.lab.inf.uva.es"
-  local cert_path="$cert_dir/fullchain.pem"
+  if ! command -v certbot >/dev/null 2>&1; then
+    log 'Instalando certbot...'
+    run_sudo apt-get install -y certbot
+  fi
+
+  run_sudo mkdir -p "$acme_webroot"
+
+  # ── Certificado: autofirmado como punto de partida ─────────────────────────
+  # Si no existe ningún cert todavía, se genera uno autofirmado para que nginx
+  # pueda arrancar con el bloque SSL antes de que certbot valide con Let's Encrypt.
   if [[ ! -f "$cert_path" ]]; then
-    # El proxy de la UVa bloquea los retos HTTP-01 y TLS-ALPN-01 de Let's Encrypt.
-    # Se genera un certificado autofirmado en las mismas rutas que usaría certbot
-    # para no tener que modificar nginx.conf. El navegador muestra un aviso
-    # solo la primera vez; sustitúyelo por un cert real si el admin añade el
-    # registro DNS-01 TXT en el futuro.
-    log "Generando certificado autofirmado (Let's Encrypt no accesible desde esta red)..."
+    log 'Generando certificado autofirmado como marcador de posición...'
     run_sudo mkdir -p "$cert_dir"
     run_sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
       -keyout "$cert_dir/privkey.pem" \
       -out    "$cert_path" \
-      -subj   "/CN=virtual.lab.inf.uva.es" \
-      -addext "subjectAltName=DNS:virtual.lab.inf.uva.es"
-    log 'Certificado autofirmado generado en '"$cert_dir"
+      -subj   '/CN=virtual.lab.inf.uva.es' \
+      -addext 'subjectAltName=DNS:virtual.lab.inf.uva.es'
   fi
 
+  # ── Instalar config nginx y arrancar/recargar ──────────────────────────────
   run_sudo cp "$ROOT_DIR/deploy/nginx/nginx.conf" /etc/nginx/nginx.conf
   run_sudo nginx -t
   run_sudo "$SYSTEMCTL_BIN" enable nginx
@@ -326,6 +331,41 @@ setup_host_nginx() {
     run_sudo "$SYSTEMCTL_BIN" reload nginx
   else
     run_sudo "$SYSTEMCTL_BIN" start nginx
+  fi
+
+  # ── Obtener/renovar certificado Let's Encrypt via HTTP-01 webroot ──────────
+  # nginx ya está escuchando en el puerto 80 y sirve /.well-known/acme-challenge/
+  # desde $acme_webroot, por lo que el desafío HTTP-01 de Let's Encrypt puede
+  # completarse ahora. Si CERTBOT_EMAIL no está definido se omite este paso.
+  local certbot_email="${CERTBOT_EMAIL:-}"
+  if [[ -n "$certbot_email" ]]; then
+    local needs_cert=0
+    if run_sudo openssl x509 -checkend 2592000 -noout -in "$cert_path" 2>/dev/null; then
+      # Cert válido más de 30 días; comprobar si es autofirmado (no tiene CA chain)
+      local issuer subject
+      issuer="$(run_sudo openssl x509 -noout -issuer -in "$cert_path" 2>/dev/null)"
+      subject="$(run_sudo openssl x509 -noout -subject -in "$cert_path" 2>/dev/null)"
+      [[ "$issuer" == "$subject" ]] && needs_cert=1 || log "Certificado Let's Encrypt vigente — omitiendo renovación"
+    else
+      needs_cert=1
+      log 'Certificado próximo a expirar — renovando...'
+    fi
+
+    if [[ "$needs_cert" -eq 1 ]]; then
+      log "Solicitando certificado Let's Encrypt para virtual.lab.inf.uva.es..."
+      if run_sudo certbot certonly --webroot \
+          -w "$acme_webroot" \
+          -d virtual.lab.inf.uva.es \
+          --non-interactive --agree-tos \
+          --email "$certbot_email" 2>&1 | while IFS= read -r line; do log "[certbot] $line"; done; then
+        log "Certificado Let's Encrypt instalado correctamente"
+        run_sudo "$SYSTEMCTL_BIN" reload nginx
+      else
+        log 'ADVERTENCIA: certbot no pudo obtener certificado. El sitio seguirá con certificado autofirmado.'
+      fi
+    fi
+  else
+    log 'CERTBOT_EMAIL no definido — se usará el certificado autofirmado. Añade CERTBOT_EMAIL=tu@email.com a .deploy/mv.backend.env para obtener un certificado de confianza.'
   fi
 }
 

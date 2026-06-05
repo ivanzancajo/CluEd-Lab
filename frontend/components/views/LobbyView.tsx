@@ -10,7 +10,6 @@ import {
   Play,
   RadioTower,
   RefreshCw,
-  ShieldCheck,
   Users,
   Zap,
 } from "lucide-react";
@@ -288,7 +287,7 @@ export function LobbyView() {
           <RadioTower className="size-6 text-amber-400" />
           <div className="flex-1">
             <h1 className="text-sm font-bold tracking-widest text-amber-300">SALA DE ESPERA</h1>
-            <p className="text-[10px] text-slate-500">HOST CONTROL ROOM</p>
+            <p className="text-[10px] text-slate-500"></p>
           </div>
           {connectionStatus === "connecting" ? <LoaderCircle className="size-4 animate-spin text-cyan-300" /> : null}
         </div>
@@ -393,9 +392,6 @@ export function LobbyView() {
           <div className="w-full max-w-4xl rounded-[32px] border border-amber-700/30 bg-slate-950/70 p-10 shadow-[0_0_60px_-20px_rgba(245,158,11,0.25)] backdrop-blur-md">
             <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-2xl">
-                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-800/60 bg-amber-950/20 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.32em] text-amber-200/90">
-                  <ShieldCheck className="size-4" /> Lobby habilitado
-                </div>
                 <h2 className="text-4xl font-black uppercase tracking-tight text-white">Esperando a los equipos</h2>
                 <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300">
                   Comparte el código con los jugadores y lanza la partida cuando estén listos.

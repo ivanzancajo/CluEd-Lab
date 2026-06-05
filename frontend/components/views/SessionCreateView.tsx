@@ -321,7 +321,7 @@ export function SessionCreateView() {
 
             <div className="space-y-3">
               <h1 className="text-4xl font-black tracking-tighter text-cyan-300 uppercase sm:text-5xl">
-                Habilitar Partida
+                Crear Sesión de Juego
               </h1>
               <p className="mx-auto max-w-xl text-sm leading-7 text-slate-300 md:text-base">
                 El código de sesión aparecerá en el lobby una vez habilitada la partida.
@@ -384,7 +384,7 @@ export function SessionCreateView() {
             ) : null}
 
             <div className="rounded-2xl border border-emerald-900/40 bg-emerald-950/20 p-4 text-sm leading-6 text-emerald-100">
-              Al habilitar la partida entrarás directamente en la sala de espera para ver los equipos conectados y arrancar el tablero cuando quieras.
+              Al crear la sesión entrarás directamente en la sala de espera, donde podrás ver los equipos conectados y lanzar la partida cuando todos estén listos.
             </div>
 
             {selectedConfig && !selectedConfigValidation.isValid ? (
@@ -413,7 +413,7 @@ export function SessionCreateView() {
             >
               <span className="flex items-center justify-center gap-3">
                 <MonitorPlay className="size-6" />
-                {isCreatingSession ? "Habilitando partida..." : "Habilitar Partida"}
+                {isCreatingSession ? "Creando sesión..." : "Crear Sesión de Juego"}
               </span>
             </button>
           </div>

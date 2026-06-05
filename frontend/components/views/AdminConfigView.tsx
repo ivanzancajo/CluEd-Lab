@@ -261,9 +261,6 @@ const EditableItemList = memo(function EditableItemList({
         <div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-cyan-300">
           {type} configurados: {items.length}/{minItems === maxItems ? maxItems : `${minItems}-${maxItems}`}
         </div>
-        {showMotif ? (
-          <p>Los motivos se muestran en la tabla de razonamiento en lugar del nombre del espacio.</p>
-        ) : null}
       </div>
 
       {items.map((item, index) => (

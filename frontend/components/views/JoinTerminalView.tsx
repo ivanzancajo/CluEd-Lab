@@ -114,7 +114,7 @@ export function JoinTerminalView() {
     if (code.length === 0) {
       return {
         tone: "text-slate-500",
-        message: "Introduce las 6 posiciones del codigo para validar el acceso.",
+        message: "Introduce el codigo de 6 digitos para poder acceder a la partida.",
       };
     }
 

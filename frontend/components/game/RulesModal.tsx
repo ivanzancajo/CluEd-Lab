@@ -1,7 +1,7 @@
 const playerRules = [
   {
     title: "Movimiento",
-    body: "Para moverte por los pasillos necesitas usar exactamente la tirada total de dados. Para entrar en una sala basta con que la puerta esté a una distancia menor o igual a tu tirada total: no hace falta agotar los pasos exactos.",
+    body: "Para moverte por los pasillos necesitas usar exactamente la tirada total de dados. Las puertas cuentan como una casilla: para entrar en una sala pulsa sobre su puerta, y al salir cruzarla también consume un paso. Basta con que la puerta sea alcanzable con tu tirada para poder acceder; no es necesario agotar los pasos exactos al entrar.",
   },
   {
     title: "Pasadizos",

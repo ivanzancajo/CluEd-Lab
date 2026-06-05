@@ -173,16 +173,16 @@ export function Landing() {
                   <Lock className="size-8 text-red-400" />
                 </div>
                 <h2 className="text-2xl font-bold text-white uppercase tracking-wider">Acceso Restringido</h2>
-                <p className="text-slate-400 text-sm mt-1">Identificación de Game Master requerida</p>
+                <p className="text-slate-400 text-sm mt-1">Identificación requerida</p>
               </div>
 
               <form onSubmit={handleLogin} className="flex flex-col gap-4">
                 <div>
                   <input
                     data-cy="landing-login-username-input"
-                    aria-label="Identificador de Game Master"
+                    aria-label="Usuario"
                     type="text"
-                    placeholder="Identificador"
+                    placeholder="Usuario"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 transition-colors"
@@ -192,9 +192,9 @@ export function Landing() {
                 <div>
                   <input
                     data-cy="landing-login-password-input"
-                    aria-label="Clave de seguridad"
+                    aria-label="Contraseña"
                     type="password"
-                    placeholder="Clave de seguridad"
+                    placeholder="Contraseña"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 transition-colors"

@@ -6,7 +6,7 @@ import { m, AnimatePresence } from "motion/react";
 import api from "../../src/lib/api";// Importamos nuestra instancia de Axios configurada
 import { hasStoredAdminSession, storeAdminToken } from "../../src/lib/auth";
 
-const DEFAULT_GAME_TITLE = "ClueLab Creator";
+const DEFAULT_GAME_TITLE = "CluEd Lab";
 
 export function Landing() {
   const gameTitle = DEFAULT_GAME_TITLE;

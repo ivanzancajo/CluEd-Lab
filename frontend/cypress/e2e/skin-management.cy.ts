@@ -106,7 +106,7 @@ function buildCreatedSkin(name: string) {
   return {
     id: "11111111-1111-4111-8111-111111111111",
     name,
-    gameTitle: "ClueLab Creator",
+    gameTitle: "CluEd Lab",
     objective: "Evaluación de resolución de problemas lógicos en entornos técnicos.",
     duration: "60",
     centerImage: "",

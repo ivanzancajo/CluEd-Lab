@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { isAxiosError } from "axios";
 import { Link, useNavigate } from "react-router";
-import { Monitor, Terminal as TerminalIcon, Cpu, Fingerprint, Settings, Zap, Lock, X } from "lucide-react";
+import { Monitor, Terminal as TerminalIcon, Fingerprint, Settings, Zap, Lock, X } from "lucide-react";
 import { m, AnimatePresence } from "motion/react";
 import api from "../../src/lib/api";// Importamos nuestra instancia de Axios configurada
 import { hasStoredAdminSession, storeAdminToken } from "../../src/lib/auth";
@@ -138,10 +138,6 @@ export function Landing() {
             <p className="text-sm leading-6 text-slate-400 group-hover:text-slate-300">Conecta un terminal de equipo mediante código de sesión y accede al tablero de interacción.</p>
           </div>
         </Link>
-      </div>
-
-      <div className="relative z-10 mt-8 flex items-center justify-center gap-2 rounded-full border border-slate-800/80 bg-slate-950/60 px-4 py-2 text-center text-[11px] uppercase tracking-[0.28em] text-slate-500 backdrop-blur-sm">
-        <Cpu className="size-4" /> V2.4.1 Secure Kernel Activated
       </div>
 
       {/* Modal de Login */}

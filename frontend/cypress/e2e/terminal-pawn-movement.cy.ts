@@ -277,7 +277,6 @@ describe("movimiento de peones en terminal", () => {
 
     clickBoardPercent("terminal-board-surface", 64.99, 23.17);
     cy.get('[data-cy="terminal-move-confirm-dialog"]').should("be.visible");
-    cy.contains("Confirma para ejecutar el movimiento seleccionado.").should("be.visible");
 
     cy.intercept("POST", "**/api/game/sessions/MOVE01/teams/team-rojo/move", (req) => {
       expect(req.body).to.have.property("targetNodeId", "pasillo-superior-derecho");

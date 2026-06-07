@@ -23,6 +23,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { useExitGuard } from "../../src/hooks/useExitGuard";
+import { useBoardZoomPan, ZOOM_LIGHT_CONFIRM } from "../../src/hooks/useBoardZoomPan";
 import { DiceAnimation } from "../DiceAnimation";
 import {
   createLobbySocketClient,
@@ -353,6 +354,7 @@ export function TerminalView() {
   const hasEnvelopeAnimatedRef = useRef(false);
   const [showGameOverModal, setShowGameOverModal] = useState(false);
   const hasShownGameOverRef = useRef(false);
+  const boardContainerRef = useRef<HTMLDivElement>(null);
   
   const [categories, setCategories] = useState<{
     c1: ElementoItem[];
@@ -372,6 +374,7 @@ export function TerminalView() {
 
   const isGameActive = sessionStatus === "EN_CURSO" || sessionStatus === "PAUSADA";
   const { showConfirm: showExitConfirm, openConfirm: openExitConfirm, cancelExit } = useExitGuard(isGameActive);
+  const { zoom, resetZoom, innerStyle: boardInnerStyle, surfaceRef: setBoardSurfaceRef, reverseTransform } = useBoardZoomPan(boardContainerRef);
   const [selectedCard, setSelectedCard] = useState<TerminalCard | null>(null);
   const [cardFlipped, setCardFlipped] = useState(false);
 
@@ -610,14 +613,8 @@ export function TerminalView() {
     handleDestinationNodePress(selectedDestination.id);
   };
 
-  const handleBoardSurfaceClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    const boardBounds = event.currentTarget.getBoundingClientRect();
-    if (boardBounds.width === 0 || boardBounds.height === 0) {
-      return;
-    }
-
-    const positionX = ((event.clientX - boardBounds.left) / boardBounds.width) * 100;
-    const positionY = ((event.clientY - boardBounds.top) / boardBounds.height) * 100;
+  const handleBoardSurfaceClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const { positionX, positionY } = reverseTransform(event.clientX, event.clientY);
     const matchedNode = findNearestBoardMovementNode(positionX, positionY);
     const matchedDestinationNode = destinationNodes.length > 0
       ? findNearestBoardMovementNode(
@@ -1749,7 +1746,7 @@ export function TerminalView() {
               className="absolute inset-0 pb-20 bg-[#380b0b] flex flex-col items-center justify-start overflow-y-auto"
             >
               {/* Tablero sobre base cuadrada fija para mantener coordenadas y áreas clicables consistentes */}
-              <div className="relative size-[clamp(18rem,88vw,26rem)] bg-black/50 rounded-b-xl border-b-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex-shrink-0 overflow-hidden">
+              <div ref={boardContainerRef} className="relative size-[clamp(18rem,88vw,26rem)] bg-black/50 rounded-b-xl border-b-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex-shrink-0 overflow-hidden">
                  {import.meta.env.DEV && (
                    <div className="absolute right-3 top-3 z-40 flex flex-col items-end gap-1.5">
                      <div className="flex gap-1">
@@ -1807,98 +1804,113 @@ export function TerminalView() {
                      )}
                    </div>
                  )}
-                 <ThemedBoard
-                   centerImage={centerImage}
-                   spaces={boardSpaces}
-                   showSpaceLabels
-                   spaceNameScale={0.88}
-                   spaceMotifScale={0.72}
-                   pawns={boardPawns}
-                   showDebugOverlay={debugMode === 'map'}
-                   debugProbe={boardDebugProbe}
-                   debugHighlightedNodeIds={boardDebugHighlightedNodeIds}
-                   boardImageAlt="Mapa temático de la partida"
-                   dataCy="terminal-themed-board"
-                   onSpaceMotifClick={setActiveMotifSpace}
-                 >
-                   {sessionStatus === "EN_CURSO" ? (
-                     <button
-                       type="button"
-                       data-cy="terminal-board-surface"
-                       aria-label="Superficie del tablero"
-                       className="absolute inset-0 z-20 cursor-crosshair"
-                       onClick={handleBoardSurfaceClick}
-                     />
-                   ) : null}
-
-                   {/* Center Area for Dice (Only on My Turn, hidden in forced-dice debug mode) */}
-                   {isMyTurn && debugMode !== 'forced-dice' && (
-                     <div
-                       className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
-                       style={{
-                         left: toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionX),
-                         top: `calc(${toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionY)} - ${DICE_CENTER_VERTICAL_OFFSET_PERCENT}%)`,
-                         width: `${BOARD_CENTER_IMAGE_BOUNDS.widthPercent}%`,
-                         height: `${BOARD_CENTER_IMAGE_BOUNDS.heightPercent}%`,
-                       }}
-                     >
-                       <div className="scale-[0.28] sm:scale-[0.34] md:scale-[0.42] origin-center">
-                         <DiceAnimation
-                           key={diceResetSignal}
-                           dataCy="terminal-dice-roll"
-                           disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || isResolutionBlockingGameplay || sessionTurn?.dice !== null || sessionTurn?.hasMoved || isLoadingMoves || isMovingPawn}
-                           onRollRequest={handleDiceRoll}
-                         />
-                       </div>
-                     </div>
-                   )}
-
-                   {/* Card Modal Overlay */}
-                   <AnimatePresence>
-                     {selectedCard && (
-                       <m.div
-                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                         className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 backdrop-blur-sm"
-                         onClick={() => { setSelectedCard(null); setCardFlipped(false); }}
+                 {/* Zoom/pan wrapper — el tablero escala dentro de este div */}
+                 <div className="absolute inset-0" style={boardInnerStyle}>
+                   <ThemedBoard
+                     centerImage={centerImage}
+                     spaces={boardSpaces}
+                     showSpaceLabels
+                     spaceNameScale={0.88}
+                     spaceMotifScale={0.72}
+                     pawns={boardPawns}
+                     showDebugOverlay={debugMode === 'map'}
+                     debugProbe={boardDebugProbe}
+                     debugHighlightedNodeIds={boardDebugHighlightedNodeIds}
+                     boardImageAlt="Mapa temático de la partida"
+                     dataCy="terminal-themed-board"
+                     onSpaceMotifClick={setActiveMotifSpace}
+                   >
+                     {/* Center Area for Dice (Only on My Turn, hidden in forced-dice debug mode) */}
+                     {isMyTurn && debugMode !== 'forced-dice' && (
+                       <div
+                         className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
+                         style={{
+                           left: toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionX),
+                           top: `calc(${toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionY)} - ${DICE_CENTER_VERTICAL_OFFSET_PERCENT}%)`,
+                           width: `${BOARD_CENTER_IMAGE_BOUNDS.widthPercent}%`,
+                           height: `${BOARD_CENTER_IMAGE_BOUNDS.heightPercent}%`,
+                         }}
                        >
+                         <div className="scale-[0.28] sm:scale-[0.34] md:scale-[0.42] origin-center">
+                           <DiceAnimation
+                             key={diceResetSignal}
+                             dataCy="terminal-dice-roll"
+                             disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || isResolutionBlockingGameplay || sessionTurn?.dice !== null || sessionTurn?.hasMoved || isLoadingMoves || isMovingPawn}
+                             onRollRequest={handleDiceRoll}
+                           />
+                         </div>
+                       </div>
+                     )}
+
+                     {/* Card Modal Overlay */}
+                     <AnimatePresence>
+                       {selectedCard && (
                          <m.div
-                           initial={{ scale: 0.8, y: 20 }}
-                           animate={{ scale: 1, y: 0, rotateY: cardFlipped ? 180 : 0 }}
-                           exit={{ scale: 0.8, opacity: 0 }}
-                           transition={{ duration: 0.4, type: "spring" }}
-                           onClick={(e) => { e.stopPropagation(); setCardFlipped(!cardFlipped); }}
-                           className={`w-48 aspect-[2.5/3.5] rounded-xl border-4 ${selectedCard.color} shadow-[0_0_30px_rgba(0,0,0,0.8)] relative cursor-pointer [transform-style:preserve-3d]`}
+                           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                           className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 backdrop-blur-sm"
+                           onClick={() => { setSelectedCard(null); setCardFlipped(false); }}
                          >
-                           <div className={`absolute inset-0 [backface-visibility:hidden] flex flex-col items-center justify-start text-center ${selectedCard.bg} bg-opacity-90 overflow-hidden rounded-lg`}>
-                             <div className="w-full h-[60%] bg-black/40 border-b border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden">
-                               {selectedCard.image
-                                 ? <ImageWithFallback src={selectedCard.image} alt={selectedCard.name} className="w-full h-full object-cover opacity-90"
-                                     fallback={<div className="size-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
+                           <m.div
+                             initial={{ scale: 0.8, y: 20 }}
+                             animate={{ scale: 1, y: 0, rotateY: cardFlipped ? 180 : 0 }}
+                             exit={{ scale: 0.8, opacity: 0 }}
+                             transition={{ duration: 0.4, type: "spring" }}
+                             onClick={(e) => { e.stopPropagation(); setCardFlipped(!cardFlipped); }}
+                             className={`w-48 aspect-[2.5/3.5] rounded-xl border-4 ${selectedCard.color} shadow-[0_0_30px_rgba(0,0,0,0.8)] relative cursor-pointer [transform-style:preserve-3d]`}
+                           >
+                             <div className={`absolute inset-0 [backface-visibility:hidden] flex flex-col items-center justify-start text-center ${selectedCard.bg} bg-opacity-90 overflow-hidden rounded-lg`}>
+                               <div className="w-full h-[60%] bg-black/40 border-b border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden">
+                                 {selectedCard.image
+                                   ? <ImageWithFallback src={selectedCard.image} alt={selectedCard.name} className="w-full h-full object-cover opacity-90"
+                                       fallback={<div className="size-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
+                                         {selectedCard.kind === "SUJETO" && <User className="size-6 text-slate-300" />}
+                                         {selectedCard.kind === "OBJETO" && <Box className="size-6 text-slate-300" />}
+                                         {selectedCard.kind === "ESPACIO" && <MapPin className="size-6 text-slate-300" />}
+                                       </div>} />
+                                   : <div className="size-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
                                        {selectedCard.kind === "SUJETO" && <User className="size-6 text-slate-300" />}
                                        {selectedCard.kind === "OBJETO" && <Box className="size-6 text-slate-300" />}
                                        {selectedCard.kind === "ESPACIO" && <MapPin className="size-6 text-slate-300" />}
-                                     </div>} />
-                                 : <div className="size-12 bg-black/60 rounded-full flex items-center justify-center border border-slate-700">
-                                     {selectedCard.kind === "SUJETO" && <User className="size-6 text-slate-300" />}
-                                     {selectedCard.kind === "OBJETO" && <Box className="size-6 text-slate-300" />}
-                                     {selectedCard.kind === "ESPACIO" && <MapPin className="size-6 text-slate-300" />}
-                                   </div>}
+                                     </div>}
+                               </div>
+                               <div className="w-full flex-1 flex flex-col items-center justify-center p-2">
+                                 <h4 className="font-bold text-sm tracking-widest uppercase text-white drop-shadow-md leading-tight line-clamp-2 px-1">{selectedCard.name}</h4>
+                                 <span className="text-[9px] uppercase tracking-widest text-slate-400 mt-2 bg-black/50 px-2 py-1 rounded border border-slate-800">{selectedCard.type}</span>
+                               </div>
                              </div>
-                             <div className="w-full flex-1 flex flex-col items-center justify-center p-2">
-                               <h4 className="font-bold text-sm tracking-widest uppercase text-white drop-shadow-md leading-tight line-clamp-2 px-1">{selectedCard.name}</h4>
-                               <span className="text-[9px] uppercase tracking-widest text-slate-400 mt-2 bg-black/50 px-2 py-1 rounded border border-slate-800">{selectedCard.type}</span>
+                             <div className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] flex flex-col items-center justify-center p-4 text-center bg-slate-950 border border-slate-700 rounded-lg">
+                               <h4 className="font-bold text-xs tracking-widest uppercase text-slate-300 mb-4 border-b border-slate-800 pb-2 w-full">{selectedCard.name}</h4>
+                               <p className="text-xs text-slate-400 leading-relaxed font-mono">{selectedCard.desc}</p>
+                               <div className="mt-auto text-[8px] text-cyan-500 uppercase tracking-widest animate-pulse">Toca para voltear</div>
                              </div>
-                           </div>
-                           <div className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] flex flex-col items-center justify-center p-4 text-center bg-slate-950 border border-slate-700 rounded-lg">
-                             <h4 className="font-bold text-xs tracking-widest uppercase text-slate-300 mb-4 border-b border-slate-800 pb-2 w-full">{selectedCard.name}</h4>
-                             <p className="text-xs text-slate-400 leading-relaxed font-mono">{selectedCard.desc}</p>
-                             <div className="mt-auto text-[8px] text-cyan-500 uppercase tracking-widest animate-pulse">Toca para voltear</div>
-                           </div>
+                           </m.div>
                          </m.div>
-                       </m.div>
-                     )}
-                   </AnimatePresence>
-                 </ThemedBoard>
+                       )}
+                     </AnimatePresence>
+                   </ThemedBoard>
+                 </div>
+
+                 {/* Superficie de captura de gestos y clicks (fuera del zoom, coordenadas reales) */}
+                 <button
+                   ref={setBoardSurfaceRef}
+                   type="button"
+                   data-cy="terminal-board-surface"
+                   aria-label="Superficie del tablero"
+                   style={{ touchAction: 'none' }}
+                   className={`absolute inset-0 z-20 ${sessionStatus === "EN_CURSO" ? "cursor-crosshair" : "cursor-default"}`}
+                   onClick={handleBoardSurfaceClick}
+                 />
+
+                 {/* Botón reset zoom */}
+                 {zoom > 1.05 && (
+                   <button
+                     type="button"
+                     onClick={resetZoom}
+                     className="absolute top-2 left-2 z-50 flex items-center gap-1 rounded-md border border-slate-700/80 bg-slate-950/85 px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-slate-300 shadow-[0_0_10px_rgba(0,0,0,0.4)]"
+                   >
+                     <Crosshair className="size-3" /> 1:1
+                   </button>
+                 )}
               </div>
 
               {debugMode === 'map' && (
@@ -1969,7 +1981,11 @@ export function TerminalView() {
                       <p className="mt-3 text-[11px] text-slate-400">
                         No hay destinos válidos para esta tirada.
                       </p>
-                    ) : null}
+                    ) : (
+                      <p className="mt-3 text-[11px] text-slate-400">
+                        Usa pinch o doble toque para ampliar el mapa y selecciona tu destino.
+                      </p>
+                    )}
 
                     {canEmitSecretPassageEvent && secretPassageDestinationNode ? (
                       <div className="mt-3 rounded-lg border border-amber-800/70 bg-amber-950/20 p-3">
@@ -2002,34 +2018,74 @@ export function TerminalView() {
                 </div>
               ) : null}
 
-              <AlertDialog open={isMoveConfirmOpen} onOpenChange={handleMoveConfirmOpenChange}>
-                <AlertDialogContent data-cy="terminal-move-confirm-dialog" className="max-w-sm border-cyan-900/60 bg-slate-950 text-cyan-100">
-                  <AlertDialogHeader>
-                    <AlertDialogTitle className="text-sm font-black uppercase tracking-[0.18em] text-cyan-300">
-                      Confirmar movimiento
-                    </AlertDialogTitle>
-                    <AlertDialogDescription className="text-sm text-slate-300">
-                      Confirma para ejecutar el movimiento seleccionado.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel
-                      data-cy="terminal-move-cancel"
-                      className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 hover:text-white"
+              {zoom >= ZOOM_LIGHT_CONFIRM ? (
+                <AnimatePresence>
+                  {isMoveConfirmOpen && selectedDestinationNode && (
+                    <m.div
+                      initial={{ y: 80, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: 80, opacity: 0 }}
+                      transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+                      data-cy="terminal-move-confirm-dialog"
+                      className="sticky bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t border-cyan-900/60 bg-slate-950/97 px-4 pb-6 pt-4 shadow-[0_-12px_40px_rgba(0,0,0,0.7)] backdrop-blur-md"
                     >
-                      Cancelar
-                    </AlertDialogCancel>
-                    <AlertDialogAction
-                      data-cy="terminal-move-confirm"
-                      className="bg-emerald-600 text-slate-950 hover:bg-emerald-500"
-                      disabled={isMovingPawn || isResolutionBlockingGameplay || !selectedDestinationNode}
-                      onClick={() => void handleMovePawn(selectedDestinationNode?.id)}
-                    >
-                      Confirmar movimiento
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-widest text-slate-500">Confirmar movimiento</p>
+                          <p className="mt-0.5 text-sm font-bold text-cyan-100">{selectedDestinationNode.label}</p>
+                          <p className="text-[10px] text-slate-400">{selectedDestinationNode.kind === "room" ? "Sala" : "Casilla"}</p>
+                        </div>
+                        <button
+                          type="button"
+                          data-cy="terminal-move-cancel"
+                          onClick={() => dispatchMove({ type: 'closeConfirm' })}
+                          className="text-slate-500 hover:text-slate-300"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        data-cy="terminal-move-confirm"
+                        onClick={() => void handleMovePawn(selectedDestinationNode.id)}
+                        disabled={isMovingPawn || isResolutionBlockingGameplay}
+                        className="mt-4 w-full rounded-xl bg-emerald-600 py-3 text-sm font-black uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isMovingPawn ? "Moviendo..." : "Confirmar movimiento"}
+                      </button>
+                    </m.div>
+                  )}
+                </AnimatePresence>
+              ) : (
+                <AlertDialog open={isMoveConfirmOpen} onOpenChange={handleMoveConfirmOpenChange}>
+                  <AlertDialogContent data-cy="terminal-move-confirm-dialog" className="max-w-sm border-cyan-900/60 bg-slate-950 text-cyan-100">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="text-sm font-black uppercase tracking-[0.18em] text-cyan-300">
+                        Confirmar movimiento
+                      </AlertDialogTitle>
+                      <AlertDialogDescription className="text-sm text-slate-300">
+                        Confirma para ejecutar el movimiento seleccionado.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel
+                        data-cy="terminal-move-cancel"
+                        className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 hover:text-white"
+                      >
+                        Cancelar
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        data-cy="terminal-move-confirm"
+                        className="bg-emerald-600 text-slate-950 hover:bg-emerald-500"
+                        disabled={isMovingPawn || isResolutionBlockingGameplay || !selectedDestinationNode}
+                        onClick={() => void handleMovePawn(selectedDestinationNode?.id)}
+                      >
+                        Confirmar movimiento
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
               
               {/* Inventory Cards List */}
               <div className="w-full flex-1 p-4 flex flex-col gap-3 min-h-[160px]">
@@ -2673,7 +2729,7 @@ export function TerminalView() {
       </div>
 
       <AnimatePresence>
-        {isResolutionShowingSolution && activeResolution?.solution ? (
+        {isResolutionShowingSolution && activeResolution?.solution && sessionStatus !== "FINALIZADA" ? (
           <m.div
             key="terminal-solution-overlay"
             initial={{ opacity: 0 }}

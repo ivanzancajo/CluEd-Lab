@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { m, AnimatePresence } from "motion/react";
+import { useBoardZoomPan, ZOOM_LIGHT_CONFIRM } from "../../src/hooks/useBoardZoomPan";
 import {
   Map as MapIcon,
   Search,
@@ -300,6 +301,8 @@ export function TerminalView() {
   const navigate = useNavigate();
   const lobbySocketRef = React.useRef<LobbySocketClient | null>(null);
   const activeGameConfigRef = React.useRef<GameConfig | null>(readStoredBoardTheme() as GameConfig | null);
+  const boardContainerRef = useRef<HTMLDivElement>(null);
+  const { zoom, resetZoom, innerStyle, surfaceRef, reverseTransform } = useBoardZoomPan(boardContainerRef);
   const [activeTab, setActiveTab] = useState("map");
   const [centerImage, setCenterImage] = useState(() => localStorage.getItem("centerImage") ?? "");
   const [boardTheme, setBoardTheme] = useState<StoredBoardTheme | null>(() => readStoredBoardTheme());
@@ -1945,9 +1948,40 @@ export function TerminalView() {
                     <div className="flex items-center justify-between gap-3">
                       <h3 className="text-[10px] font-bold tracking-widest uppercase text-cyan-300">Movimiento del peón</h3>
                       <span className="text-[9px] uppercase tracking-[0.2em] text-slate-500">
-                        {currentMoveNode ? currentTurnRemainingLabel : ""}
+                        {resolvedCurrentMoveNode ? currentTurnRemainingLabel : ""}
                       </span>
                     </div>
+
+                    {/* Posición actual */}
+                    {resolvedCurrentMoveNode ? (
+                      <div className="mt-3 flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
+                        <MapPin className="size-3 flex-shrink-0 text-slate-400" />
+                        <div className="min-w-0">
+                          <p className="text-[9px] uppercase tracking-widest text-slate-500">Posición actual</p>
+                          <p className="truncate text-[11px] font-semibold text-slate-200">{resolvedCurrentMoveNode.label}</p>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Destino seleccionado — preview en tiempo real */}
+                    <AnimatePresence>
+                      {selectedDestinationNode ? (
+                        <m.div
+                          key="dest-preview"
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          transition={{ duration: 0.18 }}
+                          className="mt-2 flex items-center gap-2 rounded-lg border border-emerald-800/60 bg-emerald-950/20 px-3 py-2"
+                        >
+                          <Crosshair className="size-3 flex-shrink-0 text-emerald-400" />
+                          <div className="min-w-0">
+                            <p className="text-[9px] uppercase tracking-widest text-emerald-500">Destino seleccionado</p>
+                            <p className="truncate text-[11px] font-semibold text-emerald-200">{selectedDestinationNode.label}</p>
+                          </div>
+                        </m.div>
+                      ) : null}
+                    </AnimatePresence>
 
                     {moveError ? (
                       <p className="mt-3 text-[11px] text-red-200">
@@ -1977,7 +2011,11 @@ export function TerminalView() {
                       <p className="mt-3 text-[11px] text-cyan-200 uppercase tracking-[0.18em]">
                         Calculando destinos posibles...
                       </p>
-                    ) : destinationNodes.length === 0 ? (
+                    ) : destinationNodes.length > 0 ? (
+                      <p className="mt-3 text-[11px] text-slate-400">
+                        Toca el tablero o haz pinch para hacer zoom y seleccionar tu destino.
+                      </p>
+                    ) : (
                       <p className="mt-3 text-[11px] text-slate-400">
                         No hay destinos válidos para esta tirada.
                       </p>
@@ -1994,7 +2032,7 @@ export function TerminalView() {
                           data-cy="terminal-secret-passage-emit"
                           onClick={() => void handleEmitSecretPassage()}
                           disabled={isEmittingSecretPassage || isResolutionBlockingGameplay || lobbyConnectionStatus !== "connected"}
-                          className="rounded-md border border-amber-500/70 bg-amber-500 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="w-full min-h-[44px] rounded-md border border-amber-500/70 bg-amber-500 px-3 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {isEmittingSecretPassage ? "Usando..." : `Usar pasadizo → ${secretPassageDestinationNode.label}`}
                         </button>
@@ -2004,6 +2042,7 @@ export function TerminalView() {
                 </div>
               ) : null}
 
+              {/* Botón "Terminar turno" en sala (del upstream) */}
               {sessionStatus === "EN_CURSO" && isMyTurn && !isTeamEliminated && resolvedCurrentMoveNode?.kind === "room" ? (
                 <div className="w-full px-4 pt-2">
                   <button
@@ -2810,9 +2849,9 @@ export function TerminalView() {
             type="button"
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all ${
-              activeTab === tab.id 
-                ? "text-cyan-400 scale-110 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]" 
+            className={`flex flex-col items-center gap-1 p-2 min-h-[44px] min-w-[44px] rounded-lg transition-all ${
+              activeTab === tab.id
+                ? "text-cyan-400 scale-110 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]"
                 : "text-slate-600 hover:text-slate-400"
             }`}
           >

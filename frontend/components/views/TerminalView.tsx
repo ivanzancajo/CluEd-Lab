@@ -1,7 +1,6 @@
 import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { m, AnimatePresence } from "motion/react";
-import { useBoardZoomPan, ZOOM_LIGHT_CONFIRM } from "../../src/hooks/useBoardZoomPan";
 import {
   Map as MapIcon,
   Search,
@@ -301,8 +300,6 @@ export function TerminalView() {
   const navigate = useNavigate();
   const lobbySocketRef = React.useRef<LobbySocketClient | null>(null);
   const activeGameConfigRef = React.useRef<GameConfig | null>(readStoredBoardTheme() as GameConfig | null);
-  const boardContainerRef = useRef<HTMLDivElement>(null);
-  const { zoom, resetZoom, innerStyle, surfaceRef, reverseTransform } = useBoardZoomPan(boardContainerRef);
   const [activeTab, setActiveTab] = useState("map");
   const [centerImage, setCenterImage] = useState(() => localStorage.getItem("centerImage") ?? "");
   const [boardTheme, setBoardTheme] = useState<StoredBoardTheme | null>(() => readStoredBoardTheme());
@@ -2013,15 +2010,11 @@ export function TerminalView() {
                       </p>
                     ) : destinationNodes.length > 0 ? (
                       <p className="mt-3 text-[11px] text-slate-400">
-                        Toca el tablero o haz pinch para hacer zoom y seleccionar tu destino.
+                        Usa pinch o doble toque para ampliar el mapa y selecciona tu destino.
                       </p>
                     ) : (
                       <p className="mt-3 text-[11px] text-slate-400">
                         No hay destinos válidos para esta tirada.
-                      </p>
-                    ) : (
-                      <p className="mt-3 text-[11px] text-slate-400">
-                        Usa pinch o doble toque para ampliar el mapa y selecciona tu destino.
                       </p>
                     )}
 

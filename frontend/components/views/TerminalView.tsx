@@ -1820,28 +1820,6 @@ export function TerminalView() {
                      dataCy="terminal-themed-board"
                      onSpaceMotifClick={setActiveMotifSpace}
                    >
-                     {/* Center Area for Dice (Only on My Turn, hidden in forced-dice debug mode) */}
-                     {isMyTurn && debugMode !== 'forced-dice' && (
-                       <div
-                         className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
-                         style={{
-                           left: toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionX),
-                           top: `calc(${toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionY)} - ${DICE_CENTER_VERTICAL_OFFSET_PERCENT}%)`,
-                           width: `${BOARD_CENTER_IMAGE_BOUNDS.widthPercent}%`,
-                           height: `${BOARD_CENTER_IMAGE_BOUNDS.heightPercent}%`,
-                         }}
-                       >
-                         <div className="scale-[0.28] sm:scale-[0.34] md:scale-[0.42] origin-center">
-                           <DiceAnimation
-                             key={diceResetSignal}
-                             dataCy="terminal-dice-roll"
-                             disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || isResolutionBlockingGameplay || sessionTurn?.dice !== null || sessionTurn?.hasMoved || isLoadingMoves || isMovingPawn}
-                             onRollRequest={handleDiceRoll}
-                           />
-                         </div>
-                       </div>
-                     )}
-
                      {/* Card Modal Overlay */}
                      <AnimatePresence>
                        {selectedCard && (
@@ -1889,6 +1867,28 @@ export function TerminalView() {
                      </AnimatePresence>
                    </ThemedBoard>
                  </div>
+
+                 {/* Dado — fuera del div de zoom para que no quede bajo la superficie de gestos */}
+                 {isMyTurn && debugMode !== 'forced-dice' && (
+                   <div
+                     className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center pointer-events-auto"
+                     style={{
+                       left: toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionX),
+                       top: `calc(${toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionY)} - ${DICE_CENTER_VERTICAL_OFFSET_PERCENT}%)`,
+                       width: `${BOARD_CENTER_IMAGE_BOUNDS.widthPercent}%`,
+                       height: `${BOARD_CENTER_IMAGE_BOUNDS.heightPercent}%`,
+                     }}
+                   >
+                     <div className="scale-[0.28] sm:scale-[0.34] md:scale-[0.42] origin-center">
+                       <DiceAnimation
+                         key={diceResetSignal}
+                         dataCy="terminal-dice-roll"
+                         disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || isResolutionBlockingGameplay || sessionTurn?.dice !== null || sessionTurn?.hasMoved || isLoadingMoves || isMovingPawn}
+                         onRollRequest={handleDiceRoll}
+                       />
+                     </div>
+                   </div>
+                 )}
 
                  {/* Superficie de captura de gestos y clicks (fuera del zoom, coordenadas reales) */}
                  <button
@@ -1948,17 +1948,6 @@ export function TerminalView() {
                         {resolvedCurrentMoveNode ? currentTurnRemainingLabel : ""}
                       </span>
                     </div>
-
-                    {/* Posición actual */}
-                    {resolvedCurrentMoveNode ? (
-                      <div className="mt-3 flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
-                        <MapPin className="size-3 flex-shrink-0 text-slate-400" />
-                        <div className="min-w-0">
-                          <p className="text-[9px] uppercase tracking-widest text-slate-500">Posición actual</p>
-                          <p className="truncate text-[11px] font-semibold text-slate-200">{resolvedCurrentMoveNode.label}</p>
-                        </div>
-                      </div>
-                    ) : null}
 
                     {/* Destino seleccionado — preview en tiempo real */}
                     <AnimatePresence>

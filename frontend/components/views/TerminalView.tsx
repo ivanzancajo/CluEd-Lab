@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { m, AnimatePresence } from "motion/react";
+import { useBoardZoomPan, ZOOM_LIGHT_CONFIRM } from "../../src/hooks/useBoardZoomPan";
 import {
   Map as MapIcon,
   Search,
@@ -299,6 +300,8 @@ export function TerminalView() {
   const navigate = useNavigate();
   const lobbySocketRef = React.useRef<LobbySocketClient | null>(null);
   const activeGameConfigRef = React.useRef<GameConfig | null>(readStoredBoardTheme() as GameConfig | null);
+  const boardContainerRef = useRef<HTMLDivElement>(null);
+  const { zoom, resetZoom, innerStyle, surfaceRef, reverseTransform } = useBoardZoomPan(boardContainerRef);
   const [activeTab, setActiveTab] = useState("map");
   const [centerImage, setCenterImage] = useState(() => localStorage.getItem("centerImage") ?? "");
   const [boardTheme, setBoardTheme] = useState<StoredBoardTheme | null>(() => readStoredBoardTheme());
@@ -610,14 +613,17 @@ export function TerminalView() {
     handleDestinationNodePress(selectedDestination.id);
   };
 
-  const handleBoardSurfaceClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    const boardBounds = event.currentTarget.getBoundingClientRect();
+  const handleBoardSurfaceClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const container = boardContainerRef.current;
+    if (!container) return;
+    const boardBounds = container.getBoundingClientRect();
     if (boardBounds.width === 0 || boardBounds.height === 0) {
       return;
     }
 
-    const positionX = ((event.clientX - boardBounds.left) / boardBounds.width) * 100;
-    const positionY = ((event.clientY - boardBounds.top) / boardBounds.height) * 100;
+    const containerX = event.clientX - boardBounds.left;
+    const containerY = event.clientY - boardBounds.top;
+    const { positionX, positionY } = reverseTransform(containerX, containerY);
     const matchedNode = findNearestBoardMovementNode(positionX, positionY);
     const matchedDestinationNode = destinationNodes.length > 0
       ? findNearestBoardMovementNode(
@@ -1749,7 +1755,23 @@ export function TerminalView() {
               className="absolute inset-0 pb-20 bg-[#380b0b] flex flex-col items-center justify-start overflow-y-auto"
             >
               {/* Tablero sobre base cuadrada fija para mantener coordenadas y áreas clicables consistentes */}
-              <div className="relative size-[clamp(18rem,88vw,26rem)] bg-black/50 rounded-b-xl border-b-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex-shrink-0 overflow-hidden">
+              <div ref={boardContainerRef} className="relative size-[clamp(18rem,88vw,26rem)] bg-black/50 rounded-b-xl border-b-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex-shrink-0 overflow-hidden">
+
+                {/* Botón de reset de zoom — visible solo cuando hay zoom activo */}
+                {zoom > 1.05 ? (
+                  <button
+                    type="button"
+                    data-cy="terminal-board-zoom-reset"
+                    onClick={resetZoom}
+                    className="absolute top-2 left-2 z-50 flex items-center gap-1 rounded-md border border-slate-700/80 bg-slate-950/85 px-2 py-1 font-mono text-[10px] text-slate-300 shadow backdrop-blur-sm"
+                    aria-label="Restablecer zoom del tablero"
+                  >
+                    <Crosshair className="size-3" /> 1:1
+                  </button>
+                ) : null}
+
+                {/* Wrapper interior transformado — recibe el CSS transform del zoom/pan */}
+                <div data-cy="terminal-board-inner" className="absolute inset-0" style={innerStyle}>
                  {import.meta.env.DEV && (
                    <div className="absolute right-3 top-3 z-40 flex flex-col items-end gap-1.5">
                      <div className="flex gap-1">
@@ -1817,19 +1839,22 @@ export function TerminalView() {
                    showDebugOverlay={debugMode === 'map'}
                    debugProbe={boardDebugProbe}
                    debugHighlightedNodeIds={boardDebugHighlightedNodeIds}
+                   moveDestinationNodeIds={destinationNodes.map((n) => n.id)}
+                   selectedMoveNodeId={selectedDestinationNodeId || undefined}
                    boardImageAlt="Mapa temático de la partida"
                    dataCy="terminal-themed-board"
                    onSpaceMotifClick={setActiveMotifSpace}
                  >
-                   {sessionStatus === "EN_CURSO" ? (
-                     <button
-                       type="button"
-                       data-cy="terminal-board-surface"
-                       aria-label="Superficie del tablero"
-                       className="absolute inset-0 z-20 cursor-crosshair"
-                       onClick={handleBoardSurfaceClick}
-                     />
-                   ) : null}
+                   {/* Surface button: siempre en el DOM para que surfaceRef esté disponible para touch listeners */}
+                   <button
+                     ref={surfaceRef}
+                     type="button"
+                     data-cy="terminal-board-surface"
+                     aria-label="Superficie del tablero"
+                     className={`absolute inset-0 z-20 ${sessionStatus === "EN_CURSO" ? "cursor-crosshair" : "pointer-events-none"}`}
+                     style={{ touchAction: 'none' }}
+                     onClick={sessionStatus === "EN_CURSO" ? handleBoardSurfaceClick : undefined}
+                   />
 
                    {/* Center Area for Dice (Only on My Turn, hidden in forced-dice debug mode) */}
                    {isMyTurn && debugMode !== 'forced-dice' && (
@@ -1899,6 +1924,7 @@ export function TerminalView() {
                      )}
                    </AnimatePresence>
                  </ThemedBoard>
+                </div>{/* fin wrapper interior transformado */}
               </div>
 
               {debugMode === 'map' && (
@@ -1933,9 +1959,40 @@ export function TerminalView() {
                     <div className="flex items-center justify-between gap-3">
                       <h3 className="text-[10px] font-bold tracking-widest uppercase text-cyan-300">Movimiento del peón</h3>
                       <span className="text-[9px] uppercase tracking-[0.2em] text-slate-500">
-                        {currentMoveNode ? currentTurnRemainingLabel : ""}
+                        {resolvedCurrentMoveNode ? currentTurnRemainingLabel : ""}
                       </span>
                     </div>
+
+                    {/* Posición actual */}
+                    {resolvedCurrentMoveNode ? (
+                      <div className="mt-3 flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
+                        <MapPin className="size-3 flex-shrink-0 text-slate-400" />
+                        <div className="min-w-0">
+                          <p className="text-[9px] uppercase tracking-widest text-slate-500">Posición actual</p>
+                          <p className="truncate text-[11px] font-semibold text-slate-200">{resolvedCurrentMoveNode.label}</p>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Destino seleccionado — preview en tiempo real */}
+                    <AnimatePresence>
+                      {selectedDestinationNode ? (
+                        <m.div
+                          key="dest-preview"
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          transition={{ duration: 0.18 }}
+                          className="mt-2 flex items-center gap-2 rounded-lg border border-emerald-800/60 bg-emerald-950/20 px-3 py-2"
+                        >
+                          <Crosshair className="size-3 flex-shrink-0 text-emerald-400" />
+                          <div className="min-w-0">
+                            <p className="text-[9px] uppercase tracking-widest text-emerald-500">Destino seleccionado</p>
+                            <p className="truncate text-[11px] font-semibold text-emerald-200">{selectedDestinationNode.label}</p>
+                          </div>
+                        </m.div>
+                      ) : null}
+                    </AnimatePresence>
 
                     {moveError ? (
                       <p className="mt-3 text-[11px] text-red-200">
@@ -1965,11 +2022,15 @@ export function TerminalView() {
                       <p className="mt-3 text-[11px] text-cyan-200 uppercase tracking-[0.18em]">
                         Calculando destinos posibles...
                       </p>
-                    ) : destinationNodes.length === 0 ? (
+                    ) : destinationNodes.length > 0 ? (
+                      <p className="mt-3 text-[11px] text-slate-400">
+                        Toca el tablero o haz pinch para hacer zoom y seleccionar tu destino.
+                      </p>
+                    ) : (
                       <p className="mt-3 text-[11px] text-slate-400">
                         No hay destinos válidos para esta tirada.
                       </p>
-                    ) : null}
+                    )}
 
                     {canEmitSecretPassageEvent && secretPassageDestinationNode ? (
                       <div className="mt-3 rounded-lg border border-amber-800/70 bg-amber-950/20 p-3">
@@ -1978,7 +2039,7 @@ export function TerminalView() {
                           data-cy="terminal-secret-passage-emit"
                           onClick={() => void handleEmitSecretPassage()}
                           disabled={isEmittingSecretPassage || isResolutionBlockingGameplay || lobbyConnectionStatus !== "connected"}
-                          className="rounded-md border border-amber-500/70 bg-amber-500 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="w-full min-h-[44px] rounded-md border border-amber-500/70 bg-amber-500 px-3 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {isEmittingSecretPassage ? "Usando..." : `Usar pasadizo → ${secretPassageDestinationNode.label}`}
                         </button>
@@ -1988,6 +2049,7 @@ export function TerminalView() {
                 </div>
               ) : null}
 
+              {/* Botón "Terminar turno" en sala (del upstream) */}
               {sessionStatus === "EN_CURSO" && isMyTurn && !isTeamEliminated && resolvedCurrentMoveNode?.kind === "room" ? (
                 <div className="w-full px-4 pt-2">
                   <button
@@ -2002,34 +2064,88 @@ export function TerminalView() {
                 </div>
               ) : null}
 
-              <AlertDialog open={isMoveConfirmOpen} onOpenChange={handleMoveConfirmOpenChange}>
-                <AlertDialogContent data-cy="terminal-move-confirm-dialog" className="max-w-sm border-cyan-900/60 bg-slate-950 text-cyan-100">
-                  <AlertDialogHeader>
-                    <AlertDialogTitle className="text-sm font-black uppercase tracking-[0.18em] text-cyan-300">
-                      Confirmar movimiento
-                    </AlertDialogTitle>
-                    <AlertDialogDescription className="text-sm text-slate-300">
-                      Confirma para ejecutar el movimiento seleccionado.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel
-                      data-cy="terminal-move-cancel"
-                      className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 hover:text-white"
+              {/* Confirmación inteligente: AlertDialog sin zoom, bottom sheet con zoom */}
+              {zoom < ZOOM_LIGHT_CONFIRM ? (
+                <AlertDialog open={isMoveConfirmOpen} onOpenChange={handleMoveConfirmOpenChange}>
+                  <AlertDialogContent data-cy="terminal-move-confirm-dialog" className="max-w-sm border-cyan-900/60 bg-slate-950 text-cyan-100">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="text-sm font-black uppercase tracking-[0.18em] text-cyan-300">
+                        Confirmar movimiento
+                      </AlertDialogTitle>
+                      <AlertDialogDescription className="text-sm text-slate-300">
+                        {selectedDestinationNode ? (
+                          <>Mover a <strong className="text-cyan-200">{selectedDestinationNode.label}</strong>{' '}
+                          <span className="text-slate-400">({selectedDestinationNode.kind === 'room' ? 'sala' : 'casilla'})</span></>
+                        ) : (
+                          'Confirma para ejecutar el movimiento seleccionado.'
+                        )}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel
+                        data-cy="terminal-move-cancel"
+                        className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 hover:text-white"
+                      >
+                        Cancelar
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        data-cy="terminal-move-confirm"
+                        className="bg-emerald-600 text-slate-950 hover:bg-emerald-500"
+                        disabled={isMovingPawn || isResolutionBlockingGameplay || !selectedDestinationNode}
+                        onClick={() => void handleMovePawn(selectedDestinationNode?.id)}
+                      >
+                        {isMovingPawn ? 'Moviendo...' : 'Confirmar movimiento'}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              ) : (
+                /* Bottom sheet — no bloquea la vista del tablero ampliado */
+                <AnimatePresence>
+                  {isMoveConfirmOpen && selectedDestinationNode ? (
+                    <m.div
+                      data-cy="terminal-move-confirm-dialog"
+                      key="move-inline-sheet"
+                      initial={{ y: 80, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: 80, opacity: 0 }}
+                      transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+                      className="sticky bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t border-cyan-900/60 bg-slate-950/97 px-4 pb-6 pt-4 shadow-[0_-12px_40px_rgba(0,0,0,0.7)] backdrop-blur-md"
                     >
-                      Cancelar
-                    </AlertDialogCancel>
-                    <AlertDialogAction
-                      data-cy="terminal-move-confirm"
-                      className="bg-emerald-600 text-slate-950 hover:bg-emerald-500"
-                      disabled={isMovingPawn || isResolutionBlockingGameplay || !selectedDestinationNode}
-                      onClick={() => void handleMovePawn(selectedDestinationNode?.id)}
-                    >
-                      Confirmar movimiento
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-400">
+                            Confirmar movimiento
+                          </p>
+                          <p className="mt-1 truncate text-sm font-semibold text-white">
+                            {selectedDestinationNode.label}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-slate-400">
+                            {selectedDestinationNode.kind === 'room' ? 'Sala' : 'Casilla'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          data-cy="terminal-move-cancel"
+                          onClick={() => handleMoveConfirmOpenChange(false)}
+                          className="flex-shrink-0 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-[11px] text-slate-300 hover:bg-slate-800"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        data-cy="terminal-move-confirm"
+                        disabled={isMovingPawn || isResolutionBlockingGameplay}
+                        onClick={() => void handleMovePawn(selectedDestinationNode.id)}
+                        className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-black uppercase tracking-[0.18em] text-slate-950 shadow-[0_0_20px_rgba(52,211,153,0.3)] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isMovingPawn ? 'Moviendo...' : 'Confirmar movimiento'}
+                      </button>
+                    </m.div>
+                  ) : null}
+                </AnimatePresence>
+              )}
               
               {/* Inventory Cards List */}
               <div className="w-full flex-1 p-4 flex flex-col gap-3 min-h-[160px]">
@@ -2754,9 +2870,9 @@ export function TerminalView() {
             type="button"
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all ${
-              activeTab === tab.id 
-                ? "text-cyan-400 scale-110 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]" 
+            className={`flex flex-col items-center gap-1 p-2 min-h-[44px] min-w-[44px] rounded-lg transition-all ${
+              activeTab === tab.id
+                ? "text-cyan-400 scale-110 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]"
                 : "text-slate-600 hover:text-slate-400"
             }`}
           >

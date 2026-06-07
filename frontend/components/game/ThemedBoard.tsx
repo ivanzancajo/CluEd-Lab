@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Crosshair } from 'lucide-react';
-import { m } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import {
   BOARD_GRID_COLUMNS_PERCENT,
   BOARD_GRID_ROWS_PERCENT,
@@ -40,6 +40,8 @@ type ThemedBoardProps = {
   showDebugOverlay?: boolean;
   debugProbe?: BoardDebugProbe | null;
   debugHighlightedNodeIds?: string[];
+  moveDestinationNodeIds?: string[];
+  selectedMoveNodeId?: string;
   spaceNameScale?: number;
   spaceMotifScale?: number;
   onSpaceMotifClick?: (space: BoardSpaceLabel) => void;
@@ -62,6 +64,8 @@ export function ThemedBoard({
   showDebugOverlay = false,
   debugProbe,
   debugHighlightedNodeIds,
+  moveDestinationNodeIds,
+  selectedMoveNodeId,
   spaceNameScale = 1,
   spaceMotifScale: _spaceMotifScale = 1,
   onSpaceMotifClick,
@@ -188,11 +192,80 @@ export function ThemedBoard({
         );
       })}
 
+      {(moveDestinationNodeIds && moveDestinationNodeIds.length > 0) || selectedMoveNodeId ? (
+        <BoardMoveHighlightLayer
+          destinationNodeIds={moveDestinationNodeIds ?? []}
+          selectedNodeId={selectedMoveNodeId}
+        />
+      ) : null}
+
       {showDebugOverlay ? (
         <BoardDebugOverlay debugProbe={debugProbe} highlightedNodeIds={highlightedNodeIds} />
       ) : null}
 
       {children}
+    </div>
+  );
+}
+
+function BoardMoveHighlightLayer({
+  destinationNodeIds,
+  selectedNodeId,
+}: {
+  destinationNodeIds: string[];
+  selectedNodeId?: string;
+}) {
+  const destinationSet = new Set(destinationNodeIds);
+
+  return (
+    <div
+      data-cy="board-move-highlight-layer"
+      className="pointer-events-none absolute inset-0 z-[19] overflow-hidden"
+    >
+      <AnimatePresence>
+        {BOARD_MOVEMENT_NODE_LIST.map((node) => {
+          const isSelected = node.id === selectedNodeId;
+          const isDestination = destinationSet.has(node.id);
+          if (!isSelected && !isDestination) return null;
+
+          return (
+            <m.div
+              key={node.id}
+              data-cy={`board-move-node-${sanitizeDebugNodeId(node.id)}`}
+              className="absolute -translate-x-1/2 -translate-y-1/2"
+              style={{ left: toBoardPercent(node.positionX), top: toBoardPercent(node.positionY) }}
+              initial={{ scale: 0.4, opacity: 0 }}
+              animate={
+                isSelected
+                  ? { scale: [1, 1.3, 1], opacity: 1 }
+                  : { scale: [0.85, 1.05, 0.85], opacity: [0.55, 0.85, 0.55] }
+              }
+              exit={{ scale: 0.4, opacity: 0 }}
+              transition={
+                isSelected
+                  ? { duration: 0.85, repeat: Infinity, ease: 'easeInOut' }
+                  : { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }
+              }
+            >
+              {isSelected ? (
+                <div
+                  className={joinClasses(
+                    'rounded-full border-2 border-emerald-300 bg-emerald-400/30 shadow-[0_0_12px_rgba(52,211,153,0.85)]',
+                    node.kind === 'room' ? 'size-7' : 'size-4'
+                  )}
+                />
+              ) : (
+                <div
+                  className={joinClasses(
+                    'rounded-full border border-cyan-300/80 bg-cyan-400/20 shadow-[0_0_6px_rgba(34,211,238,0.5)]',
+                    node.kind === 'room' ? 'size-6' : 'size-3'
+                  )}
+                />
+              )}
+            </m.div>
+          );
+        })}
+      </AnimatePresence>
     </div>
   );
 }

@@ -212,16 +212,24 @@ describe('sessionMovement', () => {
     );
   });
 
-  it('la puerta de sala-inferior-izquierda está en col 3 row 19 y es alcanzable con tirada 1', () => {
+  it('la puerta de sala-inferior-izquierda está en col 4 row 19 y es alcanzable con tirada 1', () => {
     const tirada1 = getReachableMoveNodes('sala-inferior-izquierda', [], 1).map((node) => node.id);
     const tirada2 = getReachableMoveNodes('sala-inferior-izquierda', [], 2).map((node) => node.id);
+    const tirada4 = getReachableMoveNodes('sala-inferior-izquierda', [], 4).map((node) => node.id);
 
-    // La puerta está a 1 paso, no a 2.
-    expect(tirada1).toContain('square:grid:3:19');
-    expect(tirada2).not.toContain('square:grid:3:19');
+    // La puerta es el cuadrado del corredor en col 4 row 19 (el giro del pasillo), está a 1 paso.
+    const doorNodeId = 'square:pasillo-inferior-izquierdo::pasillo-izquierdo-inferior:5';
+    expect(tirada1).toContain(doorNodeId);
+    expect(tirada2).not.toContain(doorNodeId);
+    // La casilla en col 3 row 19 ya no es la puerta: no alcanzable con tirada 1, sí con tirada 2.
+    expect(tirada1).not.toContain('square:grid:3:19');
+    expect(tirada2).toContain('square:grid:3:19');
     // La casilla 3:20 está excluida del grafo.
     expect(tirada1).not.toContain('square:grid:3:20');
     expect(tirada2).not.toContain('square:grid:3:20');
+    // Con tirada 4, las casillas 1,18 y 2,17 no son alcanzables (quedan a 5 pasos).
+    expect(tirada4).not.toContain('square:pasillo-inferior-izquierdo::pasillo-izquierdo-inferior:1');
+    expect(tirada4).not.toContain('square:grid:2:17');
   });
 
   it('al salir de cualquier sala, la puerta consume un paso antes de alcanzar casillas exteriores', () => {

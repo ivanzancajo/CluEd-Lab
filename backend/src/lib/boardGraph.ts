@@ -309,7 +309,7 @@ const ROOM_ENTRY_DOOR_GRID_COORDINATES: Record<string, readonly BoardGridCoordin
   'sala-media-izquierda': [{ col: 5, row: 8 }, { col: 2, row: 10 }],
   'sala-media-izquierda-inferior': [{ col: 0, row: 12 }, { col: 4, row: 15 }],
   'sala-media-derecha': [{ col: 16, row: 9 }, { col: 15, row: 12 }],
-  'sala-inferior-izquierda': [{ col: 3, row: 19 }],
+  'sala-inferior-izquierda': [{ col: 4, row: 19 }],
   'sala-inferior-centro': [{ col: 8, row: 17 }, { col: 13, row: 17 }, { col: 14, row: 19 }, { col: 7, row: 19 }],
   'sala-inferior-derecha': [{ col: 18, row: 18 }],
 } as const;

@@ -355,6 +355,7 @@ export function TerminalView() {
   const [showGameOverModal, setShowGameOverModal] = useState(false);
   const hasShownGameOverRef = useRef(false);
   const boardContainerRef = useRef<HTMLDivElement>(null);
+  const diceWrapperRef = useRef<HTMLDivElement>(null);
   
   const [categories, setCategories] = useState<{
     c1: ElementoItem[];
@@ -625,7 +626,7 @@ export function TerminalView() {
       positionY >= diceCenterY - BOARD_CENTER_IMAGE_BOUNDS.heightPercent / 2 &&
       positionY <= diceCenterY + BOARD_CENTER_IMAGE_BOUNDS.heightPercent / 2;
     if (inDiceArea && isMyTurn && !isResolutionBlockingGameplay && sessionTurn?.dice === null && !sessionTurn?.hasMoved && !isLoadingMoves && !isMovingPawn) {
-      void handleDiceRoll();
+      diceWrapperRef.current?.querySelector('button')?.click();
       return;
     }
     const matchedNode = findNearestBoardMovementNode(positionX, positionY);
@@ -1834,9 +1835,10 @@ export function TerminalView() {
                      onSpaceMotifClick={setActiveMotifSpace}
                    >
                      {/* Dado — dentro del zoom para que se mueva y escale con el tablero.
-                         Los clicks en su área son interceptados por la superficie y redirigidos a handleDiceRoll. */}
+                         Los clicks en su área son interceptados por la superficie y redirigidos al botón del dado. */}
                      {isMyTurn && debugMode !== 'forced-dice' && (
                        <div
+                         ref={diceWrapperRef}
                          className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
                          style={{
                            left: toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionX),

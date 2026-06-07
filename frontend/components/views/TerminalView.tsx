@@ -615,6 +615,19 @@ export function TerminalView() {
 
   const handleBoardSurfaceClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     const { positionX, positionY } = reverseTransform(event.clientX, event.clientY);
+
+    // Taps en el área del dado — el dado vive dentro del div de zoom (bloqueado por la superficie),
+    // así que interceptamos aquí y re-dirigimos al handler del dado.
+    const diceCenterY = BOARD_CENTER_IMAGE_BOUNDS.positionY - DICE_CENTER_VERTICAL_OFFSET_PERCENT;
+    const inDiceArea =
+      positionX >= BOARD_CENTER_IMAGE_BOUNDS.positionX - BOARD_CENTER_IMAGE_BOUNDS.widthPercent / 2 &&
+      positionX <= BOARD_CENTER_IMAGE_BOUNDS.positionX + BOARD_CENTER_IMAGE_BOUNDS.widthPercent / 2 &&
+      positionY >= diceCenterY - BOARD_CENTER_IMAGE_BOUNDS.heightPercent / 2 &&
+      positionY <= diceCenterY + BOARD_CENTER_IMAGE_BOUNDS.heightPercent / 2;
+    if (inDiceArea && isMyTurn && !isResolutionBlockingGameplay && sessionTurn?.dice === null && !sessionTurn?.hasMoved && !isLoadingMoves && !isMovingPawn) {
+      void handleDiceRoll();
+      return;
+    }
     const matchedNode = findNearestBoardMovementNode(positionX, positionY);
     const matchedDestinationNode = destinationNodes.length > 0
       ? findNearestBoardMovementNode(
@@ -1820,6 +1833,29 @@ export function TerminalView() {
                      dataCy="terminal-themed-board"
                      onSpaceMotifClick={setActiveMotifSpace}
                    >
+                     {/* Dado — dentro del zoom para que se mueva y escale con el tablero.
+                         Los clicks en su área son interceptados por la superficie y redirigidos a handleDiceRoll. */}
+                     {isMyTurn && debugMode !== 'forced-dice' && (
+                       <div
+                         className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
+                         style={{
+                           left: toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionX),
+                           top: `calc(${toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionY)} - ${DICE_CENTER_VERTICAL_OFFSET_PERCENT}%)`,
+                           width: `${BOARD_CENTER_IMAGE_BOUNDS.widthPercent}%`,
+                           height: `${BOARD_CENTER_IMAGE_BOUNDS.heightPercent}%`,
+                         }}
+                       >
+                         <div className="scale-[0.28] sm:scale-[0.34] md:scale-[0.42] origin-center">
+                           <DiceAnimation
+                             key={diceResetSignal}
+                             dataCy="terminal-dice-roll"
+                             disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || isResolutionBlockingGameplay || sessionTurn?.dice !== null || sessionTurn?.hasMoved || isLoadingMoves || isMovingPawn}
+                             onRollRequest={handleDiceRoll}
+                           />
+                         </div>
+                       </div>
+                     )}
+
                      {/* Card Modal Overlay */}
                      <AnimatePresence>
                        {selectedCard && (
@@ -1867,28 +1903,6 @@ export function TerminalView() {
                      </AnimatePresence>
                    </ThemedBoard>
                  </div>
-
-                 {/* Dado — fuera del div de zoom para que no quede bajo la superficie de gestos */}
-                 {isMyTurn && debugMode !== 'forced-dice' && (
-                   <div
-                     className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center pointer-events-auto"
-                     style={{
-                       left: toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionX),
-                       top: `calc(${toBoardPercent(BOARD_CENTER_IMAGE_BOUNDS.positionY)} - ${DICE_CENTER_VERTICAL_OFFSET_PERCENT}%)`,
-                       width: `${BOARD_CENTER_IMAGE_BOUNDS.widthPercent}%`,
-                       height: `${BOARD_CENTER_IMAGE_BOUNDS.heightPercent}%`,
-                     }}
-                   >
-                     <div className="scale-[0.28] sm:scale-[0.34] md:scale-[0.42] origin-center">
-                       <DiceAnimation
-                         key={diceResetSignal}
-                         dataCy="terminal-dice-roll"
-                         disabled={sessionStatus !== "EN_CURSO" || !isMyTurn || isResolutionBlockingGameplay || sessionTurn?.dice !== null || sessionTurn?.hasMoved || isLoadingMoves || isMovingPawn}
-                         onRollRequest={handleDiceRoll}
-                       />
-                     </div>
-                   </div>
-                 )}
 
                  {/* Superficie de captura de gestos y clicks (fuera del zoom, coordenadas reales) */}
                  <button
@@ -1948,26 +1962,6 @@ export function TerminalView() {
                         {resolvedCurrentMoveNode ? currentTurnRemainingLabel : ""}
                       </span>
                     </div>
-
-                    {/* Destino seleccionado — preview en tiempo real */}
-                    <AnimatePresence>
-                      {selectedDestinationNode ? (
-                        <m.div
-                          key="dest-preview"
-                          initial={{ opacity: 0, y: -4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -4 }}
-                          transition={{ duration: 0.18 }}
-                          className="mt-2 flex items-center gap-2 rounded-lg border border-emerald-800/60 bg-emerald-950/20 px-3 py-2"
-                        >
-                          <Crosshair className="size-3 flex-shrink-0 text-emerald-400" />
-                          <div className="min-w-0">
-                            <p className="text-[9px] uppercase tracking-widest text-emerald-500">Destino seleccionado</p>
-                            <p className="truncate text-[11px] font-semibold text-emerald-200">{selectedDestinationNode.label}</p>
-                          </div>
-                        </m.div>
-                      ) : null}
-                    </AnimatePresence>
 
                     {moveError ? (
                       <p className="mt-3 text-[11px] text-red-200">
@@ -2048,29 +2042,38 @@ export function TerminalView() {
                       exit={{ y: 80, opacity: 0 }}
                       transition={{ type: 'spring', stiffness: 340, damping: 28 }}
                       data-cy="terminal-move-confirm-dialog"
-                      className="sticky bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t border-cyan-900/60 bg-slate-950/97 px-4 pb-6 pt-4 shadow-[0_-12px_40px_rgba(0,0,0,0.7)] backdrop-blur-md"
+                      className="sticky bottom-0 left-0 right-0 z-50 rounded-t-3xl border-t border-slate-800/80 bg-slate-950 px-5 pb-8 pt-3 shadow-[0_-24px_60px_rgba(0,0,0,0.9)] backdrop-blur-xl"
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] uppercase tracking-widest text-slate-500">Confirmar movimiento</p>
-                          <p className="mt-0.5 text-sm font-bold text-cyan-100">{selectedDestinationNode.label}</p>
-                          <p className="text-[10px] text-slate-400">{selectedDestinationNode.kind === "room" ? "Sala" : "Casilla"}</p>
+                      {/* Drag handle */}
+                      <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-700" />
+
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 rounded-xl border border-emerald-800/60 bg-emerald-950/30 p-2.5">
+                          <Crosshair className="size-4 text-emerald-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Mover peón a</p>
+                          <p className="mt-0.5 truncate text-base font-black tracking-wide text-white">{selectedDestinationNode.label}</p>
+                          <span className="mt-1 inline-block rounded-full border border-slate-700/60 bg-slate-900 px-2 py-0.5 text-[9px] uppercase tracking-widest text-slate-400">
+                            {selectedDestinationNode.kind === "room" ? "Sala" : "Corredor"}
+                          </span>
                         </div>
                         <button
                           type="button"
                           data-cy="terminal-move-cancel"
                           onClick={() => dispatchMove({ type: 'closeConfirm' })}
-                          className="text-slate-500 hover:text-slate-300"
+                          className="rounded-xl border border-slate-700/60 bg-slate-900/80 p-2 text-slate-400 transition-colors hover:text-slate-200"
                         >
                           <X className="size-4" />
                         </button>
                       </div>
+
                       <button
                         type="button"
                         data-cy="terminal-move-confirm"
                         onClick={() => void handleMovePawn(selectedDestinationNode.id)}
                         disabled={isMovingPawn || isResolutionBlockingGameplay}
-                        className="mt-4 w-full rounded-xl bg-emerald-600 py-3 text-sm font-black uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="mt-5 w-full rounded-2xl bg-emerald-600 py-3.5 text-sm font-black uppercase tracking-[0.2em] text-slate-950 shadow-[0_4px_20px_rgba(16,185,129,0.25)] transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {isMovingPawn ? "Moviendo..." : "Confirmar movimiento"}
                       </button>

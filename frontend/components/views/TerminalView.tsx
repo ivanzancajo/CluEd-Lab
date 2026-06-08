@@ -1020,6 +1020,28 @@ export function TerminalView() {
       setHandError(null);
       setIsLoadingHand(true);
 
+      // El backend emite `game:setup-cards` ANTES que `gameStarted` (y antes de la
+      // actualizacion de presencia que ya avanza el estado a EN_CURSO). Por eso no
+      // podemos depender de ese push para apagar el loading: cuando este handler lo
+      // enciende, el `game:setup-cards` ya paso —o se perdio porque el terminal aun
+      // no estaba suscrito a su sala de equipo— y el effect de respaldo no se vuelve
+      // a disparar (el estado no cambia). Cargamos la mano por HTTP y garantizamos
+      // resolver el estado de carga pase lo que pase, evitando el "cargando" colgado.
+      const accessCode = getStoredSessionCode();
+      void (accessCode
+        ? getTeamTerminalState(accessCode, teamId)
+        : Promise.reject(new Error("Falta el código de sesión almacenado.")))
+        .then((state) => {
+          applyTerminalState(state);
+          setHandError(null);
+        })
+        .catch((error) => {
+          setHandError(getSessionErrorMessage(error, "No se han podido cargar las cartas del equipo."));
+        })
+        .finally(() => {
+          setIsLoadingHand(false);
+        });
+
       if (!hasEnvelopeAnimatedRef.current) {
         hasEnvelopeAnimatedRef.current = true;
         setShowEnvelopeAnimation(true);

@@ -395,7 +395,16 @@ run_sudo "$AWK_BIN" -v rule="$(canonicalize_pg_hba_rule "$HOST_RULE")" '
 
 log 'Alineando Prisma desde el host'
 pushd "$BACKEND_DIR" >/dev/null
-npm ci
+# npm ci puede fallar si la cache de npm tiene un tarball corrupto/parcial
+# (sintoma tipico: "@prisma/engines/scripts/postinstall.js" MODULE_NOT_FOUND)
+# o si un node_modules previo quedo a medias. Reintenta una vez partiendo de
+# node_modules y cache de npm limpios.
+if ! npm ci; then
+  log 'npm ci fallo; limpiando node_modules y cache de npm y reintentando'
+  rm -rf node_modules
+  npm cache clean --force
+  npm ci
+fi
 SAVED_DATABASE_URL="$DATABASE_URL"
 export DATABASE_URL="$HOST_DATABASE_URL"
 npm run prisma:generate

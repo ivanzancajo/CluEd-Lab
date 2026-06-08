@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router";
 import { m, AnimatePresence } from "motion/react";
 import {
@@ -1880,12 +1881,15 @@ export function TerminalView() {
                        </div>
                      )}
 
-                     {/* Card Modal Overlay */}
-                     <AnimatePresence>
+                     {/* Card Modal Overlay — portal a document.body para escapar del transform
+                         de zoom/pan del tablero; si no, el `fixed` se ancla al contenedor
+                         transformado y la carta queda "sobre el tablero" en vez de sobre la pantalla. */}
+                     {createPortal(
+                       <AnimatePresence>
                        {selectedCard && (
                          <m.div
                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                           className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 backdrop-blur-sm"
+                           className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6 backdrop-blur-sm"
                            onClick={() => { setSelectedCard(null); setCardFlipped(false); }}
                          >
                            <m.div
@@ -1924,7 +1928,9 @@ export function TerminalView() {
                            </m.div>
                          </m.div>
                        )}
-                     </AnimatePresence>
+                       </AnimatePresence>,
+                       document.body
+                     )}
                    </ThemedBoard>
                  </div>
 

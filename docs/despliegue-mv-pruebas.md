@@ -20,6 +20,43 @@ Se ha validado sobre la rama `develop` del repositorio. Si tu copia local tiene 
 
 Consecuencia importante: los origenes CORS deben incluir `https://virtual.lab.inf.uva.es:20382` y, si el tunnel esta activo, tambien la URL del tunnel.
 
+## Via de acceso recomendada: Cloudflare Tunnel para todos los usuarios
+
+El acceso directo por `https://virtual.lab.inf.uva.es:20382` tiene dos limitaciones que NO se pueden resolver configurando la MV:
+
+1. **Eduroam lo bloquea.** El puerto publico `20382` (y `20383`) es no estandar; el cortafuegos de salida de Eduroam descarta el trafico antes de que llegue a la MV. Ningun ajuste de nginx lo abre.
+2. **Muestra "sitio no seguro".** El certificado es autofirmado (lo genera `scripts/deploy-mv.sh` con `openssl`). El trafico va cifrado, pero el navegador no confia en el porque no lo emite una CA reconocida. Bajo el NAT del laboratorio no es posible obtener un certificado valido: Let's Encrypt HTTP-01 necesita el puerto 80 estandar publico (solo hay `20382→80`), DNS-01 exige controlar la zona DNS de `uva.es` (es de la universidad) y TLS-ALPN-01 necesita el 443 estandar publico. La advertencia es inherente a este path.
+
+Por eso **se recomienda usar el Cloudflare Named Tunnel como entrada canonica para todos los usuarios** (dentro y fuera de Eduroam), no solo como parche de Eduroam. El tunnel resuelve ambos problemas a la vez: sale por el 443 estandar (Eduroam lo permite) y Cloudflare sirve un **certificado de confianza valido en su propio edge**, sin advertencia de navegador. El acceso directo `:20382` queda como via de respaldo en LAN/depuracion, asumiendo la advertencia del certificado autofirmado.
+
+| | `:20382` directo | Cloudflare Named Tunnel |
+|---|---|---|
+| Funciona desde Eduroam | No (puerto bloqueado) | Si (sale por 443 estandar) |
+| Certificado de confianza | No (advertencia) | Si (cert valido de Cloudflare) |
+| URL estable | Si | Si (Named Tunnel) |
+
+La configuracion del Named Tunnel se detalla en [Acceso desde Eduroam: Cloudflare Tunnel](#acceso-desde-eduroam-cloudflare-tunnel).
+
+### Eliminar el aviso "sitio no seguro" en `:20382`
+
+El acceso directo `:20382` usa un certificado **autofirmado** que genera `scripts/deploy-mv.sh` con `openssl`. El trafico va cifrado, pero el navegador avisa porque ninguna CA de confianza lo respalda. Bajo el NAT del laboratorio **no es posible emitir un certificado valido por auto-servicio** (ACME requiere el puerto 80/443 estandar publico o control del DNS de `uva.es`, y no tienes ninguno de los dos).
+
+La unica forma de que `:20382` deje de avisar es instalar un certificado emitido por una CA de confianza **para `virtual.lab.inf.uva.es`**. Como el dominio es de la universidad, ese certificado debe pedirlo quien lo gestiona:
+
+1. Solicita al **laboratorio / Servicio de Informatica de la UVa** un certificado de servidor para `virtual.lab.inf.uva.es`. Las universidades espanolas suelen emitirlo via RedIRIS / GEANT TCS (Sectigo), sin necesidad de ACME.
+2. Te entregaran (o generaras tu el CSR y ellos firman) dos ficheros: la cadena completa y la clave privada.
+3. En la MV, sustituye los ficheros autofirmados por los reales, conservando las rutas que ya usa nginx:
+
+```bash
+sudo cp fullchain_real.pem /etc/letsencrypt/live/virtual.lab.inf.uva.es/fullchain.pem
+sudo cp privkey_real.pem   /etc/letsencrypt/live/virtual.lab.inf.uva.es/privkey.pem
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+No hay que tocar `deploy/nginx/nginx.conf`: ya apunta a esas rutas. Tras la recarga, `:20382` y `:20383` sirven el certificado valido y desaparece el aviso. Si vuelves a ejecutar `deploy-mv.sh`, no regenera el autofirmado porque solo lo crea cuando el fichero no existe.
+
+Mientras no dispongas del certificado institucional, usa el **Quick Tunnel** como via limpia sin advertencia (ver mas abajo) y manten `:20382` con el autofirmado como respaldo en LAN.
+
 ## Alcance y fuera de alcance
 
 Esta guia si cubre:
@@ -291,9 +328,9 @@ El puerto 20382 asignado por el laboratorio es no estandar y Eduroam lo bloquea.
 
 Hay dos variantes segun si tienes dominio propio en Cloudflare:
 
-### Opcion A — Quick Tunnel (sin cuenta ni dominio)
+### Opcion A — Quick Tunnel (sin cuenta ni dominio) — recomendada sin dominio propio
 
-La mas sencilla. Cloudflare asigna una URL del tipo `https://palabras-random.trycloudflare.com` al arrancar el contenedor. La URL es estable mientras el contenedor no se reinicie.
+La mas sencilla y la que da un **certificado de confianza sin advertencia de navegador** sin necesidad de dominio propio. Cloudflare asigna una URL del tipo `https://palabras-random.trycloudflare.com` con TLS valido en su edge. La URL es estable mientras el contenedor no se reinicie. **Convive con el acceso directo `:20382`**: ambos quedan operativos a la vez (el tunel sirve a Eduroam y a quien quiera la URL limpia; `:20382` sigue disponible en LAN/depuracion).
 
 En la MV, edita `.deploy/mv.backend.env` y descomenta:
 
@@ -303,7 +340,7 @@ CLOUDFLARE_QUICK_TUNNEL=true
 
 El script `deploy-mv.sh` detecta esta variable y:
 
-1. Levanta los contenedores con `--profile tunnel`, arrancando `cloudflared` en modo Quick Tunnel (`--url http://localhost:80`).
+1. Levanta los contenedores con `--profile tunnel`, arrancando `cloudflared` en modo Quick Tunnel (`--url http://localhost:8081`, el bloque loopback HTTP plano de nginx).
 2. Espera hasta 45 segundos a que el contenedor emita su URL en los logs.
 3. Añade la URL a `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` en `backend/.env`.
 4. Reinicia solo el contenedor `backend` para que aplique el nuevo CORS.
@@ -315,7 +352,7 @@ Al terminar el despliegue el log muestra la URL asignada. Si el contenedor se re
 Requiere un dominio gestionado en Cloudflare DNS. Ofrece una URL fija que no cambia en reinicios.
 
 1. En el Cloudflare Dashboard → Zero Trust → Networks → Tunnels, crea un tunnel.
-2. Añade un **Public Hostname** apuntando a `http://localhost:80`.
+2. Añade un **Public Hostname** apuntando a `http://localhost:8081` (el bloque loopback HTTP plano de nginx; no uses `:80`, que sirve TLS).
 3. Copia el **token** del tunnel.
 4. En la MV, edita `.deploy/mv.backend.env` y descomenta:
 

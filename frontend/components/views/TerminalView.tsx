@@ -379,6 +379,9 @@ export function TerminalView() {
   const { zoom, resetZoom, innerStyle: boardInnerStyle, surfaceRef: setBoardSurfaceRef, reverseTransform } = useBoardZoomPan(boardContainerRef);
   const [selectedCard, setSelectedCard] = useState<TerminalCard | null>(null);
   const [cardFlipped, setCardFlipped] = useState(false);
+  // El puntero esta sobre el dado y el lanzamiento esta permitido: el cursor pasa
+  // a "pointer" en vez de mantener el "crosshair" de seleccion de movimiento.
+  const [isPointerOverDice, setIsPointerOverDice] = useState(false);
 
   const storedTeamId = getStoredTeamId();
   // react-doctor-disable-next-line react-doctor/no-event-handler
@@ -615,18 +618,44 @@ export function TerminalView() {
     handleDestinationNodePress(selectedDestination.id);
   };
 
-  const handleBoardSurfaceClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    const { positionX, positionY } = reverseTransform(event.clientX, event.clientY);
-
-    // Taps en el área del dado — el dado vive dentro del div de zoom (bloqueado por la superficie),
-    // así que interceptamos aquí y re-dirigimos al handler del dado.
+  // El dado vive dentro del div de zoom (bloqueado por la superficie de captura),
+  // así que detectamos su área en coordenadas reales del tablero.
+  const isPointWithinDiceArea = (positionX: number, positionY: number) => {
     const diceCenterY = BOARD_CENTER_IMAGE_BOUNDS.positionY - DICE_CENTER_VERTICAL_OFFSET_PERCENT;
-    const inDiceArea =
+    return (
       positionX >= BOARD_CENTER_IMAGE_BOUNDS.positionX - BOARD_CENTER_IMAGE_BOUNDS.widthPercent / 2 &&
       positionX <= BOARD_CENTER_IMAGE_BOUNDS.positionX + BOARD_CENTER_IMAGE_BOUNDS.widthPercent / 2 &&
       positionY >= diceCenterY - BOARD_CENTER_IMAGE_BOUNDS.heightPercent / 2 &&
-      positionY <= diceCenterY + BOARD_CENTER_IMAGE_BOUNDS.heightPercent / 2;
-    if (inDiceArea && isMyTurn && !isResolutionBlockingGameplay && sessionTurn?.dice === null && !sessionTurn?.hasMoved && !isLoadingMoves && !isMovingPawn) {
+      positionY <= diceCenterY + BOARD_CENTER_IMAGE_BOUNDS.heightPercent / 2
+    );
+  };
+
+  // El lanzamiento de dados solo es posible en estas condiciones; se usa tanto
+  // para el tap como para decidir el cursor sobre el dado.
+  const canRollDiceNow = () =>
+    isMyTurn &&
+    !isResolutionBlockingGameplay &&
+    sessionTurn?.dice === null &&
+    !sessionTurn?.hasMoved &&
+    !isLoadingMoves &&
+    !isMovingPawn;
+
+  // react-doctor-disable-next-line react-doctor/no-event-handler
+  const handleBoardSurfacePointerMove = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const { positionX, positionY } = reverseTransform(event.clientX, event.clientY);
+    const overDice = canRollDiceNow() && isPointWithinDiceArea(positionX, positionY);
+    setIsPointerOverDice((previous) => (previous === overDice ? previous : overDice));
+  };
+
+  const handleBoardSurfacePointerLeave = () => {
+    setIsPointerOverDice((previous) => (previous ? false : previous));
+  };
+
+  const handleBoardSurfaceClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const { positionX, positionY } = reverseTransform(event.clientX, event.clientY);
+
+    // Taps en el área del dado — interceptamos aquí y re-dirigimos al handler del dado.
+    if (isPointWithinDiceArea(positionX, positionY) && canRollDiceNow()) {
       diceWrapperRef.current?.querySelector('button')?.click();
       return;
     }
@@ -1941,7 +1970,15 @@ export function TerminalView() {
                    data-cy="terminal-board-surface"
                    aria-label="Superficie del tablero"
                    style={{ touchAction: 'none' }}
-                   className={`absolute inset-0 z-20 ${sessionStatus === "EN_CURSO" ? "cursor-crosshair" : "cursor-default"}`}
+                   className={`absolute inset-0 z-20 ${
+                     isPointerOverDice
+                       ? "cursor-pointer"
+                       : sessionStatus === "EN_CURSO"
+                         ? "cursor-crosshair"
+                         : "cursor-default"
+                   }`}
+                   onMouseMove={handleBoardSurfacePointerMove}
+                   onMouseLeave={handleBoardSurfacePointerLeave}
                    onClick={handleBoardSurfaceClick}
                  />
 

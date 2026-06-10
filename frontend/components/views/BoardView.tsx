@@ -101,6 +101,7 @@ export function BoardView() {
   const [isRulesOpen, setIsRulesOpen] = useState(false);
   const [showGameOverModal, setShowGameOverModal] = useState(false);
   const hasShownGameOverRef = useRef(false);
+  const hasAutoOpenedResolutionRef = useRef(false);
 
   const isBoardActive = presenceState !== null && presenceState.status !== "FINALIZADA";
   const { showConfirm: showExitConfirm, openConfirm: openExitConfirm, cancelExit } = useExitGuard(isBoardActive);
@@ -154,7 +155,17 @@ export function BoardView() {
     }
 
     const updateTimeRemaining = () => {
-      setTimeRemaining(calculateRemainingSeconds(presenceState.startedAt, presenceState.durationSeconds));
+      const remaining = calculateRemainingSeconds(presenceState.startedAt, presenceState.durationSeconds);
+      setTimeRemaining(remaining);
+
+      // Al agotarse el tiempo abrimos una sola vez el diálogo de resolución para que lo
+      // gestione el game master (revelar solución o habilitar acusación final).
+      if (remaining > 0) {
+        hasAutoOpenedResolutionRef.current = false;
+      } else if (!presenceState.resolution && !hasAutoOpenedResolutionRef.current) {
+        hasAutoOpenedResolutionRef.current = true;
+        setIsResolutionDialogOpen(true);
+      }
     };
 
     updateTimeRemaining();

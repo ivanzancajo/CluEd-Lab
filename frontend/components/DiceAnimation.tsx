@@ -11,11 +11,11 @@ interface DiceFaceProps {
   value: number;
 }
 
-const Dot = () => <div className="size-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />;
+const Dot = () => <div className="size-2 rounded-full bg-slate-900 shadow-[0_0_4px_rgba(8,145,178,0.9)] ring-1 ring-cyan-700/40" />;
 
 const DiceFace: React.FC<DiceFaceProps> = ({ value }) => {
   return (
-    <div className="size-12 bg-slate-900 border-2 border-cyan-800 rounded-lg shadow-inner shadow-black flex items-center justify-center p-1.5 relative">
+    <div className="size-12 bg-gradient-to-br from-slate-100 to-slate-300 border-2 border-cyan-300 rounded-lg shadow-[0_0_18px_rgba(34,211,238,0.9),0_2px_6px_rgba(0,0,0,0.85)] ring-1 ring-slate-900/30 flex items-center justify-center p-1.5 relative">
       {value === 1 && <Dot />}
       {value === 2 && (
         <div className="flex flex-col justify-between w-full h-full">
@@ -106,7 +106,7 @@ export const DiceAnimation = ({
       data-cy={dataCy}
       onClick={startRoll}
       disabled={isRolling || disabled}
-      className={`relative z-30 p-3 rounded-xl bg-slate-950/60 backdrop-blur-sm border border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.3)] flex flex-col items-center justify-center transition-all duration-300 ${isRolling ? 'scale-110' : 'hover:scale-105 active:scale-95'} ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+      className={`relative z-30 p-3 rounded-xl bg-slate-950/85 backdrop-blur-sm border border-cyan-400/50 shadow-[0_0_24px_rgba(6,182,212,0.45)] flex flex-col items-center justify-center transition-all duration-300 ${isRolling ? 'scale-110' : 'hover:scale-105 active:scale-95'} ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
     >
       <div className="flex flex-col gap-3">
         <m.div

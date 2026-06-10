@@ -78,6 +78,34 @@ export function ThemedBoard({
   const boardPawns = pawns ?? teams ?? [];
   const highlightedNodeIds = new Set(debugHighlightedNodeIds ?? []);
 
+  // Agrupar peones que comparten sala para repartirlos en abanico y que no se solapen.
+  const pawnClusters = new Map<string, ThemedBoardTeam[]>();
+  for (const team of boardPawns) {
+    const key = `${Math.round(team.positionX)}:${Math.round(team.positionY)}`;
+    const cluster = pawnClusters.get(key);
+    if (cluster) {
+      cluster.push(team);
+    } else {
+      pawnClusters.set(key, [team]);
+    }
+  }
+
+  const getPawnClusterLayout = (team: ThemedBoardTeam) => {
+    const key = `${Math.round(team.positionX)}:${Math.round(team.positionY)}`;
+    const cluster = pawnClusters.get(key) ?? [team];
+    if (cluster.length <= 1) {
+      return { offsetX: 0, offsetY: 0, sizeScale: 1 };
+    }
+    const index = cluster.indexOf(team);
+    const angle = (2 * Math.PI / cluster.length) * index - Math.PI / 2;
+    const radius = PAWN_SIZE_PERCENT * 0.6;
+    return {
+      offsetX: Math.cos(angle) * radius,
+      offsetY: Math.sin(angle) * radius,
+      sizeScale: cluster.length >= 3 ? 0.85 : 0.92,
+    };
+  };
+
   return (
     <div
       data-cy={dataCy}
@@ -152,36 +180,44 @@ export function ThemedBoard({
 
       {boardPawns.map((team) => {
         const teamMeta = getTeamMeta(team.color);
+        const clusterLayout = getPawnClusterLayout(team);
+        const pawnSize = PAWN_SIZE_PERCENT * clusterLayout.sizeScale;
+        const isLightPawn = isLightTeamColor(team.color);
+        const xStrokeClass = isLightPawn ? 'stroke-slate-900' : 'stroke-white';
+        const xOutlineClass = isLightPawn ? 'stroke-white/70' : 'stroke-slate-900/70';
 
         return (
           <m.div
             key={team.id}
             initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: team.isEliminated ? 0.55 : (team.opacity ?? 1) }}
+            animate={{ scale: 1, opacity: team.isEliminated ? 0.9 : (team.opacity ?? 1) }}
             transition={{ type: 'spring', stiffness: 220, damping: 16 }}
             data-cy={`board-pawn-${team.color.toLowerCase()}`}
             className={joinClasses(
-              'absolute z-20 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-slate-900 shadow-[0_0_15px_rgba(0,0,0,0.8)]',
+              'absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-slate-900 shadow-[0_0_15px_rgba(0,0,0,0.8)]',
               team.isCurrent ? 'animate-bounce' : ''
             )}
             style={{
-              top: toBoardPercent(team.positionY),
-              left: toBoardPercent(team.positionX),
-              width: `${PAWN_SIZE_PERCENT}%`,
-              height: `${PAWN_SIZE_PERCENT}%`,
+              top: `calc(${toBoardPercent(team.positionY)} + ${clusterLayout.offsetY}%)`,
+              left: `calc(${toBoardPercent(team.positionX)} + ${clusterLayout.offsetX}%)`,
+              width: `${pawnSize}%`,
+              height: `${pawnSize}%`,
               backgroundColor: teamMeta.hexColor,
               borderColor: teamMeta.hexColor,
-              filter: team.isEliminated ? 'grayscale(0.6)' : undefined,
+              filter: team.isEliminated ? 'grayscale(0.25)' : undefined,
+              zIndex: team.isCurrent ? 22 : 20,
             }}
           >
             {team.isEliminated ? (
               <svg
                 viewBox="0 0 10 10"
-                className="absolute size-[60%] stroke-red-500"
-                style={{ strokeWidth: 2, strokeLinecap: 'round' }}
+                className="absolute size-[72%]"
+                style={{ strokeLinecap: 'round' }}
               >
-                <line x1="2" y1="2" x2="8" y2="8" />
-                <line x1="8" y1="2" x2="2" y2="8" />
+                <line x1="2" y1="2" x2="8" y2="8" className={xOutlineClass} style={{ strokeWidth: 3.6 }} />
+                <line x1="8" y1="2" x2="2" y2="8" className={xOutlineClass} style={{ strokeWidth: 3.6 }} />
+                <line x1="2" y1="2" x2="8" y2="8" className={xStrokeClass} style={{ strokeWidth: 2.6 }} />
+                <line x1="8" y1="2" x2="2" y2="8" className={xStrokeClass} style={{ strokeWidth: 2.6 }} />
               </svg>
             ) : team.isCurrent ? (
               <Crosshair className="size-[56%] text-white" />
@@ -372,6 +408,12 @@ function BoardDebugOverlay({
 
 function joinClasses(...classes: Array<string | undefined>) {
   return classes.filter(Boolean).join(' ');
+}
+
+const LIGHT_TEAM_COLORS = new Set<TeamColor>(['AMARILLO', 'BLANCO']);
+
+function isLightTeamColor(color: TeamColor) {
+  return LIGHT_TEAM_COLORS.has(color);
 }
 
 function getBoardDebugMarkerClass(kind: string, isGeneratedSquare: boolean, isHighlighted: boolean) {

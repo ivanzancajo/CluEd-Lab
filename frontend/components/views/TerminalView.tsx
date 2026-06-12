@@ -659,6 +659,33 @@ export function TerminalView() {
       diceWrapperRef.current?.querySelector('button')?.click();
       return;
     }
+
+    // Taps sobre el marcador "M" de motivo de una sala — la superficie de captura tapa el
+    // botón del tablero, así que detectamos aquí el impacto y abrimos el modal de motivos.
+    const MOTIF_MARKER_HIT_RADIUS = 4;
+    let motifSpaceHit: BoardSpaceLabel | null = null;
+    let motifClosestDistance = MOTIF_MARKER_HIT_RADIUS;
+    boardSpaces.forEach((space, index) => {
+      if (!space.motif) {
+        return;
+      }
+      const slot = BOARD_SPACE_SLOTS[index];
+      if (!slot) {
+        return;
+      }
+      const markerX = slot.positionX + slot.widthPercent / 2;
+      const markerY = slot.positionY - 0.5;
+      const distance = Math.hypot(positionX - markerX, positionY - markerY);
+      if (distance <= motifClosestDistance) {
+        motifClosestDistance = distance;
+        motifSpaceHit = space;
+      }
+    });
+    if (motifSpaceHit) {
+      setActiveMotifSpace(motifSpaceHit);
+      return;
+    }
+
     const matchedNode = findNearestBoardMovementNode(positionX, positionY);
     const matchedDestinationNode = destinationNodes.length > 0
       ? findNearestBoardMovementNode(
@@ -1327,6 +1354,7 @@ export function TerminalView() {
   };
 
   const ownedItemIds = React.useMemo(() => new Set(teamHand.map(c => c.id)), [teamHand]);
+  const publicItemIds = React.useMemo(() => new Set(publicCards.map(c => c.id)), [publicCards]);
 
   const boardSpaces = mapBoardSpaces(boardTheme);
   const storedTeamIdForPawns = getStoredTeamId();
@@ -2291,17 +2319,24 @@ export function TerminalView() {
                       {items.map((item: ElementoItem) => {
                         const rowName = item.name;
                         const isOwned = ownedItemIds.has(item.id);
+                        const isCommon = !isOwned && publicItemIds.has(item.id);
+                        const isLocked = isOwned || isCommon;
 
                         return (
-                        <div key={item.name} className={`flex border-b border-slate-800/50 transition-colors ${isOwned ? 'bg-emerald-950/10' : 'hover:bg-slate-900/50'}`}>
+                        <div key={item.name} className={`flex border-b border-slate-800/50 transition-colors ${isOwned ? 'bg-emerald-950/10' : isCommon ? 'bg-amber-950/10' : 'hover:bg-slate-900/50'}`}>
                           <div className="w-32 flex-shrink-0 p-2 border-r border-slate-800 flex items-center gap-1.5 overflow-hidden bg-slate-950">
-                            <div className={`p-1 rounded-md border flex-shrink-0 ${isOwned ? 'border-emerald-800/60 bg-emerald-950/40' : 'border-slate-800 bg-slate-900'}`}>
+                            <div className={`p-1 rounded-md border flex-shrink-0 ${isOwned ? 'border-emerald-800/60 bg-emerald-950/40' : isCommon ? 'border-amber-800/60 bg-amber-950/40' : 'border-slate-800 bg-slate-900'}`}>
                               {item.avatar}
                             </div>
-                            <span className={`text-[10px] leading-tight truncate flex-1 ${isOwned ? 'text-emerald-300' : 'text-slate-300'}`} title={item.name}>{item.name}</span>
+                            <span className={`text-[10px] leading-tight truncate flex-1 ${isOwned ? 'text-emerald-300' : isCommon ? 'text-amber-300' : 'text-slate-300'}`} title={item.name}>{item.name}</span>
                             {isOwned && (
                               <span className="flex-shrink-0 text-[7px] font-black uppercase tracking-wide text-emerald-200 bg-emerald-900/50 border border-emerald-700/40 rounded px-1 leading-4">
                                 Tuya
+                              </span>
+                            )}
+                            {isCommon && (
+                              <span className="flex-shrink-0 text-[7px] font-black uppercase tracking-wide text-amber-200 bg-amber-900/50 border border-amber-700/40 rounded px-1 leading-4">
+                                Común
                               </span>
                             )}
                             {!isC1 && !isC2 && item.motif && (
@@ -2318,12 +2353,12 @@ export function TerminalView() {
                           </div>
                           <div className="flex-1 flex overflow-x-auto scrollbar-none">
                             {TEAMS.map(team => {
-                              if (isOwned) {
+                              if (isLocked) {
                                 return (
                                   <div
                                     key={team}
-                                    className="size-10 flex-shrink-0 border-r border-slate-800/60 bg-emerald-950/15 cursor-not-allowed"
-                                    title="Carta en tu mano — no editable"
+                                    className={`size-10 flex-shrink-0 border-r border-slate-800/60 cursor-not-allowed ${isOwned ? 'bg-emerald-950/15' : 'bg-amber-950/15'}`}
+                                    title={isOwned ? "Carta en tu mano — no editable" : "Evidencia común — visible para todos"}
                                   />
                                 );
                               }

@@ -2471,7 +2471,7 @@ export function TerminalView() {
                           <h4 className="mt-2 text-base font-black text-white">Resolucion definitiva del sobre</h4>
                         </div>
                         <div className="rounded-2xl border border-fuchsia-700/70 bg-fuchsia-950/35 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-fuchsia-100">
-                          Riesgo maximo
+                          Riesgo máximo
                         </div>
                       </div>
 
@@ -2579,7 +2579,7 @@ export function TerminalView() {
                         }
                         className="mt-5 w-full rounded-2xl bg-red-600 p-4 text-sm font-black uppercase tracking-[0.24em] text-slate-950 shadow-[0_0_24px_rgba(239,68,68,0.35)] transition-all disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {isSubmittingAccusation ? "Resolviendo acusacion..." : "Realizar acusacion"}
+                        {isSubmittingAccusation ? "Resolviendo acusación..." : "Realizar acusación"}
                       </button>
                     </div>
                   ) : (
@@ -2596,7 +2596,7 @@ export function TerminalView() {
                               </p>
                             </div>
                             <div className="rounded-2xl border border-cyan-800/70 bg-slate-950/60 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
-                              {activeSuggestion.receiverTeamName ? "En refutacion" : "Abierta"}
+                              {activeSuggestion.receiverTeamName ? "En refutación" : "Abierta"}
                             </div>
                           </div>
 
@@ -2622,7 +2622,7 @@ export function TerminalView() {
                         <div data-cy="terminal-refute-panel" className="rounded-[26px] border border-red-800/70 bg-[linear-gradient(145deg,rgba(69,10,10,0.72),rgba(15,23,42,0.94))] p-5 shadow-[0_12px_32px_rgba(69,10,10,0.24)]">
                           <div className="flex items-start justify-between gap-4">
                             <div>
-                              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-red-200">Solicitud privada de refutacion</p>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-red-200">Solicitud privada de refutación</p>
                               <h4 className="mt-2 text-base font-black text-white">Elige una carta para bloquear la sugerencia</h4>
                             </div>
                             <div className="rounded-2xl border border-red-700/80 bg-red-950/50 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-red-100">

@@ -106,7 +106,7 @@ cd backend
 npm run demo:deal -- --teams=6
 ```
 
-Crea una skin de prueba, una sesión y los equipos indicados, y devuelve por JSON el código de acceso, el id de sesión y la mano privada de cada equipo. Acepta `--teams` entre `2` y `6`.
+Crea una skin de prueba, una sesión y los equipos indicados, y devuelve por JSON el código de acceso, el id de sesión y la mano privada de cada equipo. Acepta `--teams` entre `3` y `6`.
 
 ## Docker de despliegue
 
@@ -130,9 +130,22 @@ Puntos críticos:
 
 Acceso en la MV del laboratorio:
 
-- **Cloudflare Tunnel** (recomendado): URL HTTPS con certificado válido configurada en `CLOUDFLARE_TUNNEL_URL`. Funciona desde Eduroam y cualquier red.
+- **Cloudflare Tunnel** (recomendado): URL HTTPS con certificado válido. Funciona desde Eduroam y cualquier red. Ver cómo obtener la URL más abajo.
 - **Acceso directo**: `https://virtual.lab.inf.uva.es:20382` — HTTPS con certificado autofirmado (el navegador muestra advertencia; puerto bloqueado en Eduroam).
 - Backend solo en la MV: `http://127.0.0.1:4000`
+
+### Obtener la URL del Cloudflare Tunnel
+
+El script de despliegue imprime la URL al final. Si necesitas recuperarla después:
+
+**Named Tunnel** (URL fija configurada en `CLOUDFLARE_TUNNEL_URL`): la URL es la misma siempre; está definida en `.deploy/mv.backend.env`.
+
+**Quick Tunnel** (URL dinámica asignada por Cloudflare en cada arranque):
+
+```bash
+docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml logs cloudflared \
+  | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1
+```
 
 Parar servicios:
 

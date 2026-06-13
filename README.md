@@ -140,12 +140,14 @@ El script de despliegue imprime la URL al final. Si necesitas recuperarla despu�
 
 **Named Tunnel** (URL fija configurada en `CLOUDFLARE_TUNNEL_URL`): la URL es la misma siempre; está definida en `.deploy/mv.backend.env`.
 
-**Quick Tunnel** (URL dinámica asignada por Cloudflare en cada arranque):
+**Quick Tunnel** (sin cuenta ni dominio; `cloudflared` arranca con `--url http://localhost:8081` y Cloudflare le asigna un subdominio aleatorio `*.trycloudflare.com` con TLS válido). La URL es efímera y cambia en cada reinicio del contenedor. Recupérala de los logs:
 
 ```bash
 docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml logs cloudflared \
   | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1
 ```
+
+El procedimiento completo (activación, generación y CORS automático) está en [docs/despliegue-mv-pruebas.md](docs/despliegue-mv-pruebas.md#opcion-a--quick-tunnel-sin-cuenta-ni-dominio--recomendada-sin-dominio-propio).
 
 Parar servicios:
 

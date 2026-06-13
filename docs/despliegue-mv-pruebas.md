@@ -2,7 +2,7 @@
 
 Esta guia cubre el despliegue productivo actual en una MV Linux donde el frontend y el backend corren en Docker Compose, pero PostgreSQL permanece fuera de Docker en el host de la propia MV.
 
-Para la MV del laboratorio con acceso publico en `virtual.lab.inf.uva.es`, puerto SSH `20381` y publicacion web `20382 -> 80` (y `20383 -> 443`), el script de despliegue configura automaticamente nginx en el host como proxy inverso HTTP y, opcionalmente, activa un Cloudflare Tunnel para acceso desde redes con puertos no estandar bloqueados (Eduroam).
+Para la MV del laboratorio con acceso publico en `virtual.lab.inf.uva.es`, puerto SSH `20381` y publicacion web `20382 -> 80`, el script de despliegue configura automaticamente nginx en el host como proxy inverso HTTP y, opcionalmente, activa un Cloudflare Tunnel para acceso desde redes con puertos no estandar bloqueados (Eduroam).
 
 Si quieres dejar el despliegue reproducible para futuras actualizaciones y automatizarlo con GitHub Actions, usa [scripts/deploy-mv.sh](../scripts/deploy-mv.sh) y la guia de [docs/automatizacion-despliegue-mv.md](./automatizacion-despliegue-mv.md).
 
@@ -12,7 +12,6 @@ Se ha validado sobre la rama `develop` del repositorio. Si tu copia local tiene 
 
 - El punto de entrada fuera de Eduroam es `https://virtual.lab.inf.uva.es:20382` (HTTPS, NAT lab: externo `:20382` → VM:80). El navegador mostrara una advertencia de certificado autofirmado en el primer acceso; se puede continuar haciendo clic en "Avanzado".
 - El nginx del host (Ubuntu, fuera de Docker) escucha en el puerto 80 con TLS (cert autofirmado) y proxea `/api`, `/socket.io` y `/` a los contenedores internos. El Cloudflare Tunnel usa el puerto interno `8081` (HTTP, solo loopback) para no interferir con el TLS del puerto 80.
-- El puerto 443 (externo `:20383`) tambien sirve HTTPS con el mismo certificado autofirmado.
 - El contenedor `frontend` sirve unicamente ficheros estaticos en `127.0.0.1:8080`.
 - El contenedor `backend` escucha en `127.0.0.1:4000`.
 - El backend conecta con PostgreSQL del host Linux mediante `host.docker.internal:5432`.
@@ -24,7 +23,7 @@ Consecuencia importante: los origenes CORS deben incluir `https://virtual.lab.in
 
 El acceso directo por `https://virtual.lab.inf.uva.es:20382` tiene dos limitaciones que NO se pueden resolver configurando la MV:
 
-1. **Eduroam lo bloquea.** El puerto publico `20382` (y `20383`) es no estandar; el cortafuegos de salida de Eduroam descarta el trafico antes de que llegue a la MV. Ningun ajuste de nginx lo abre.
+1. **Eduroam lo bloquea.** El puerto publico `20382` es no estandar; el cortafuegos de salida de Eduroam descarta el trafico antes de que llegue a la MV. Ningun ajuste de nginx lo abre.
 2. **Muestra "sitio no seguro".** El certificado es autofirmado (lo genera `scripts/deploy-mv.sh` con `openssl`). El trafico va cifrado, pero el navegador no confia en el porque no lo emite una CA reconocida. Bajo el NAT del laboratorio no es posible obtener un certificado valido: Let's Encrypt HTTP-01 necesita el puerto 80 estandar publico (solo hay `20382→80`), DNS-01 exige controlar la zona DNS de `uva.es` (es de la universidad) y TLS-ALPN-01 necesita el 443 estandar publico. La advertencia es inherente a este path.
 
 Por eso **se recomienda usar el Cloudflare Named Tunnel como entrada canonica para todos los usuarios** (dentro y fuera de Eduroam), no solo como parche de Eduroam. El tunnel resuelve ambos problemas a la vez: sale por el 443 estandar (Eduroam lo permite) y Cloudflare sirve un **certificado de confianza valido en su propio edge**, sin advertencia de navegador. El acceso directo `:20382` queda como via de respaldo en LAN/depuracion, asumiendo la advertencia del certificado autofirmado.
@@ -53,7 +52,7 @@ sudo cp privkey_real.pem   /etc/letsencrypt/live/virtual.lab.inf.uva.es/privkey.
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-No hay que tocar `deploy/nginx/nginx.conf`: ya apunta a esas rutas. Tras la recarga, `:20382` y `:20383` sirven el certificado valido y desaparece el aviso. Si vuelves a ejecutar `deploy-mv.sh`, no regenera el autofirmado porque solo lo crea cuando el fichero no existe.
+No hay que tocar `deploy/nginx/nginx.conf`: ya apunta a esas rutas. Tras la recarga, `:20382` sirve el certificado valido y desaparece el aviso. Si vuelves a ejecutar `deploy-mv.sh`, no regenera el autofirmado porque solo lo crea cuando el fichero no existe.
 
 Mientras no dispongas del certificado institucional, usa el **Quick Tunnel** como via limpia sin advertencia (ver mas abajo) y manten `:20382` con el autofirmado como respaldo en LAN.
 
@@ -183,7 +182,7 @@ Notas:
 
 ## Ejemplo completo de backend/.env
 
-El origen CORS usa `http://` con el puerto externo `20382` (NAT lab: externo `:20382` → VM:80):
+El origen CORS usa `https://` con el puerto externo `20382` (NAT lab: externo `:20382` → VM:80):
 
 ```dotenv
 PORT=4000
@@ -345,7 +344,26 @@ El script `deploy-mv.sh` detecta esta variable y:
 3. Añade la URL a `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` en `backend/.env`.
 4. Reinicia solo el contenedor `backend` para que aplique el nuevo CORS.
 
-Al terminar el despliegue el log muestra la URL asignada. Si el contenedor se reinicia, la URL cambia: vuelve a ejecutar `deploy-mv.sh` para que el script la detecte y actualice CORS automaticamente.
+#### Como se genera la URL
+
+`cloudflared` no necesita cuenta ni token: al arrancar con `--url`, abre una conexion saliente al edge de Cloudflare, que le asigna un subdominio aleatorio bajo `trycloudflare.com` (por ejemplo `https://palabras-random.trycloudflare.com`) con TLS valido. Esa URL es **efimera**: vive mientras el contenedor `cloudflared` siga en marcha y **cambia en cada reinicio** del contenedor.
+
+#### Como encontrar la URL accesible
+
+Al terminar el despliegue, el log de `deploy-mv.sh` imprime la linea `Quick Tunnel activo: https://...`. Para recuperarla en cualquier momento, extraela de los logs del contenedor `cloudflared`:
+
+```bash
+docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml logs cloudflared \
+  | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1
+```
+
+Si el comando no devuelve nada, el contenedor aun no ha emitido la URL (espera unos segundos) o el perfil `tunnel` no esta activo. Comprueba que `CLOUDFLARE_QUICK_TUNNEL=true` esta en `.deploy/mv.backend.env` y revisa los logs completos:
+
+```bash
+docker compose --env-file docker-compose.lab.env -f docker-compose.prod.yml logs cloudflared --tail=50
+```
+
+Si el contenedor se reinicia, la URL cambia y el CORS del backend deja de incluirla: vuelve a ejecutar `deploy-mv.sh` para que detecte la nueva URL y actualice `ALLOWED_ORIGINS` automaticamente.
 
 ### Opcion B — Named Tunnel (cuenta gratuita de Cloudflare + dominio, URL estable)
 

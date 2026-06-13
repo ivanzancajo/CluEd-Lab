@@ -374,11 +374,14 @@ Si el workflow falla, revisa primero:
 Si la app no carga por `https://virtual.lab.inf.uva.es:20382`:
 
 ```bash
-# Comprobar que nginx escucha en 80
+# Comprobar que nginx escucha en 80 (TLS) y en 8081 (HTTP loopback)
 sudo ss -tlnp | grep nginx
 
-# Comprobar que el proxy HTTP funciona localmente
-curl -I http://127.0.0.1:80/
+# El puerto 80 sirve TLS (cert autofirmado): usar https con -k
+curl -kI https://127.0.0.1:80/
+
+# El proxy HTTP plano (el que usa el Cloudflare Tunnel) escucha en 8081
+curl -I http://127.0.0.1:8081/
 
 # Ver logs de nginx
 sudo journalctl -u nginx --since '5 minutes ago'

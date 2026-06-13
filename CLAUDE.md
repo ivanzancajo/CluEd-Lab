@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Cluedo Online** — a real-time multiplayer web adaptation of Cluedo. Players join as teams via access codes; a Game Master (admin) controls the session lifecycle. The board is thematic (skins), movement is node-graph based, and the game resolves through suggestions, refutations, and a final accusation phase.
+**CluEd Lab** — a real-time multiplayer web adaptation of Cluedo. Players join as teams via access codes; a Game Master (admin) controls the session lifecycle. The board is thematic (CluEdSkins), movement is node-graph based, and the game resolves through suggestions, refutations, and a final accusation phase.
 
 Stack: Express + Socket.IO backend, React SPA frontend, PostgreSQL via Prisma, Docker Compose for dev and prod.
 

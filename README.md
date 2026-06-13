@@ -128,9 +128,10 @@ Puntos críticos:
 - `ALLOWED_ORIGINS` y `SOCKET_IO_CORS_ORIGIN` deben apuntar al DNS o IP pública real, no a `localhost`.
 - El backend productivo no aplica migraciones al iniciar; ejecútalas manualmente con `npm run prisma:migrate:deploy` antes de actualizar.
 
-Servicios publicados en la MV del laboratorio:
+Acceso en la MV del laboratorio:
 
-- Frontend desde fuera: `http://virtual.lab.inf.uva.es:20382`
+- **Cloudflare Tunnel** (recomendado): URL HTTPS con certificado válido configurada en `CLOUDFLARE_TUNNEL_URL`. Funciona desde Eduroam y cualquier red.
+- **Acceso directo**: `https://virtual.lab.inf.uva.es:20382` — HTTPS con certificado autofirmado (el navegador muestra advertencia; puerto bloqueado en Eduroam).
 - Backend solo en la MV: `http://127.0.0.1:4000`
 
 Parar servicios:

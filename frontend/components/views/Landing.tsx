@@ -81,7 +81,7 @@ export function Landing() {
         <div className="p-4 bg-cyan-950/30 border border-cyan-800 rounded-full shadow-[0_0_30px_rgba(6,182,212,0.15)]">
           <Fingerprint className="size-16 text-cyan-400" />
         </div>
-        <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-cyan-300 drop-shadow-[0_0_15px_rgba(45,212,191,0.5)] uppercase break-words px-4">
+        <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-cyan-300 drop-shadow-[0_0_15px_rgba(45,212,191,0.5)] break-words px-4">
           {gameTitle}
         </h1>
         <p className="max-w-2xl text-sm leading-7 text-slate-300 md:text-base">

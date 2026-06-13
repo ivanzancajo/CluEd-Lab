@@ -98,7 +98,7 @@ export function Landing() {
           </div>
           <div className="space-y-3">
             <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-purple-300/80">Panel administrativo</p>
-            <h2 className="text-2xl font-bold text-slate-200 group-hover:text-white">Configurar CluedoSkin</h2>
+            <h2 className="text-2xl font-bold text-slate-200 group-hover:text-white">Configurar CluEdSkin</h2>
             <p className="text-sm leading-6 text-slate-400 group-hover:text-slate-300">Accede a la administración para editar la cluedoskin, categorías, recursos visuales y parámetros de partida.</p>
           </div>
         </button>

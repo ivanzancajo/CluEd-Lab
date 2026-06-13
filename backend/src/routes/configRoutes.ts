@@ -318,7 +318,7 @@ function parseSkinId(req: AuthRequest, res: Response): string | null {
 function mapCreateSkinFields(
   payload: CreateSkinConfigInput,
   metadata: SkinContextMetadata
-): Prisma.CluedoSkinCreateInput {
+): Prisma.CluEdSkinCreateInput {
   return {
     name: payload.name,
     objective: payload.objective,
@@ -330,8 +330,8 @@ function mapCreateSkinFields(
 function mapUpdateSkinFields(
   payload: UpdateSkinConfigInput,
   metadata: SkinContextMetadata
-): Prisma.CluedoSkinUpdateInput {
-  const data: Prisma.CluedoSkinUpdateInput = {
+): Prisma.CluEdSkinUpdateInput {
+  const data: Prisma.CluEdSkinUpdateInput = {
     context: serializeSkinContext(metadata),
   };
 

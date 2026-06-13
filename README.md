@@ -107,7 +107,7 @@ cd backend
 npm run test:docker-backend-postgres
 ```
 
-La prueba levanta un PostgreSQL efímero y un backend en Docker, sincroniza el esquema Prisma sobre esa base vacía, hace login por HTTP, crea una CluedoSkin, reinicia el contenedor del backend y vuelve a leer la skin para verificar conectividad y persistencia reales.
+La prueba levanta un PostgreSQL efímero y un backend en Docker, sincroniza el esquema Prisma sobre esa base vacía, hace login por HTTP, crea una CluEdSkin, reinicia el contenedor del backend y vuelve a leer la skin para verificar conectividad y persistencia reales.
 
 ## Demo automatizada de reparto
 
@@ -171,9 +171,9 @@ docker compose -f docker-compose.prod.yml down
 ## Pruebas manuales de autenticacion
 
 1. Abre la portada en `http://localhost:5173` o `http://localhost:8080`.
-2. Pulsa `Configurar CluedoSkin` o `Crear Sesión`.
+2. Pulsa `Configurar CluEdSkin` o `Crear Sesión`.
 3. Introduce el usuario definido en `ADMIN_USER` y la contraseña en claro asociada al hash de `ADMIN_PASS_HASH`.
-4. Verifica que el login correcto te redirige a la pantalla administrativa solicitada: `/config` si accediste desde `Configurar CluedoSkin` o `/host` si accediste desde `Crear Sesión`.
+4. Verifica que el login correcto te redirige a la pantalla administrativa solicitada: `/config` si accediste desde `Configurar CluEdSkin` o `/host` si accediste desde `Crear Sesión`.
 5. Intenta abrir `http://localhost:5173/config` o `http://localhost:8080/config` sin token y confirma la redirección a `/`.
 6. Repite la prueba con una contraseña incorrecta y confirma el mensaje de error.
 7. Desde la vista de administración o de creación de sesión, pulsa `Salir` o `Cerrar sesión` y verifica que vuelves a la portada.

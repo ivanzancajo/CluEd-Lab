@@ -88,7 +88,7 @@ npm run prisma:migrate:resolve -- --applied 20260417_scrum_13_skin_schema
 | `sessionAccusation.ts` | final accusation verdicts |
 | `sessionResolution.ts` | in-memory resolution state (FINAL_CHANCE timer + submissions, DIRECT_REVEAL). Resolution is not persisted until finalized |
 | `boardGraph.ts` | static board topology — nodes with `(positionX, positionY)`, adjacency. Shared conceptually with frontend's `src/lib/boardGraph.ts` |
-| `skinConfigs.ts` | loads a `CluedoSkin` + its elements from DB into a typed config |
+| `skinConfigs.ts` | loads a `CluEdSkin` + its elements from DB into a typed config |
 | `sessionAccessCode.ts` | 6-char access code generation with uniqueness retry logic |
 | `http.ts` | `HttpError` class and `parseBody` helper for Zod validation in routes |
 
@@ -108,14 +108,14 @@ npm run prisma:migrate:resolve -- --applied 20260417_scrum_13_skin_schema
   - `auth.ts` — JWT storage and retrieval
   - `sessionApi.ts` — typed API client and TypeScript types mirroring backend `SessionSnapshot`
   - `lobbySocket.ts` — Socket.IO client wrapper with typed events matching `socketServer.ts`
-  - `skinApi.ts` — CRUD for CluedoSkin via REST
+  - `skinApi.ts` — CRUD for CluEdSkin via REST
   - `boardGraph.ts` / `boardMovement.ts` — client-side board graph and movement validation
 
 Vite dev server proxies `/api` and `/socket.io` to `localhost:4000`, so the frontend never needs `VITE_API_URL` in local dev.
 
 ### Database Schema (key models)
 
-- **`CluedoSkin`** — thematic skin (subjects, objects, spaces as `Elemento` records).
+- **`CluEdSkin`** — thematic skin (subjects, objects, spaces as `Elemento` records).
 - **`Partida`** — game session. Holds `status` (`EstadoPartida`), `accessCode`, FK to active turn team, active suggestion event, dice state.
 - **`Equipo`** — a team within a session. Has board position `(positionX, positionY)`, elimination state, color.
 - **`Elemento`** — generic game element (subject/object/space) shared across skins.

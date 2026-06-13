@@ -332,7 +332,7 @@ export function SessionCreateView() {
           <div className="mt-8 flex flex-col gap-6 rounded-2xl border border-slate-800 bg-slate-950/75 p-6 shadow-inner shadow-black/30">
             <div className="space-y-3">
               <label htmlFor="session-config-select" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-cyan-400">
-                <FileText className="size-4" /> Seleccionar CluedoSkin para la partida
+                <FileText className="size-4" /> Seleccionar CluEdSkin para la partida
               </label>
 
               {isLoadingConfigs ? (
@@ -379,7 +379,7 @@ export function SessionCreateView() {
               </div>
             ) : isLoadingSelectedConfig ? (
               <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 text-sm text-slate-400">
-                Cargando los detalles de la CluedoSkin seleccionada…
+                Cargando los detalles de la CluEdSkin seleccionada…
               </div>
             ) : null}
 

@@ -410,7 +410,7 @@ Checklist minimo:
 
 - La portada carga correctamente.
 - El login de administrador funciona.
-- En `Configurar CluedoSkin` aparecen skins remotas.
+- En `Configurar CluEdSkin` aparecen skins remotas.
 - En `Crear sesion` aparecen skins remotas.
 - Se puede crear una sesion y llegar al lobby.
 - Dos equipos pueden unirse y el lobby se actualiza en tiempo real.

@@ -63,7 +63,7 @@ const prisma = new PrismaClient({
   },
 });
 
-describe('API de gestion de CluedoSkins', () => {
+describe('API de gestion de CluEdSkins', () => {
   let server: Server;
   let baseUrl = '';
   let adminToken = '';
@@ -81,7 +81,7 @@ describe('API de gestion de CluedoSkins', () => {
 
     const address = server.address();
     if (!address || typeof address === 'string') {
-      throw new Error('No se pudo resolver el puerto del servidor de pruebas de CluedoSkins.');
+      throw new Error('No se pudo resolver el puerto del servidor de pruebas de CluEdSkins.');
     }
 
     baseUrl = `http://127.0.0.1:${(address as AddressInfo).port}`;
@@ -409,7 +409,7 @@ function signAdminToken() {
   const jwtSecret = process.env.JWT_SECRET;
 
   if (!jwtSecret) {
-    throw new Error('JWT_SECRET no está definida para los tests de CluedoSkins.');
+    throw new Error('JWT_SECRET no está definida para los tests de CluEdSkins.');
   }
 
   return jwt.sign(

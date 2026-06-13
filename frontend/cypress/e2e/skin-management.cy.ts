@@ -156,7 +156,7 @@ function fillDraftCollections(counts: Record<CollectionKey, number>) {
   });
 }
 
-describe("Gestion de CluedoSkins", () => {
+describe("Gestion de CluEdSkins", () => {
   beforeEach(() => {
     cy.viewport(1440, 1100);
   });

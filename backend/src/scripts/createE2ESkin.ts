@@ -75,7 +75,7 @@ async function main() {
   const skinName = process.env.SKIN_NAME?.trim() || `e2e-skin-${Date.now()}`;
   const timestamp = Date.now();
 
-  const skin = await prisma.cluedoSkin.create({
+  const skin = await prisma.cluEdSkin.create({
     data: {
       name: skinName,
       objective: 'Validar sugerencia, refutacion y cierre de turno desde el terminal.',

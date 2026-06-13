@@ -120,7 +120,7 @@ async function createDealDemoViaDatabase(options: CliOptions): Promise<DemoResul
   const prisma = getPrismaClient();
   const demoSkin = buildDemoSkinInput(options);
   const teamColors = COLOR_SORT_ORDER.slice(0, options.teamCount);
-  const skin = await prisma.cluedoSkin.create({
+  const skin = await prisma.cluEdSkin.create({
     data: {
       name: demoSkin.name,
       objective: demoSkin.objective,

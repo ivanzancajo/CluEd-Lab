@@ -24,10 +24,10 @@ export type { TeamHandCard };
 
 type SessionGameplayClient = Pick<
   typeof prisma,
-  'partida' | 'solucion' | 'tablaRazonamiento' | 'celdaRazonamiento' | 'cartaEquipo' | 'cartaPublica' | 'cluedoSkin' | 'evento'
+  'partida' | 'solucion' | 'tablaRazonamiento' | 'celdaRazonamiento' | 'cartaEquipo' | 'cartaPublica' | 'cluEdSkin' | 'evento'
 >;
 
-type TeamTerminalStateClient = Pick<typeof prisma, 'partida' | 'cartaEquipo' | 'cartaPublica' | 'cluedoSkin' | 'evento' | 'tablaRazonamiento'>;
+type TeamTerminalStateClient = Pick<typeof prisma, 'partida' | 'cartaEquipo' | 'cartaPublica' | 'cluEdSkin' | 'evento' | 'tablaRazonamiento'>;
 
 type SessionTeamRecord = {
   id: string;

@@ -10,7 +10,7 @@ import {
   sortTeamsByTurnOrder,
 } from './sessionTurn.js';
 
-type SessionSuggestionBaseClient = Pick<typeof prisma, 'partida' | 'evento' | 'cluedoSkin'> &
+type SessionSuggestionBaseClient = Pick<typeof prisma, 'partida' | 'evento' | 'cluEdSkin'> &
   Partial<Pick<typeof prisma, 'elemento'>>;
 
 type SessionSuggestionClient = SessionSuggestionBaseClient & Pick<typeof prisma, 'cartaEquipo'>;

@@ -2,7 +2,7 @@ import { TipoElemento, type DescripcionElemento, type Elemento } from '@prisma/c
 import { HttpError } from './http.js';
 import { prisma } from './prisma.js';
 
-type PrismaSkinReader = Pick<typeof prisma, 'cluedoSkin'> & Partial<Pick<typeof prisma, 'elemento'>>;
+type PrismaSkinReader = Pick<typeof prisma, 'cluEdSkin'> & Partial<Pick<typeof prisma, 'elemento'>>;
 type SkinDescriptionRecord = DescripcionElemento & {
   element?: Elemento | null;
 };
@@ -135,7 +135,7 @@ export function countCollectionsByKind(
 }
 
 export async function loadSkinConfiguration(client: PrismaSkinReader, skinId: string): Promise<LoadedSkinConfiguration> {
-  const skin = (await client.cluedoSkin.findUnique({
+  const skin = (await client.cluEdSkin.findUnique({
     where: { id: skinId },
     include: {
       elementDescriptions: true,

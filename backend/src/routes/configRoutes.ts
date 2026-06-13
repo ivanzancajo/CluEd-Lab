@@ -35,7 +35,7 @@ const CONFIG_COLLECTIONS: Array<{
   { key: 'spaces', kind: TipoElemento.ESPACIO },
 ];
 
-type PrismaWriter = Pick<typeof prisma, 'cluedoSkin' | 'elemento' | 'descripcionElemento' | 'partida'>;
+type PrismaWriter = Pick<typeof prisma, 'cluEdSkin' | 'elemento' | 'descripcionElemento' | 'partida'>;
 type SkinDescriptionRecord = DescripcionElemento & {
   motif?: string | null;
   element: Elemento;
@@ -50,7 +50,7 @@ router.use(verifyToken);
 
 router.get('/skins', async (_req, res) => {
   try {
-    const skins = await prisma.cluedoSkin.findMany({
+    const skins = await prisma.cluEdSkin.findMany({
       include: {
         elementDescriptions: {
           select: {
@@ -164,7 +164,7 @@ router.post('/skins', async (req, res) => {
   try {
     const skinConfig = await prisma.$transaction(async (tx) => {
       const metadata = createSkinMetadata(payload, Date.now());
-      const skin = await tx.cluedoSkin.create({
+      const skin = await tx.cluEdSkin.create({
         data: mapCreateSkinFields(payload, metadata),
       });
 
@@ -192,7 +192,7 @@ router.put('/skins/:id', async (req, res) => {
 
   try {
     const skinConfig = await prisma.$transaction(async (tx) => {
-      const existingSkin = await tx.cluedoSkin.findUnique({ where: { id: skinId } });
+      const existingSkin = await tx.cluEdSkin.findUnique({ where: { id: skinId } });
 
       if (!existingSkin) {
         throw new HttpError(404, 'La configuración solicitada no existe.');
@@ -210,7 +210,7 @@ router.put('/skins/:id', async (req, res) => {
         await ensureSkinSpacesHaveMotifs(tx, skinId);
       }
 
-      await tx.cluedoSkin.update({
+      await tx.cluEdSkin.update({
         where: { id: skinId },
         data: mapUpdateSkinFields(payload, nextMetadata),
       });
@@ -237,7 +237,7 @@ router.put('/skins/:id/descriptions', async (req, res) => {
 
   try {
     const skinConfig = await prisma.$transaction(async (tx) => {
-      const existingSkin = await tx.cluedoSkin.findUnique({ where: { id: skinId } });
+      const existingSkin = await tx.cluEdSkin.findUnique({ where: { id: skinId } });
 
       if (!existingSkin) {
         throw new HttpError(404, 'La configuración solicitada no existe.');
@@ -248,7 +248,7 @@ router.put('/skins/:id/descriptions', async (req, res) => {
       const metadata = touchSkinMetadata(parseSkinContext(existingSkin.context, existingSkin.name));
       await syncSkinCollections(tx, skinId, extractDescriptionsPayload(payload), metadata.hasMotifs);
 
-      await tx.cluedoSkin.update({
+      await tx.cluEdSkin.update({
         where: { id: skinId },
         data: { context: serializeSkinContext(metadata) },
       });
@@ -270,7 +270,7 @@ router.delete('/skins/:id', async (req, res) => {
 
   try {
     await prisma.$transaction(async (tx) => {
-      const existingSkin = await tx.cluedoSkin.findUnique({
+      const existingSkin = await tx.cluEdSkin.findUnique({
         where: { id: skinId },
         include: {
           elementDescriptions: {
@@ -288,7 +288,7 @@ router.delete('/skins/:id', async (req, res) => {
       await ensureSkinNotLinkedToMatches(tx, skinId, 'No se puede eliminar la configuración porque está asociada a una partida.');
 
       const elementIds = existingSkin.elementDescriptions.map((description) => description.elementId);
-      await tx.cluedoSkin.delete({ where: { id: skinId } });
+      await tx.cluEdSkin.delete({ where: { id: skinId } });
 
       for (const elementId of elementIds) {
         await deleteElementIfOrphaned(tx, elementId);

@@ -24,7 +24,7 @@ export const COLOR_LABELS: Record<ColorEquipo, string> = {
   [ColorEquipo.BLANCO]: 'Equipo Blanco',
 };
 
-export type SessionReader = Pick<typeof prisma, 'partida' | 'cluedoSkin' | 'evento' | 'cartaPublica'>;
+export type SessionReader = Pick<typeof prisma, 'partida' | 'cluEdSkin' | 'evento' | 'cartaPublica'>;
 
 export type SessionTeamSnapshot = {
   id: string;

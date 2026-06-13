@@ -34,9 +34,9 @@ export type SessionResolutionSnapshot = {
   winningTeams: SessionResolutionWinningTeam[];
 };
 
-type SessionResolutionClient = Pick<typeof prisma, 'partida' | 'cluedoSkin'>;
+type SessionResolutionClient = Pick<typeof prisma, 'partida' | 'cluEdSkin'>;
 
-type SessionResolutionPersistenceClient = Pick<typeof prisma, 'partida' | 'cluedoSkin' | 'evento'>;
+type SessionResolutionPersistenceClient = Pick<typeof prisma, 'partida' | 'cluEdSkin' | 'evento'>;
 
 export type FinalChanceAccusationInput = {
   subjectElementId: string;

@@ -133,7 +133,7 @@ async function main() {
 
   console.error(`Creando skin: "${skinName}"...`);
 
-  const skin = await prisma.cluedoSkin.create({
+  const skin = await prisma.cluEdSkin.create({
     data: {
       name: skinName,
       objective: 'Alguien ha saboteado el sistema de comunicaciones del laboratorio. Descubre quien, con que y donde.',

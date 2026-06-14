@@ -3,7 +3,9 @@ FROM node:22-alpine AS base
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+# El proyecto usa legacy-peer-deps (ver .npmrc local); se fija aquí porque el
+# build de Docker no copia .npmrc y npm ci debe resolver igual que en local.
+RUN npm ci --legacy-peer-deps
 
 FROM base AS dev
 

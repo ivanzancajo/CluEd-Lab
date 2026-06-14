@@ -110,6 +110,7 @@ function setupVisit(
       window.localStorage.setItem("teamName", session.teams[0].name);
       window.localStorage.setItem("activeConfig", JSON.stringify(activeConfig));
       window.localStorage.setItem("centerImage", activeConfig.centerImage);
+      window.localStorage.removeItem("boardDebugMode");
     },
   });
 }
@@ -219,7 +220,7 @@ describe("sala-media-derecha — acceso y topología post-corrección", () => {
     setupVisit(session, activeConfig);
     cy.wait("@getTeamState");
 
-    cy.get('[data-cy="terminal-dice-roll"]').click({ force: true });
+    cy.get('[data-cy="terminal-dice-roll"]').should("not.be.disabled").click({ force: true });
     cy.wait("@rollTeamDice");
     cy.wait("@getTeamMoves");
 
@@ -230,10 +231,9 @@ describe("sala-media-derecha — acceso y topología post-corrección", () => {
     clickBoardPercent("terminal-board-surface", POS.puertaNorte.x, POS.puertaNorte.y);
     cy.get('[data-cy="terminal-move-confirm-dialog"]').should("be.visible");
 
-    // Confirmar el movimiento hacia la sala (targetNodeId debe ser la sala, no la puerta)
+    // El frontend envía la casilla puerta; el backend la resuelve a sala-media-derecha.
     cy.intercept("POST", "**/api/game/sessions/SALA01/teams/team-amarillo/move", (req) => {
-      // El frontend resuelve la puerta → sala-media-derecha
-      expect(req.body).to.have.property("targetNodeId", "sala-media-derecha");
+      expect(req.body).to.have.property("targetNodeId", POS.puertaNorte.id);
       req.reply({
         statusCode: 200,
         body: {
@@ -355,7 +355,7 @@ describe("sala-media-derecha — acceso y topología post-corrección", () => {
     setupVisit(session, activeConfig);
     cy.wait("@getTeamState");
 
-    cy.get('[data-cy="terminal-dice-roll"]').click({ force: true });
+    cy.get('[data-cy="terminal-dice-roll"]').should("not.be.disabled").click({ force: true });
     cy.wait("@rollTeamDice");
     cy.wait("@getTeamMoves");
 
@@ -365,7 +365,7 @@ describe("sala-media-derecha — acceso y topología post-corrección", () => {
     cy.get('[data-cy="terminal-move-confirm-dialog"]').should("be.visible");
 
     cy.intercept("POST", "**/api/game/sessions/SALA01/teams/team-amarillo/move", (req) => {
-      expect(req.body).to.have.property("targetNodeId", "sala-media-derecha");
+      expect(req.body).to.have.property("targetNodeId", POS.puertaLateral.id);
       req.reply({
         statusCode: 200,
         body: {
@@ -493,7 +493,7 @@ describe("sala-media-derecha — acceso y topología post-corrección", () => {
     setupVisit(session, activeConfig);
     cy.wait("@getTeamState");
 
-    cy.get('[data-cy="terminal-dice-roll"]').click({ force: true });
+    cy.get('[data-cy="terminal-dice-roll"]').should("not.be.disabled").click({ force: true });
     cy.wait("@rollTeamDice");
     cy.wait("@getTeamMoves");
 

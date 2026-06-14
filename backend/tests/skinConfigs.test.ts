@@ -16,7 +16,7 @@ describe('skinConfigs con datos heredados', () => {
 
   it('omite descripciones huerfanas al cargar una skin completa', async () => {
     const client = {
-      cluedoSkin: {
+      cluEdSkin: {
         findUnique: async () => ({
           id: 'skin-1',
           name: 'Skin heredada',

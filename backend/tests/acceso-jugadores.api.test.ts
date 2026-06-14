@@ -209,7 +209,7 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
   beforeEach(async () => {
     await prisma.partida.deleteMany();
     await prisma.solucion.deleteMany();
-    await prisma.cluedoSkin.deleteMany();
+    await prisma.cluEdSkin.deleteMany();
     await prisma.elemento.deleteMany();
   });
 
@@ -464,8 +464,8 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
     });
   });
 
-  it('rechaza iniciar la partida cuando hay menos de dos equipos unidos', async () => {
-    await seedPlayableSession('START2', ['ROJO']);
+  it('rechaza iniciar la partida cuando hay menos de tres equipos unidos', async () => {
+    await seedPlayableSession('START2', ['ROJO', 'AZUL']);
 
     const response = await request('/api/game/sessions/START2/start', {
       method: 'POST',
@@ -477,7 +477,7 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
 
     expect(response.status).toBe(409);
     expect(body).toEqual({
-      error: 'La partida necesita al menos 2 equipos unidos para poder iniciarse.',
+      error: 'La partida necesita al menos 3 equipos unidos para poder iniciarse.',
       details: undefined,
     });
   });
@@ -949,7 +949,7 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
   });
 
   it('emite gameStarted cuando el admin inicia la partida por socket', async () => {
-    const seeded = await seedPlayableSession('SOCK01', ['ROJO', 'AZUL']);
+    const seeded = await seedPlayableSession('SOCK01', ['ROJO', 'AZUL', 'VERDE']);
     const hostSocket = await connectSocketClient(socketUrl, signAdminToken({ role: 'admin', username: 'admin', sub: 'socket-admin' }));
     const teamSocket = await connectSocketClient(socketUrl);
 
@@ -991,7 +991,7 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
       expect(teamGameStarted.session.id).toBe(seeded.session.id);
       expect(hostGameStarted.session.status).toBe(EstadoPartida.EN_CURSO);
       expect(teamGameStarted.session.status).toBe(EstadoPartida.EN_CURSO);
-      // Skin 6+6+9=21 elementos, 3 en solución, 18 no-solución → 9 por equipo (reparto estándar)
+      // Skin 6+6+9=21 elementos, 3 en solución, 18 no-solución → 6 por equipo (reparto estándar)
       expect(await prisma.cartaEquipo.count()).toBe(18);
     } finally {
       hostSocket.disconnect();
@@ -1000,7 +1000,7 @@ describe('SCRUM-35 API de acceso de jugadores', () => {
   });
 
   it('emite game:status-changed al pausar y reanudar desde el Game Master', async () => {
-    const seeded = await seedPlayableSession('PAUS01', ['ROJO', 'AZUL']);
+    const seeded = await seedPlayableSession('PAUS01', ['ROJO', 'AZUL', 'VERDE']);
     const hostSocket = await connectSocketClient(socketUrl, signAdminToken({ role: 'admin', username: 'admin', sub: 'socket-admin' }));
     const teamSocket = await connectSocketClient(socketUrl);
 
@@ -1095,7 +1095,7 @@ async function seedSkinAndSession(
   }
 ) {
   const timestamp = Date.now();
-  const skin = await prisma.cluedoSkin.create({
+  const skin = await prisma.cluEdSkin.create({
     data: {
       name: `Skin ${accessCode}`,
       objective: 'Validar el acceso de jugadores.',
@@ -1129,7 +1129,7 @@ async function seedSkinAndSession(
 
 async function seedPlayableSession(accessCode: string, teamColors: readonly ColorEquipo[]) {
   const timestamp = Date.now();
-  const skin = await prisma.cluedoSkin.create({
+  const skin = await prisma.cluEdSkin.create({
     data: {
       name: `Skin ${accessCode}`,
       objective: 'Validar inicio de partida y reparto inicial.',

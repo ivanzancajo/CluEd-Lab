@@ -97,7 +97,7 @@ describe('SCRUM-89 acusacion final', () => {
   beforeEach(async () => {
     await prisma.partida.deleteMany();
     await prisma.solucion.deleteMany();
-    await prisma.cluedoSkin.deleteMany();
+    await prisma.cluEdSkin.deleteMany();
     await prisma.elemento.deleteMany();
   });
 
@@ -400,7 +400,7 @@ describe('SCRUM-89 acusacion final', () => {
 
 async function seedAccusationSession(accessCode: string, options: SeedAccusationSessionOptions = {}) {
   const timestamp = Date.now();
-  const skin = await prisma.cluedoSkin.create({
+  const skin = await prisma.cluEdSkin.create({
     data: {
       name: `Skin ${accessCode}`,
       objective: 'Validar la acusación final.',

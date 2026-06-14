@@ -59,7 +59,7 @@ describe('SCRUM-100 reparto cíclico y sobrantes', () => {
     lobbyPresenceStore.clear?.();
     await prisma.partida.deleteMany();
     await prisma.solucion.deleteMany();
-    await prisma.cluedoSkin.deleteMany();
+    await prisma.cluEdSkin.deleteMany();
     await prisma.elemento.deleteMany();
   });
 
@@ -140,8 +140,8 @@ describe('SCRUM-100 reparto cíclico y sobrantes', () => {
   });
 
   it('emite game:setup-cards a cada equipo con su mano privada exclusiva', async () => {
-    const seed = await seedLobbySession('REPT03', [ColorEquipo.ROJO, ColorEquipo.AZUL]);
-    // 6 non-solution, 2 equipos → reparto estándar: 6 / 2 = 3 por equipo, sin sobrantes
+    const seed = await seedLobbySession('REPT03', [ColorEquipo.ROJO, ColorEquipo.AZUL, ColorEquipo.VERDE]);
+    // 6 non-solution, 3 equipos → reparto estándar: 6 / 3 = 2 por equipo, sin sobrantes
     const adminToken = signAdminToken({ role: 'admin', sub: 'admin' });
     const adminSocket = await connectSocketClient(socketUrl, adminToken);
     const redSocket = await connectSocketClient(socketUrl);
@@ -165,9 +165,9 @@ describe('SCRUM-100 reparto cíclico y sobrantes', () => {
 
       const [redPayload, bluePayload] = await Promise.all([redSetupCardsPromise, blueSetupCardsPromise]);
 
-      // Con skin 3+3+3=9: 6 no-sol, 2 equipos → 3/equipo sin sobrantes
-      expect(redPayload.hand).toHaveLength(3);
-      expect(bluePayload.hand).toHaveLength(3);
+      // Con skin 3+3+3=9: 6 no-sol, 3 equipos → 2/equipo sin sobrantes
+      expect(redPayload.hand).toHaveLength(2);
+      expect(bluePayload.hand).toHaveLength(2);
 
       // Las manos son disjuntas (sin duplicados entre equipos)
       const redIds = new Set(redPayload.hand.map((c) => c.id));
@@ -341,7 +341,7 @@ describe('SCRUM-100 reparto cíclico y sobrantes', () => {
 
 async function seedLobbySession(accessCode: string, colors: ColorEquipo[]) {
   const timestamp = Date.now();
-  const skin = await prisma.cluedoSkin.create({
+  const skin = await prisma.cluEdSkin.create({
     data: {
       name: `Skin ${accessCode}`,
       objective: 'Test reparto SCRUM-100',

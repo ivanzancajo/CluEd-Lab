@@ -115,7 +115,7 @@ describe("SCRUM-107 panel de dado forzado en modo debug", () => {
     const session = buildSession(activeConfig);
     setupTerminalVisit(session, activeConfig);
 
-    cy.get('[data-cy="terminal-board-debug-toggle"]').click();
+    cy.get('[data-cy="terminal-board-debug-forced-dice-toggle"]').click();
     cy.get('[data-cy="debug-forced-dice-panel"]').should("be.visible");
   });
 
@@ -124,7 +124,7 @@ describe("SCRUM-107 panel de dado forzado en modo debug", () => {
     const session = buildSession(activeConfig);
     setupTerminalVisit(session, activeConfig);
 
-    cy.get('[data-cy="terminal-board-debug-toggle"]').click();
+    cy.get('[data-cy="terminal-board-debug-forced-dice-toggle"]').click();
     cy.get('[data-cy="debug-forced-dice-select"]').should("be.visible");
     cy.get('[data-cy="debug-forced-dice-select"] option').should("have.length", 12);
     cy.get('[data-cy="debug-forced-dice-select"] option').first().should("have.value", "");
@@ -138,10 +138,10 @@ describe("SCRUM-107 panel de dado forzado en modo debug", () => {
     const session = buildSession(activeConfig);
     setupTerminalVisit(session, activeConfig);
 
-    cy.get('[data-cy="terminal-board-debug-toggle"]').click();
+    cy.get('[data-cy="terminal-board-debug-forced-dice-toggle"]').click();
     cy.get('[data-cy="debug-forced-dice-panel"]').should("be.visible");
 
-    cy.get('[data-cy="terminal-board-debug-toggle"]').click();
+    cy.get('[data-cy="terminal-board-debug-forced-dice-toggle"]').click();
     cy.get('[data-cy="debug-forced-dice-panel"]').should("not.exist");
   });
 
@@ -168,9 +168,9 @@ describe("SCRUM-107 panel de dado forzado en modo debug", () => {
       });
     }).as("rollForzado");
 
-    cy.get('[data-cy="terminal-board-debug-toggle"]').click();
+    cy.get('[data-cy="terminal-board-debug-forced-dice-toggle"]').click();
     cy.get('[data-cy="debug-forced-dice-select"]').select("7");
-    cy.get('[data-cy="terminal-dice-roll"]').click({ force: true });
+    cy.get('[data-cy="debug-forced-dice-confirm"]').click();
     cy.wait("@rollForzado");
   });
 
@@ -197,9 +197,7 @@ describe("SCRUM-107 panel de dado forzado en modo debug", () => {
       });
     }).as("rollAleatorio");
 
-    cy.get('[data-cy="terminal-board-debug-toggle"]').click();
-    cy.get('[data-cy="debug-forced-dice-select"]').select("5");
-    cy.get('[data-cy="debug-forced-dice-select"]').select("");
+    // Sin forzar el dado (modo aleatorio), la tirada normal envía un cuerpo vacío.
     cy.get('[data-cy="terminal-dice-roll"]').click({ force: true });
     cy.wait("@rollAleatorio");
   });
@@ -243,7 +241,8 @@ describe("SCRUM-107 panel de dado forzado en modo debug", () => {
     });
 
     cy.wait("@getTeamStateConDado");
-    cy.get('[data-cy="terminal-board-debug-toggle"]').click();
+    // Con el dado ya tirado, ni el toggle de dado forzado ni su panel deben existir.
+    cy.get('[data-cy="terminal-board-debug-forced-dice-toggle"]').should("not.exist");
     cy.get('[data-cy="debug-forced-dice-panel"]').should("not.exist");
   });
 });

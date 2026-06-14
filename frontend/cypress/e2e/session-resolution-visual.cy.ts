@@ -328,12 +328,15 @@ function buildAccusationPayload(teamState: TeamState, itemIndex: number) {
 describe("SCRUM-93/99 smoke visual de resolución", () => {
   let adminSocket: Socket | null = null;
   let blueSocket: Socket | null = null;
+  let greenSocket: Socket | null = null;
 
   afterEach(() => {
     adminSocket?.disconnect();
     blueSocket?.disconnect();
+    greenSocket?.disconnect();
     adminSocket = null;
     blueSocket = null;
+    greenSocket = null;
   });
 
   it("captura el board tras el revelado directo", () => {
@@ -345,6 +348,7 @@ describe("SCRUM-93/99 smoke visual de resolución", () => {
         createSession(token, skin.id).then((session) => {
           joinTeam(session.accessCode, "ROJO");
           joinTeam(session.accessCode, "AZUL");
+          joinTeam(session.accessCode, "VERDE");
 
           startSession(token, session.accessCode).then(() => {
             visitBoard(session, token, skinPayload);
@@ -372,6 +376,7 @@ describe("SCRUM-93/99 smoke visual de resolución", () => {
       createSkin(token, skinName).then((skin) => {
         createSession(token, skin.id).then((session) => {
           joinTeam(session.accessCode, "ROJO");
+          joinTeam(session.accessCode, "VERDE");
           joinTeam(session.accessCode, "AZUL").then((blueTeam) => {
             startSession(token, session.accessCode).then(() => {
               fetchTeamState(session.accessCode, blueTeam.id).then((blueState) => {
@@ -383,7 +388,7 @@ describe("SCRUM-93/99 smoke visual de resolución", () => {
 
                 cy.get('[data-cy="board-resolution-open"]').click();
                 cy.get('[data-cy="board-resolution-final-chance"]').click();
-                cy.get('[data-cy="board-resolution-detail"]').should("contain", "0/2 acusaciones recibidas");
+                cy.get('[data-cy="board-resolution-detail"]').should("contain", "0/3 acusaciones recibidas");
                 cy.get('[data-cy="board-resolution-countdown"]').should("be.visible");
                 cy.screenshot("board-final-chance-pending");
 
@@ -407,14 +412,19 @@ describe("SCRUM-93/99 smoke visual de resolución", () => {
         createSession(token, skin.id).then((session) => {
           joinTeam(session.accessCode, "ROJO").then((redTeam) => {
             joinTeam(session.accessCode, "AZUL").then((blueTeam) => {
+              joinTeam(session.accessCode, "VERDE").then((greenTeam) => {
               startSession(token, session.accessCode).then(() => {
                 fetchTeamState(session.accessCode, redTeam.id).then((redState) => {
                   fetchTeamState(session.accessCode, blueTeam.id).then((blueState) => {
+                  fetchTeamState(session.accessCode, greenTeam.id).then((greenState) => {
                     cy.then(() => connectAdminSocket(token)).then((socket) => {
                       adminSocket = socket;
                     });
                     cy.then(() => connectTeamSocket(session.id, blueTeam.id)).then((socket) => {
                       blueSocket = socket;
+                    });
+                    cy.then(() => connectTeamSocket(session.id, greenTeam.id)).then((socket) => {
+                      greenSocket = socket;
                     });
 
                     visitTerminal(session, redTeam, skinPayload);
@@ -435,11 +445,17 @@ describe("SCRUM-93/99 smoke visual de resolución", () => {
                     cy.then(() => emitFinalChance(blueSocket as Socket, buildAccusationPayload(blueState, 1))).then((response) => {
                       expect(response.ok).to.eq(true);
                     });
+                    cy.then(() => emitFinalChance(greenSocket as Socket, buildAccusationPayload(greenState, 2))).then((response) => {
+                      expect(response.ok).to.eq(true);
+                    });
 
-                    cy.get('[data-cy="terminal-solution-reveal"]').should("be.visible");
+                    cy.contains("Partida finalizada").should("be.visible");
+                    cy.contains("Solución del caso").should("be.visible");
                     cy.screenshot("terminal-solution-overlay");
                   });
+                  });
                 });
+              });
               });
             });
           });

@@ -181,7 +181,7 @@ describe("SCRUM-110 validacion visual — tablero tematico, botones M y modal de
     });
 
     cy.wait("@getTeamState");
-    cy.get('[data-cy="terminal-board-debug-toggle"]').click();
+    cy.get('[data-cy="terminal-board-debug-forced-dice-toggle"]').click();
     cy.get('[data-cy="debug-forced-dice-panel"]').should("be.visible");
     cy.screenshot("03-panel-dado-forzado");
   });

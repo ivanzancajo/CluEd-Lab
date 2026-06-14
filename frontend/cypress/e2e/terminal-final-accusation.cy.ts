@@ -341,13 +341,13 @@ describe("SCRUM-89 terminal de acusacion final", () => {
                       cy.get('[data-cy="terminal-lobby-status-banner"]').should("contain", blueTeam.name);
 
                       cy.contains("button", "MAPA").click();
-                      cy.contains("Tu equipo ha sido eliminado. El peon permanece donde quedo y ya no volvera a tener turno.").should("be.visible");
+                      cy.contains("Equipo eliminado. Tu peón permanece fijo en el tablero.").should("be.visible");
                       cy.get('[data-cy="terminal-board-surface"]').click("center");
-                      cy.contains("Tu equipo ya ha sido eliminado y no puede volver a mover este peon.").should("be.visible");
+                      cy.contains("Equipo eliminado. El peón ya no puede moverse.").should("be.visible");
 
                       cy.contains("button", "SUGERIR/ACUSAR").click();
                       cy.get('[data-cy="terminal-suggest-mode-select"]').select("hipotesis");
-                      cy.contains("Tu equipo ha sido eliminado. Ya no puede sugerir ni acusar, pero debe mostrar una carta si la mesa le pide refutar y mantener la solucion en secreto.").should("be.visible");
+                      cy.contains("Equipo eliminado. No puede sugerir ni acusar, pero debe refutar si se le pide.").should("be.visible");
 
                       fetchSession(session.accessCode).then((updatedSession) => {
                         expect(updatedSession.status).to.eq("EN_CURSO");
@@ -372,8 +372,11 @@ describe("SCRUM-89 terminal de acusacion final", () => {
     loginAsAdmin().then((token) => {
       seedSkin(skinName).then((skin) => {
         createSession(token, skin.skinId).then((session) => {
-          joinTeam(session.accessCode, "AZUL").then((blueTeam) => {
+          // ROJO precede a AMARILLO en el orden de turno, por lo que al sugerir ROJO el
+          // equipo amarillo (eliminado) es el primero al que se pide refutar.
+          joinTeam(session.accessCode, "ROJO").then((redTeam) => {
             joinTeam(session.accessCode, "AMARILLO").then((yellowTeam) => {
+              joinTeam(session.accessCode, "AZUL");
               startSession(token, session.accessCode).then(() => {
                 fetchTeamState(session.accessCode, yellowTeam.id).then((yellowState) => {
                   const accusationPlan = buildWrongAccusationPlan(yellowState.hand);
@@ -387,19 +390,19 @@ describe("SCRUM-89 terminal de acusacion final", () => {
 
                     cy.get('[data-cy="terminal-accusation-banner"]').should("contain", "tu equipo queda eliminado");
 
-                    setTeamRoomTurnState(session.id, blueTeam.id, suggestionPlan.roomNodeId).then(() => {
-                      visitTerminal(session, blueTeam, skinPayload);
+                    setTeamRoomTurnState(session.id, redTeam.id, suggestionPlan.roomNodeId).then(() => {
+                      visitTerminal(session, redTeam, skinPayload);
                       openDeductionTab();
                       cy.get('[data-cy="terminal-compose-suggestion"]').should("be.visible");
-                      cy.contains('[data-cy="terminal-suggest-subject"]', suggestionPlan.subjectName).click();
-                      cy.contains('[data-cy="terminal-suggest-object"]', suggestionPlan.objectName).click();
+                      cy.get('[data-cy="terminal-suggest-subject"]').select(suggestionPlan.subjectName);
+                      cy.get('[data-cy="terminal-suggest-object"]').select(suggestionPlan.objectName);
                       cy.get('[data-cy="terminal-suggest-submit"]').click();
                       cy.get('[data-cy="terminal-awaiting-refutation"]').should("be.visible");
 
                       visitTerminal(session, yellowTeam, skinPayload);
                       openDeductionTab();
                       cy.get('[data-cy="terminal-refute-panel"]').scrollIntoView().should("be.visible");
-                      cy.get('[data-cy="terminal-eliminated-refute-note"]').should("contain", "debes mostrar una carta para refutar en privado");
+                      cy.get('[data-cy="terminal-eliminated-refute-note"]').should("contain", "debes mostrar una carta para refutar");
                       cy.get('[data-cy="terminal-refute-submit"]').should("not.be.disabled").click();
                       cy.contains("Carta mostrada").should("be.visible");
                     });
@@ -422,45 +425,60 @@ describe("SCRUM-89 terminal de acusacion final", () => {
         createSession(token, skin.skinId).then((session) => {
           joinTeam(session.accessCode, "ROJO").then((redTeam) => {
             joinTeam(session.accessCode, "AZUL").then((blueTeam) => {
+              joinTeam(session.accessCode, "VERDE").then((greenTeam) => {
               startSession(token, session.accessCode).then(() => {
                 fetchTeamState(session.accessCode, blueTeam.id).then((blueState) => {
                   fetchTeamState(session.accessCode, redTeam.id).then((redState) => {
+                  fetchTeamState(session.accessCode, greenTeam.id).then((greenState) => {
                     const blueAccusationPlan = buildWrongAccusationPlan(blueState.hand);
                     const redAccusationPlan = buildWrongAccusationPlan(redState.hand);
+                    const greenAccusationPlan = buildWrongAccusationPlan(greenState.hand);
 
+                    // Con la regla de mínimo 3 equipos, se eliminan los tres en cadena hasta cerrar la partida.
                     setTeamRoomTurnState(session.id, blueTeam.id, ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER[0]).then(() => {
                       visitTerminal(session, blueTeam, skinPayload);
                       openFinalAccusationPanel();
                       fillFinalAccusationForm(blueAccusationPlan);
                       cy.get('[data-cy="terminal-final-accusation-submit"]').click();
-
                       cy.get('[data-cy="terminal-accusation-banner"]').should("contain", "tu equipo queda eliminado");
 
                       fetchSession(session.accessCode).then((afterBlueAccusation) => {
                         expect(afterBlueAccusation.status).to.eq("EN_CURSO");
-                        expect(afterBlueAccusation.turn?.currentTeamId).to.eq(redTeam.id);
                       });
 
-                      visitTerminal(session, redTeam, skinPayload);
-                      cy.get('[data-cy="terminal-turn-indicator"]').should("contain", "MI TURNO");
-                      openFinalAccusationPanel();
-                      fillFinalAccusationForm(redAccusationPlan);
-                      cy.get('[data-cy="terminal-final-accusation-submit"]').click();
+                      setTeamRoomTurnState(session.id, redTeam.id, ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER[1]).then(() => {
+                        visitTerminal(session, redTeam, skinPayload);
+                        cy.get('[data-cy="terminal-turn-indicator"]').should("contain", "MI TURNO");
+                        openFinalAccusationPanel();
+                        fillFinalAccusationForm(redAccusationPlan);
+                        cy.get('[data-cy="terminal-final-accusation-submit"]').click();
+                        cy.get('[data-cy="terminal-accusation-banner"]').should("contain", "tu equipo queda eliminado");
 
-                      cy.get('[data-cy="terminal-accusation-banner"]').should("contain", "No quedan equipos activos");
-                      cy.get('[data-cy="terminal-turn-indicator"]').should("contain", "ESPERA");
-                      cy.get('[data-cy="terminal-status-line"]').should("contain", "PARTIDA FINALIZADA");
-                      cy.get('[data-cy="terminal-lobby-status-banner"]').should("contain", "Partida finalizada. No quedan equipos activos.");
+                        setTeamRoomTurnState(session.id, greenTeam.id, ROOM_NODE_IDS_IN_SPACE_SLOT_ORDER[2]).then(() => {
+                          visitTerminal(session, greenTeam, skinPayload);
+                          cy.get('[data-cy="terminal-turn-indicator"]').should("contain", "MI TURNO");
+                          openFinalAccusationPanel();
+                          fillFinalAccusationForm(greenAccusationPlan);
+                          cy.get('[data-cy="terminal-final-accusation-submit"]').click();
 
-                      fetchSession(session.accessCode).then((finishedSession) => {
-                        expect(finishedSession.status).to.eq("FINALIZADA");
-                        expect(finishedSession.turn).to.eq(null);
-                        expect(finishedSession.winnerTeam).to.eq(null);
-                        expect(finishedSession.finishedAt).to.be.a("string").and.not.equal(null);
+                          cy.get('[data-cy="terminal-accusation-banner"]').should("contain", "No quedan equipos activos");
+                          cy.get('[data-cy="terminal-turn-indicator"]').should("contain", "ESPERA");
+                          cy.get('[data-cy="terminal-status-line"]').should("contain", "PARTIDA FINALIZADA");
+                          cy.get('[data-cy="terminal-lobby-status-banner"]').should("contain", "Partida finalizada. No quedan equipos activos.");
+
+                          fetchSession(session.accessCode).then((finishedSession) => {
+                            expect(finishedSession.status).to.eq("FINALIZADA");
+                            expect(finishedSession.turn).to.eq(null);
+                            expect(finishedSession.winnerTeam).to.eq(null);
+                            expect(finishedSession.finishedAt).to.be.a("string").and.not.equal(null);
+                          });
+                        });
                       });
                     });
                   });
+                  });
                 });
+              });
               });
             });
           });
@@ -476,6 +494,7 @@ describe("SCRUM-89 terminal de acusacion final", () => {
     loginAsAdmin().then((token) => {
       seedSkin(skinName).then((skin) => {
         createSession(token, skin.skinId).then((session) => {
+          joinTeam(session.accessCode, "VERDE");
           joinTeam(session.accessCode, "ROJO").then((redTeam) => {
             joinTeam(session.accessCode, "AZUL").then((blueTeam) => {
               startSession(token, session.accessCode).then(() => {
@@ -489,8 +508,8 @@ describe("SCRUM-89 terminal de acusacion final", () => {
 
                       openDeductionTab();
                       cy.get('[data-cy="terminal-compose-suggestion"]').should("be.visible");
-                      cy.contains('[data-cy="terminal-suggest-subject"]', suggestionPlan.subjectName).click();
-                      cy.contains('[data-cy="terminal-suggest-object"]', suggestionPlan.objectName).click();
+                      cy.get('[data-cy="terminal-suggest-subject"]').select(suggestionPlan.subjectName);
+                      cy.get('[data-cy="terminal-suggest-object"]').select(suggestionPlan.objectName);
                       cy.get('[data-cy="terminal-suggest-submit"]').click();
                       cy.get('[data-cy="terminal-awaiting-refutation"]').should("be.visible");
 

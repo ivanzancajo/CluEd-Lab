@@ -2,9 +2,25 @@ import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import istanbul from 'vite-plugin-istanbul';
+
+const coverageEnabled = process.env.COVERAGE === 'true';
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    ...(coverageEnabled
+      ? [
+          istanbul({
+            include: ['src/**/*', 'components/**/*', 'routes.ts'],
+            exclude: ['node_modules', 'cypress', 'components/ui/**'],
+            extension: ['.ts', '.tsx'],
+            requireEnv: false,
+          }),
+        ]
+      : []),
+  ],
   server: {
     port: 5173,
     host: '0.0.0.0',

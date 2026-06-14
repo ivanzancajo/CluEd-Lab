@@ -9,10 +9,18 @@ const CENTER_IMAGE = encodeURI(
 // sala-superior-izquierda: grid(col=2, row=2, offsetX=-0.06, offsetY=-1.37)
 // COLUMNS[2]=21.72−0.06=21.66  |  ROWS[2]=16.54−1.37=15.17
 // Tiene pasadizo hacia sala-inferior-derecha ("Sala inferior derecha")
-const CORNER_ROOM_POSITION = { positionX: 21.66, positionY: 15.17 };
+const CORNER_ROOM_POSITION = {
+  positionX: 21.66,
+  positionY: 15.17,
+  node: { id: "sala-superior-izquierda", label: "Sala superior izquierda", positionX: 21.66, positionY: 15.17, kind: "room" },
+};
 
 // spawn-rojo: casilla de spawn, no es sala, no tiene pasadizo
-const SPAWN_POSITION = { positionX: 64.97, positionY: 10.03 };
+const SPAWN_POSITION = {
+  positionX: 64.97,
+  positionY: 10.03,
+  node: { id: "spawn-rojo", label: "Salida roja", positionX: 64.97, positionY: 10.03, kind: "spawn" },
+};
 
 function buildActiveConfig() {
   return {
@@ -79,6 +87,20 @@ function setupTerminal(position: { positionX: number; positionY: number }, hasMo
     body: { item: { session, team, hand: [], pendingSuggestion: null } },
   }).as("getTeamState");
 
+  // El terminal consulta los destinos al montar; el nodo actual determina si el
+  // equipo está en una sala (necesario para que aparezca el botón de pasadizo).
+  cy.intercept("GET", "**/api/game/sessions/PASA01/teams/team-rojo/moves", {
+    statusCode: 200,
+    body: {
+      item: {
+        diceRoll: null,
+        remainingMoves: null,
+        currentNode: position.node,
+        destinationNodes: [],
+      },
+    },
+  }).as("getTeamMoves");
+
   cy.visit("/terminal", {
     onBeforeLoad(window) {
       window.localStorage.setItem("sessionId", session.id);
@@ -89,6 +111,7 @@ function setupTerminal(position: { positionX: number; positionY: number }, hasMo
       window.localStorage.setItem("teamName", team.name);
       window.localStorage.setItem("activeConfig", JSON.stringify(session.skin));
       window.localStorage.setItem("centerImage", session.skin.centerImage);
+      window.localStorage.removeItem("boardDebugMode");
     },
   });
 

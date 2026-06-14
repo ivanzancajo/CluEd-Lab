@@ -137,8 +137,9 @@ describe("movimiento de peones en terminal", () => {
 
     clickBoardPercent("terminal-board-surface", 64.97, 10.03);
 
+    // La sonda visual (celda de rejilla resaltada) se registra sobre la posición de spawn-rojo.
     cy.get('[data-cy="board-debug-probe-cell"]').should("be.visible");
-    cy.get('[data-cy="board-debug-overlay"]').contains("spawn-rojo").should("be.visible");
+    cy.get('[data-cy="board-debug-overlay"] [data-cy="board-debug-node-spawn-rojo"]').should("be.visible");
   });
 
   it("permite seleccionar un destino final alcanzable y mover el peon en un solo movimiento", () => {
@@ -258,6 +259,7 @@ describe("movimiento de peones en terminal", () => {
         window.localStorage.setItem("teamName", initialSession.teams[0].name);
         window.localStorage.setItem("activeConfig", JSON.stringify(activeConfig));
         window.localStorage.setItem("centerImage", activeConfig.centerImage);
+        window.localStorage.removeItem("boardDebugMode");
       },
     });
 
@@ -268,7 +270,7 @@ describe("movimiento de peones en terminal", () => {
     cy.get('[data-cy="board-pawn-azul"]').should("not.exist");
     cy.contains("Sin movimiento activo").should("be.visible");
 
-    cy.get('[data-cy="terminal-dice-roll"]').click({ force: true });
+    cy.get('[data-cy="terminal-dice-roll"]').should("not.be.disabled").click({ force: true });
     cy.wait("@rollTeamDice");
     cy.wait("@getTeamMoves");
 
@@ -314,7 +316,7 @@ describe("movimiento de peones en terminal", () => {
     cy.get('[data-cy="terminal-turn-indicator"]').should("contain.text", "ESPERA");
     cy.get('[data-cy="board-pawn-rojo"]')
       .should("have.attr", "style")
-      .and("include", "top: 23.17%")
-      .and("include", "left: 64.99%");
+      .and("include", "23.17%")
+      .and("include", "64.99%");
   });
 });

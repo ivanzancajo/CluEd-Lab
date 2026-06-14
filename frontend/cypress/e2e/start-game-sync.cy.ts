@@ -162,7 +162,7 @@ describe("SCRUM-42/43/44 inicio sincronizado de partida", () => {
           });
 
           cy.get('[data-cy="lobby-session-code"]').should("contain", session.accessCode);
-          cy.get('[data-cy="lobby-start-hint"]').should("contain", "Se necesitan al menos 2 equipos unidos para iniciar la partida");
+          cy.get('[data-cy="lobby-start-hint"]').should("contain", "Se necesitan al menos 3 equipos unidos para iniciar la partida");
           cy.get('[data-cy="lobby-start-button"]').should("be.disabled");
         });
       });
@@ -177,6 +177,7 @@ describe("SCRUM-42/43/44 inicio sincronizado de partida", () => {
         createSession(token, skin.id).then((session) => {
           joinTeam(session.accessCode, "ROJO");
           joinTeam(session.accessCode, "AZUL");
+          joinTeam(session.accessCode, "VERDE");
 
           let restStartRequests = 0;
           cy.intercept("POST", "**/api/game/sessions/*/start", (request) => {
@@ -212,6 +213,7 @@ describe("SCRUM-42/43/44 inicio sincronizado de partida", () => {
     loginAsAdmin().then((token) => {
       createSkin(token, testName).then((skin) => {
         createSession(token, skin.id).then((session) => {
+          joinTeam(session.accessCode, "VERDE");
           joinTeam(session.accessCode, "ROJO").then((redTeam) => {
             joinTeam(session.accessCode, "AZUL").then(() => {
               cy.visit("/terminal", {
@@ -241,8 +243,8 @@ describe("SCRUM-42/43/44 inicio sincronizado de partida", () => {
               cy.get('[data-cy="terminal-lobby-status-banner"]').should("contain", "Turno actual: Equipo Rojo.");
               cy.get('[data-cy="terminal-lobby-status-banner"]').should("contain", "Sin tirada activa.");
               cy.get('[data-cy="terminal-hand-list"]').should("be.visible");
-              // 2 equipos: 18 no-solución / 2 = 9 cartas por equipo (reparto estándar)
-              cy.get('[data-cy="terminal-hand-card"]').should("have.length", 9);
+              // 3 equipos: 18 no-solución / 3 = 6 cartas por equipo (reparto estándar)
+              cy.get('[data-cy="terminal-hand-card"]').should("have.length", 6);
               cy.window().then((window) => {
                 expect(window.localStorage.getItem("sessionStatus")).to.eq("EN_CURSO");
               });

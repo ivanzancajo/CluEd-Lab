@@ -93,7 +93,7 @@ describe('API de gestion de CluEdSkins', () => {
     await prisma.solucion.deleteMany();
     await prisma.descripcionElemento.deleteMany();
     await prisma.elemento.deleteMany();
-    await prisma.cluedoSkin.deleteMany();
+    await prisma.cluEdSkin.deleteMany();
   });
 
   afterAll(async () => {
@@ -161,7 +161,7 @@ describe('API de gestion de CluEdSkins', () => {
     });
 
     const body = (await response.json()) as SkinItemResponse;
-    const storedSkin = await prisma.cluedoSkin.findUnique({
+    const storedSkin = await prisma.cluEdSkin.findUnique({
       where: { id: body.item.id },
       include: { elementDescriptions: true },
     });
@@ -231,7 +231,7 @@ describe('API de gestion de CluEdSkins', () => {
       expect(response.status).toBe(400);
       expect(body.error).toBe('La solicitud contiene datos inválidos.');
       expect(body.details).toContain(detail);
-      expect(await prisma.cluedoSkin.count()).toBe(0);
+      expect(await prisma.cluEdSkin.count()).toBe(0);
     }
   );
 
@@ -246,7 +246,7 @@ describe('API de gestion de CluEdSkins', () => {
     });
 
     expect(response.status).toBe(201);
-    expect(await prisma.cluedoSkin.count()).toBe(1);
+    expect(await prisma.cluEdSkin.count()).toBe(1);
   });
 
   it('rechaza la creacion cuando sujetos supera el maximo de 10', async () => {
@@ -262,7 +262,7 @@ describe('API de gestion de CluEdSkins', () => {
 
     expect(response.status).toBe(400);
     expect(body.details).toContain('La configuración no puede tener más de 10 sujetos.');
-    expect(await prisma.cluedoSkin.count()).toBe(0);
+    expect(await prisma.cluEdSkin.count()).toBe(0);
   });
 
   it('actualiza una skin existente y persiste los cambios de metadatos', async () => {
@@ -282,7 +282,7 @@ describe('API de gestion de CluEdSkins', () => {
     });
 
     const body = (await response.json()) as SkinItemResponse;
-    const storedSkin = await prisma.cluedoSkin.findUnique({
+    const storedSkin = await prisma.cluEdSkin.findUnique({
       where: { id: existingSkin.id },
     });
 
@@ -316,7 +316,7 @@ describe('API de gestion de CluEdSkins', () => {
       expect(response.status).toBe(400);
       expect(body.error).toBe('La solicitud contiene datos inválidos.');
       expect(body.details).toContain(detail);
-      expect(await prisma.cluedoSkin.count()).toBe(1);
+      expect(await prisma.cluEdSkin.count()).toBe(1);
     }
   );
 
@@ -338,7 +338,7 @@ describe('API de gestion de CluEdSkins', () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe('La solicitud contiene datos inválidos.');
     expect(body.details).toContain('No se pueden repetir los motivos de los espacios dentro de la misma skin.');
-    expect(await prisma.cluedoSkin.count()).toBe(0);
+    expect(await prisma.cluEdSkin.count()).toBe(0);
   });
 
   it('SCRUM-116 rechaza la actualizacion cuando se introducen motivos duplicados en espacios', async () => {
@@ -360,7 +360,7 @@ describe('API de gestion de CluEdSkins', () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe('La solicitud contiene datos inválidos.');
     expect(body.details).toContain('No se pueden repetir los motivos de los espacios dentro de la misma skin.');
-    expect(await prisma.cluedoSkin.count()).toBe(1);
+    expect(await prisma.cluEdSkin.count()).toBe(1);
   });
 
   it('SCRUM-116 acepta motivos diferentes aunque sean similares en case', async () => {
@@ -377,7 +377,7 @@ describe('API de gestion de CluEdSkins', () => {
     });
 
     expect(response.status).toBe(201);
-    expect(await prisma.cluedoSkin.count()).toBe(1);
+    expect(await prisma.cluEdSkin.count()).toBe(1);
   });
 
   it('elimina una skin existente y sus elementos huerfanos', async () => {
@@ -388,7 +388,7 @@ describe('API de gestion de CluEdSkins', () => {
     });
 
     expect(response.status).toBe(204);
-    expect(await prisma.cluedoSkin.findUnique({ where: { id: existingSkin.id } })).toBeNull();
+    expect(await prisma.cluEdSkin.findUnique({ where: { id: existingSkin.id } })).toBeNull();
     expect(await prisma.descripcionElemento.count()).toBe(0);
     expect(await prisma.elemento.count()).toBe(0);
   });
@@ -463,7 +463,7 @@ async function seedSkinInDatabase(name: string) {
   const payload = buildCreatePayload(name);
   const timestamp = Date.now();
 
-  const skin = await prisma.cluedoSkin.create({
+  const skin = await prisma.cluEdSkin.create({
     data: {
       name: payload.name,
       objective: payload.objective,

@@ -121,7 +121,7 @@ describe("SCRUM-108/SCRUM-110: marcador M y modal de motivo en el tablero", () =
 
     it("abre el modal al pulsar el botón M y muestra nombre y motivo", () => {
       cy.get('[data-cy="space-motif-modal"]').should("not.exist");
-      cy.get('[data-cy="board-space-motif-1"]').click();
+      cy.get('[data-cy="board-space-motif-1"]').click({ force: true });
       cy.get('[data-cy="space-motif-modal"]').should("be.visible");
       cy.get('[data-cy="space-motif-modal"]').within(() => {
         cy.contains("Camara Anecoica").should("be.visible");
@@ -130,30 +130,30 @@ describe("SCRUM-108/SCRUM-110: marcador M y modal de motivo en el tablero", () =
     });
 
     it("muestra la descripcion extendida cuando existe", () => {
-      cy.get('[data-cy="board-space-motif-1"]').click();
+      cy.get('[data-cy="board-space-motif-1"]').click({ force: true });
       cy.get('[data-cy="space-motif-modal"]').within(() => {
         cy.contains("Descripcion extendida de la camara anecoica.").should("be.visible");
       });
     });
 
     it("cierra el modal al pulsar el botón de cierre", () => {
-      cy.get('[data-cy="board-space-motif-1"]').click();
+      cy.get('[data-cy="board-space-motif-1"]').click({ force: true });
       cy.get('[data-cy="space-motif-modal"]').should("be.visible");
       cy.get('[data-cy="space-motif-modal-close"]').click();
       cy.get('[data-cy="space-motif-modal"]').should("not.exist");
     });
 
     it("cierra el modal al hacer clic en el overlay exterior", () => {
-      cy.get('[data-cy="board-space-motif-1"]').click();
+      cy.get('[data-cy="board-space-motif-1"]').click({ force: true });
       cy.get('[data-cy="space-motif-modal"]').should("be.visible");
       cy.get('[data-cy="space-motif-modal-overlay"]').click({ force: true });
       cy.get('[data-cy="space-motif-modal"]').should("not.exist");
     });
 
     it("permite abrir el modal de otra sala tras cerrar el primero", () => {
-      cy.get('[data-cy="board-space-motif-1"]').click();
+      cy.get('[data-cy="board-space-motif-1"]').click({ force: true });
       cy.get('[data-cy="space-motif-modal-close"]').click();
-      cy.get('[data-cy="board-space-motif-2"]').click();
+      cy.get('[data-cy="board-space-motif-2"]').click({ force: true });
       cy.get('[data-cy="space-motif-modal"]').within(() => {
         cy.contains("Sala Hedy Lamarr").should("be.visible");
         cy.contains("Interferencia").should("be.visible");

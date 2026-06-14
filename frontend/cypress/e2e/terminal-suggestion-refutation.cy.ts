@@ -326,6 +326,7 @@ describe("SCRUM-84 terminal de sugerencia y refutacion", () => {
     loginAsAdmin().then((token) => {
       seedSkin(skinName).then((skin) => {
         createSession(token, skin.skinId).then((session) => {
+          joinTeam(session.accessCode, "VERDE");
           joinTeam(session.accessCode, "ROJO").then((redTeam) => {
             joinTeam(session.accessCode, "AZUL").then((blueTeam) => {
               startSession(token, session.accessCode).then(() => {
@@ -333,12 +334,13 @@ describe("SCRUM-84 terminal de sugerencia y refutacion", () => {
                   visitTerminal(session, redTeam, skinPayload);
 
                   cy.get('[data-cy="terminal-turn-indicator"]').should("contain", "MI TURNO");
-                  openDeductionTab();
-                  cy.get('[data-cy="terminal-compose-suggestion"]').should("be.visible");
-                  cy.get('[data-cy="terminal-end-turn-submit"]').click();
+                  // El botón de terminar turno en sala está en la pestaña de mapa (vista por defecto).
+                  cy.get('[data-cy="terminal-end-turn-submit"]').scrollIntoView();
+                  cy.get('[data-cy="terminal-end-turn-submit"]').click({ force: true });
 
                   cy.get('[data-cy="terminal-turn-indicator"]').should("contain", "ESPERA");
                   cy.get('[data-cy="terminal-lobby-status-banner"]').should("contain", blueTeam.name);
+                  openDeductionTab();
                   cy.get('[data-cy="terminal-suggest-blocked"]').should("contain", `Solo puedes sugerir en tu turno. Ahora juega ${blueTeam.name}.`);
                 });
               });
@@ -357,6 +359,7 @@ describe("SCRUM-84 terminal de sugerencia y refutacion", () => {
     loginAsAdmin().then((token) => {
       seedSkin(skinName).then((skin) => {
         createSession(token, skin.skinId).then((session) => {
+          joinTeam(session.accessCode, "VERDE");
           joinTeam(session.accessCode, "ROJO").then((redTeam) => {
             joinTeam(session.accessCode, "AZUL").then((blueTeam) => {
               startSession(token, session.accessCode).then(() => {
@@ -371,8 +374,8 @@ describe("SCRUM-84 terminal de sugerencia y refutacion", () => {
                     visitTerminal(session, redTeam, skinPayload);
                     openDeductionTab();
                     cy.get('[data-cy="terminal-compose-suggestion"]').should("be.visible");
-                    cy.contains('[data-cy="terminal-suggest-subject"]', suggestionPlan.subjectName).click();
-                    cy.contains('[data-cy="terminal-suggest-object"]', suggestionPlan.objectName).click();
+                    cy.get('[data-cy="terminal-suggest-subject"]').select(suggestionPlan.subjectName);
+                    cy.get('[data-cy="terminal-suggest-object"]').select(suggestionPlan.objectName);
                     cy.get('[data-cy="terminal-suggestion-preview"]').should("contain", suggestionPlan.subjectName);
                     cy.get('[data-cy="terminal-suggestion-preview"]').should("contain", suggestionPlan.objectName);
 

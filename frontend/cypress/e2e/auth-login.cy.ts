@@ -86,7 +86,7 @@ describe("CU00 autenticacion de Game Master", () => {
     cy.wait("@sessionRequest");
     cy.wait("@listSkinsRequest");
     cy.url().should("include", "/host");
-    cy.contains("Habilitar Partida").should("be.visible");
+    cy.contains("Crear Sesión de Juego").should("be.visible");
     cy.window().then((window) => {
       expect(window.localStorage.getItem("adminToken")).to.eq(token);
     });

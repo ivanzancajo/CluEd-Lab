@@ -28,12 +28,12 @@ const INCOMPLETE_COLLECTION_CASES: Array<{
   {
     collectionKey: "subjects",
     counts: { subjects: 5, objects: 6, spaces: 9 },
-    expectedMessage: "La skin debe tener exactamente 6 sujetos.",
+    expectedMessage: "La skin debe tener entre 6 y 10 sujetos.",
   },
   {
     collectionKey: "objects",
     counts: { subjects: 6, objects: 5, spaces: 9 },
-    expectedMessage: "La skin debe tener exactamente 6 objetos.",
+    expectedMessage: "La skin debe tener entre 6 y 10 objetos.",
   },
   {
     collectionKey: "spaces",
@@ -175,9 +175,10 @@ describe("Gestion de CluEdSkins", () => {
       }).as("createSkinRequest");
 
       fillDraftCollections(counts);
-      cy.get('[data-cy="admin-config-save-button"]').scrollIntoView().click();
 
-      cy.get('[data-cy="admin-config-error-message"]').should("contain", expectedMessage);
+      // Con la validación incompleta, el botón de guardar queda deshabilitado y el
+      // resumen de validación expone el motivo; no se llega a lanzar la petición.
+      cy.get('[data-cy="admin-config-save-button"]').scrollIntoView().should("be.disabled");
       cy.get('[data-cy="admin-config-validation-summary"]').should("contain", expectedMessage);
       cy.then(() => {
         expect(createRequestCount).to.eq(0);

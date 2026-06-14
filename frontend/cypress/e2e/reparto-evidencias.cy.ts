@@ -113,13 +113,14 @@ describe("SCRUM-100 Evidencias Comunes en TerminalView", () => {
     adminSocket = null;
   });
 
-  it("muestra 9 cartas en mano y sin sobrantes visibles (2 equipos, reparto estándar)", () => {
-    // 21 elementos − 3 solución = 18 no-solución; 18 / 2 = 9/equipo, 0 sobrantes
+  it("muestra 6 cartas en mano y sin sobrantes visibles (3 equipos, reparto estándar)", () => {
+    // 21 elementos − 3 solución = 18 no-solución; 18 / 3 = 6/equipo, 0 sobrantes
     const skinName = `Skin EC-Empty ${Date.now()}`;
 
     loginAsAdmin().then((token) => {
       createSkin(token, skinName).then((skin) => {
         createSession(token, skin.id).then((session) => {
+          joinTeam(session.accessCode, "VERDE");
           joinTeam(session.accessCode, "ROJO").then((redTeam) => {
             joinTeam(session.accessCode, "AZUL").then(() => {
               cy.visit("/terminal", {
@@ -145,8 +146,8 @@ describe("SCRUM-100 Evidencias Comunes en TerminalView", () => {
                 });
 
               cy.get('[data-cy="terminal-hand-list"]').should("be.visible");
-              // 2 equipos: 18 no-solución / 2 = 9 por equipo (reparto estándar)
-              cy.get('[data-cy="terminal-hand-card"]').should("have.length", 9);
+              // 3 equipos: 18 no-solución / 3 = 6 por equipo (reparto estándar)
+              cy.get('[data-cy="terminal-hand-card"]').should("have.length", 6);
 
               // No hay sobrantes visibles en evidencias comunes
               cy.get('[data-cy="evidencias-comunes-panel"]').scrollIntoView().should("be.visible");
@@ -312,12 +313,13 @@ describe("SCRUM-100 Evidencias Comunes en BoardView", () => {
     });
   });
 
-  it("no renderiza el panel de evidencias cuando no hay sobrantes (2 equipos)", () => {
+  it("no renderiza el panel de evidencias cuando no hay sobrantes (3 equipos)", () => {
     const skinName = `Skin Board EC Vacio ${Date.now()}`;
 
     loginAsAdmin().then((token) => {
       createSkin(token, skinName).then((skin) => {
         createSession(token, skin.id).then((session) => {
+          joinTeam(session.accessCode, "VERDE");
           joinTeam(session.accessCode, "ROJO").then(() => {
             joinTeam(session.accessCode, "AZUL").then(() => {
               cy.visit("/lobby", {

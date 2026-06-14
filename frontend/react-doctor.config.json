@@ -1,0 +1,6 @@
+{
+  "rules": {
+    "react-doctor/no-gray-on-colored-background": "off",
+    "deslop/unused-dev-dependency": "off"
+  }
+}

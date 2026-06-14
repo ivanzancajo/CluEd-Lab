@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cluedo_db
+      POSTGRES_USER: cluedo_admin
+      POSTGRES_PASSWORD: CluedoDb2026
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cluedo_admin -d cluedo_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend-migrate:
+    build:
+      context: ./backend
+      target: base
+    environment:
+      DATABASE_URL: postgresql://cluedo_admin:CluedoDb2026@postgres:5432/cluedo_db?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["npx", "prisma", "db", "push", "--skip-generate"]
+
+  backend:
+    build:
+      context: ./backend
+      target: prod
+    environment:
+      PORT: 4000
+      ADMIN_USER: admin
+      ADMIN_PASS_HASH: $2b$10$.MNos/rO0qHEeJ3EC71SZueJ0gWbdHc4pBK9mChgEW4Gj3THg6gom
+      JWT_SECRET: test_auth_secret_2026
+      DATABASE_URL: postgresql://cluedo_admin:CluedoDb2026@postgres:5432/cluedo_db?schema=public
+      ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BACKEND_SMOKE_TEST_PORT:-4400}:4000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20

@@ -1,0 +1,52 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "API de autenticacion y servicios de Cluedo",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "demo:deal": "tsx src/scripts/createDealDemo.ts",
+    "demo:motif-skin": "node dist/scripts/createMotifSkin.js",
+    "prisma:generate": "prisma generate",
+    "prisma:pull": "prisma db pull",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:resolve": "prisma migrate resolve",
+    "prisma:validate": "prisma validate",
+    "test": "jest --runInBand --config jest.config.cjs",
+    "test:auth-api": "jest --runInBand --config jest.auth.config.cjs",
+    "test:integration": "jest --runInBand --config jest.config.cjs",
+    "test:unit": "jest --runInBand --config jest.unit.config.cjs",
+    "test:docker-backend-postgres": "tsx tests/backend-postgres.container.integration.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^25.6.0",
+    "jest": "^30.3.0",
+    "prisma": "^6.19.3",
+    "socket.io-client": "^4.8.3",
+    "ts-jest": "^29.4.9",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "socket.io": "^4.8.3",
+    "zod": "^4.3.6"
+  }
+}

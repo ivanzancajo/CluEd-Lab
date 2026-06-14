@@ -13,7 +13,7 @@ const prisma = new PrismaClient({
 describe('SCRUM-27 Prisma integration de sesiones', () => {
   beforeEach(async () => {
     await prisma.partida.deleteMany();
-    await prisma.cluedoSkin.deleteMany();
+    await prisma.cluEdSkin.deleteMany();
   });
 
   afterAll(async () => {
@@ -33,7 +33,7 @@ describe('SCRUM-27 Prisma integration de sesiones', () => {
       updatedAt: 1713657600000,
     };
 
-    const skin = await prisma.cluedoSkin.create({
+    const skin = await prisma.cluEdSkin.create({
       data: {
         name: 'Skin de integración',
         objective: 'Validar persistencia de sesiones.',

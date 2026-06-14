@@ -147,7 +147,7 @@ describe('SCRUM-84 sugerencia y refutacion', () => {
   beforeEach(async () => {
     await prisma.partida.deleteMany();
     await prisma.solucion.deleteMany();
-    await prisma.cluedoSkin.deleteMany();
+    await prisma.cluEdSkin.deleteMany();
     await prisma.elemento.deleteMany();
   });
 
@@ -443,7 +443,7 @@ async function seedSuggestionSession(accessCode: string) {
 
 async function seedSkinAndSession(accessCode: string) {
   const timestamp = Date.now();
-  const skin = await prisma.cluedoSkin.create({
+  const skin = await prisma.cluEdSkin.create({
     data: {
       name: `Skin ${accessCode}`,
       objective: 'Validar sugerencias y refutaciones.',

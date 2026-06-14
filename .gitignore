@@ -34,3 +34,5 @@ yarn-error.log*
 *.njsproj
 *.sln
 *.sw?
+# Artefactos de cobertura nyc/istanbul
+.nyc_output/

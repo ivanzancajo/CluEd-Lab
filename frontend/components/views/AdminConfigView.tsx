@@ -30,6 +30,7 @@ import {
   User,
 } from "lucide-react";
 import { clearAdminSession } from "../../src/lib/auth";
+import { compressImageFile } from "../../src/lib/imageCompression";
 import {
   createSkinConfig,
   deleteSkinConfig,
@@ -338,20 +339,18 @@ const EditableItemList = memo(function EditableItemList({
                     aria-label="Subir imagen local"
                     className="hidden"
                     disabled={fieldsDisabled}
-                    onChange={(event) => {
+                    onChange={async (event) => {
                       const file = event.target.files?.[0];
+                      event.target.value = "";
                       if (!file) {
                         return;
                       }
 
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        updateItem(item.localId, (currentItem) => ({
-                          ...currentItem,
-                          imageUrl: typeof reader.result === "string" ? reader.result : "",
-                        }));
-                      };
-                      reader.readAsDataURL(file);
+                      const compressed = await compressImageFile(file);
+                      updateItem(item.localId, (currentItem) => ({
+                        ...currentItem,
+                        imageUrl: compressed,
+                      }));
                     }}
                   />
                 </label>
@@ -604,17 +603,15 @@ export function AdminConfigView() {
     }
   };
 
-  const handleCenterImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleCenterImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    event.target.value = "";
     if (!file) {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setCenterImage(typeof reader.result === "string" ? reader.result : "");
-    };
-    reader.readAsDataURL(file);
+    const compressed = await compressImageFile(file);
+    setCenterImage(compressed);
   };
 
   const handleSaveConfig = async () => {

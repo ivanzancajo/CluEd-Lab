@@ -12,7 +12,7 @@ const httpServer = createServer(app);
 
 // Middlewares iniciales
 app.use(cors({ origin: env.allowedOrigins, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
 
 // ==========================================
 // RUTA DE HEALTH CHECK (Control de salud)

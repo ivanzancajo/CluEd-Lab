@@ -252,6 +252,10 @@ export function validateSkinComposition(config: {
 
 export function getSkinErrorMessage(error: unknown, fallback: string) {
   if (isAxiosError<SkinErrorResponse>(error)) {
+    if (error.response?.status === 413) {
+      return "La imagen es demasiado grande para guardarse. Usa una imagen más ligera o introduce una URL.";
+    }
+
     const apiError = error.response?.data;
     if (apiError?.details && apiError.details.length > 0) {
       return apiError.details.join(" ");

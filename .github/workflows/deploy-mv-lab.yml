@@ -6,10 +6,10 @@ on:
       git_ref:
         description: Ref git a desplegar en la MV
         required: true
-        default: develop
+        default: main
   push:
     branches:
-      - develop
+      - main
     paths:
       - backend/**
       - frontend/**
